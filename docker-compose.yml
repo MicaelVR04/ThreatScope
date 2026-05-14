@@ -1,0 +1,43 @@
+version: "3.9"
+
+services:
+
+  engine:
+    build: ./engine
+    container_name: threatscope_engine
+    network_mode: host         # needs host network to capture real packets
+    cap_add:
+      - NET_ADMIN              # permission to sniff network traffic
+      - NET_RAW
+    env_file:
+      - .env
+    volumes:
+      - ./engine:/app
+    depends_on:
+      - api
+    restart: unless-stopped
+
+  api:
+    build: ./api
+    container_name: threatscope_api
+    ports:
+      - "8000:8000"
+    env_file:
+      - .env
+    volumes:
+      - ./api:/app
+    restart: unless-stopped
+
+  dashboard:
+    build: ./dashboard
+    container_name: threatscope_dashboard
+    ports:
+      - "5173:5173"
+    env_file:
+      - .env
+    volumes:
+      - ./dashboard:/app
+      - /app/node_modules        # preserve node_modules inside container
+    depends_on:
+      - api
+    restart: unless-stopped
