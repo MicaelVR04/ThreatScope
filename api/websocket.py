@@ -8,7 +8,10 @@ Responsibilities:
 """
 
 import json
+import logging
 from fastapi import WebSocket
+
+logger = logging.getLogger(__name__)
 
 
 class ConnectionManager:
@@ -18,7 +21,6 @@ class ConnectionManager:
     """
 
     def __init__(self):
-        # List of all currently connected WebSocket clients
         self.active_connections: list[WebSocket] = []
 
     async def connect(self, websocket: WebSocket):
@@ -27,6 +29,7 @@ class ConnectionManager:
         """
         await websocket.accept()
         self.active_connections.append(websocket)
+        logger.info(f"[WS] Client connected. Total: {len(self.active_connections)}")
 
     def disconnect(self, websocket: WebSocket):
         """
@@ -34,6 +37,7 @@ class ConnectionManager:
         """
         if websocket in self.active_connections:
             self.active_connections.remove(websocket)
+            logger.info(f"[WS] Client disconnected. Total: {len(self.active_connections)}")
 
     async def broadcast(self, alert: dict):
         """
@@ -49,10 +53,8 @@ class ConnectionManager:
             try:
                 await connection.send_text(json.dumps(alert))
             except Exception:
-                # Client disconnected unexpectedly
                 disconnected.append(connection)
 
-        # Clean up disconnected clients
         for connection in disconnected:
             self.disconnect(connection)
 

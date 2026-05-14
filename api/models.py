@@ -7,9 +7,8 @@ Responsibilities:
 - Used by the database, API endpoints, and WebSocket
 """
 
-from pydantic import BaseModel
+from pydantic import BaseModel, field_validator
 from typing import Optional
-from datetime import datetime
 
 
 class Alert(BaseModel):
@@ -17,13 +16,20 @@ class Alert(BaseModel):
     Represents a single detected threat alert.
     This is the core data structure shared across the entire app.
     """
-    id:        Optional[int] = None   # auto-assigned by the database
-    type:      str                    # e.g. "PORT_SCAN", "SYN_FLOOD"
-    src_ip:    str                    # source IP address
-    dst_ip:    str                    # destination IP address
-    severity:  str                    # "LOW", "MEDIUM", or "HIGH"
-    message:   str                    # human-readable description
-    timestamp: str                    # ISO format timestamp
+    id:        Optional[int] = None
+    type:      str
+    src_ip:    str
+    dst_ip:    str
+    severity:  str
+    message:   str
+    timestamp: str
+
+    @field_validator("severity")
+    @classmethod
+    def validate_severity(cls, v):
+        if v not in ["LOW", "MEDIUM", "HIGH"]:
+            raise ValueError("severity must be LOW, MEDIUM, or HIGH")
+        return v
 
 
 class AlertSummary(BaseModel):

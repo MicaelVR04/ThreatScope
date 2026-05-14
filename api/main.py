@@ -3,18 +3,42 @@ main.py — FastAPI application entry point for ThreatScope
 Person 2 owns this file.
 
 Endpoints:
-    POST /alerts          — engine posts a new alert here
-    GET  /alerts          — dashboard fetches alert history
-    GET  /alerts/summary  — dashboard fetches summary counts
-    WS   /ws              — dashboard connects for real-time alerts
+    POST   /alerts          — engine posts a new alert here
+    GET    /alerts          — dashboard fetches alert history
+    GET    /alerts/summary  — dashboard fetches summary counts
+    GET    /alerts/stats    — dashboard fetches counts by attack type
+    DELETE /alerts          — clears all alerts (demo reset)
+    GET    /health          — health check
+    WS     /ws              — dashboard connects for real-time alerts
 """
 
-from fastapi import FastAPI, WebSocket, WebSocketDisconnect, Query
+import logging
+from fastapi import FastAPI, WebSocket, WebSocketDisconnect, Query, HTTPException, Request
 from fastapi.middleware.cors import CORSMiddleware
 from contextlib import asynccontextmanager
+from datetime import datetime, timezone
+from slowapi import Limiter
+from slowapi.util import get_remote_address
+from slowapi.middleware import SlowAPIMiddleware
 from models import Alert, AlertSummary
-from database import init_db, insert_alert, get_alerts, get_summary
+from database import init_db, insert_alert, get_alerts, get_summary, get_stats, clear_alerts
 from websocket import manager
+
+
+# ── Logging ────────────────────────────────────────────────────────────────
+logging.basicConfig(
+    level=logging.INFO,
+    format="%(asctime)s [%(levelname)s] %(message)s",
+    handlers=[
+        logging.FileHandler("threatscope.log"),
+        logging.StreamHandler()
+    ]
+)
+logger = logging.getLogger(__name__)
+
+
+# ── Rate Limiter ───────────────────────────────────────────────────────────
+limiter = Limiter(key_func=get_remote_address)
 
 
 # ── Startup ────────────────────────────────────────────────────────────────
@@ -32,11 +56,13 @@ app = FastAPI(
     lifespan=lifespan
 )
 
+app.state.limiter = limiter
+app.add_middleware(SlowAPIMiddleware)
+
 # ── CORS ───────────────────────────────────────────────────────────────────
-# Allows the React dashboard to talk to the API
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=["http://localhost:5173"],  # React dev server
+    allow_origins=["http://localhost:5173"],
     allow_methods=["*"],
     allow_headers=["*"],
 )
@@ -44,16 +70,23 @@ app.add_middleware(
 
 # ── REST Endpoints ─────────────────────────────────────────────────────────
 @app.post("/alerts", response_model=Alert)
-async def create_alert(alert: Alert):
+@limiter.limit("60/minute")
+async def create_alert(request: Request, alert: Alert):
     """
     Receives a new alert from the engine.
-    Saves it to the database and broadcasts it to all connected dashboards.
+    Validates severity, saves to DB, and broadcasts to all dashboards.
     """
+    if alert.severity not in ["LOW", "MEDIUM", "HIGH"]:
+        raise HTTPException(status_code=400, detail="severity must be LOW, MEDIUM, or HIGH")
+
     alert_dict = alert.model_dump()
+
+    if not alert_dict.get("timestamp"):
+        alert_dict["timestamp"] = datetime.now(timezone.utc).isoformat()
+
     alert_id = insert_alert(alert_dict)
     alert_dict["id"] = alert_id
 
-    # Broadcast to all connected dashboard clients via WebSocket
     await manager.broadcast(alert_dict)
 
     return alert_dict
@@ -62,13 +95,17 @@ async def create_alert(alert: Alert):
 @app.get("/alerts", response_model=list[Alert])
 def read_alerts(
     severity: str = Query(default=None, description="Filter by severity: LOW, MEDIUM, HIGH"),
-    limit: int = Query(default=100, description="Max number of alerts to return")
+    limit: int = Query(default=50, le=200, description="Max number of alerts to return"),
+    offset: int = Query(default=0, ge=0, description="Number of alerts to skip")
 ):
     """
     Returns alert history from the database.
-    Optional severity filter and limit.
+    Supports severity filter and pagination.
     """
-    return get_alerts(severity=severity, limit=limit)
+    if severity and severity not in ["LOW", "MEDIUM", "HIGH"]:
+        raise HTTPException(status_code=400, detail="severity must be LOW, MEDIUM, or HIGH")
+
+    return get_alerts(severity=severity, limit=limit, offset=offset)
 
 
 @app.get("/alerts/summary", response_model=AlertSummary)
@@ -78,6 +115,25 @@ def read_summary():
     Used for the dashboard summary cards.
     """
     return get_summary()
+
+
+@app.get("/alerts/stats")
+def read_stats():
+    """
+    Returns alert counts grouped by attack type.
+    Used for dashboard charts.
+    """
+    return get_stats()
+
+
+@app.delete("/alerts")
+def delete_alerts():
+    """
+    Clears all alerts from the database.
+    Useful for resetting between demos.
+    """
+    clear_alerts()
+    return {"message": "All alerts cleared"}
 
 
 @app.get("/health")
@@ -96,7 +152,6 @@ async def websocket_endpoint(websocket: WebSocket):
     await manager.connect(websocket)
     try:
         while True:
-            # Keep the connection alive — we only send, never receive
             await websocket.receive_text()
     except WebSocketDisconnect:
         manager.disconnect(websocket)
