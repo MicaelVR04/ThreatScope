@@ -5,8 +5,10 @@ import {
 } from 'recharts'
 import { Activity, ShieldAlert, AlertTriangle, Info, PauseCircle, PlayCircle } from 'lucide-react'
 import AlertCard from '../components/AlertCard'
+import SeverityChart from '../components/SeverityChart'
+import AttackTypeChart from '../components/AttackTypeChart'
 import useWebSocket from '../hooks/useWebSocket'
-import { getAlertsSummary, getAlertStats } from '../services/api'
+import { getAlertsSummary, getAlertStats, getAttackTypeStats } from '../services/api'
 
 const SEV = {
   HIGH:   { color: '#ef4444', icon: <ShieldAlert  size={18} color="#ef4444" /> },
@@ -18,9 +20,10 @@ const FEED_LIMIT = 20
 
 export default function Dashboard({ onConnectionChange }) {
   const { alerts: wsAlerts, connected } = useWebSocket()
-  const [summary,   setSummary]  = useState({ total: 0, high: 0, medium: 0, low: 0 })
-  const [chartData, setChartData] = useState([])
-  const [paused,    setPaused]    = useState(false)
+  const [summary,    setSummary]    = useState({ total: 0, high: 0, medium: 0, low: 0 })
+  const [chartData,  setChartData]  = useState([])
+  const [typeStats,  setTypeStats]  = useState([])
+  const [paused,     setPaused]     = useState(false)
   const frozenRef = useRef([])
 
   // Propagate connection state up to App / Navbar
@@ -31,9 +34,14 @@ export default function Dashboard({ onConnectionChange }) {
     getAlertsSummary().then(setSummary).catch(console.error)
   }, [])
 
-  // Fetch chart data from /alerts/stats
+  // Fetch time-series chart data from /alerts/stats
   useEffect(() => {
     getAlertStats().then(setChartData).catch(console.error)
+  }, [])
+
+  // Fetch attack-type breakdown from /alerts/stats?group_by=type
+  useEffect(() => {
+    getAttackTypeStats().then(setTypeStats).catch(console.error)
   }, [])
 
   // Freeze the feed when paused
@@ -60,9 +68,26 @@ export default function Dashboard({ onConnectionChange }) {
         ))}
       </div>
 
-      {/* Traffic chart */}
+      {/* Charts row */}
+      <div style={styles.chartsRow}>
+
+        {/* Severity donut — /alerts/summary */}
+        <section style={styles.chartCard}>
+          <h2 style={styles.sectionTitle}>Severity Breakdown</h2>
+          <SeverityChart data={summary} />
+        </section>
+
+        {/* Attack type bar — /alerts/stats?group_by=type */}
+        <section style={{ ...styles.chartCard, flex: 2 }}>
+          <h2 style={styles.sectionTitle}>Attack Types</h2>
+          <AttackTypeChart data={typeStats} />
+        </section>
+
+      </div>
+
+      {/* Time-series area chart — /alerts/stats */}
       <section style={styles.section}>
-        <h2 style={styles.sectionTitle}>Alert Activity</h2>
+        <h2 style={styles.sectionTitle}>Alert Activity Over Time</h2>
         {chartData.length === 0 ? (
           <p style={styles.empty}>No stats data available.</p>
         ) : (
@@ -124,6 +149,8 @@ const styles = {
   cardHeader:   { display: 'flex', alignItems: 'center', gap: 8 },
   cardLabel:    { fontSize: 13, color: '#94a3b8' },
   cardValue:    { fontSize: 34, fontWeight: 'bold' },
+  chartsRow:    { display: 'flex', gap: 16, marginBottom: 32, flexWrap: 'wrap' },
+  chartCard:    { flex: 1, minWidth: 260, background: '#1e293b', borderRadius: 8, padding: '20px 24px' },
   section:      { marginBottom: 32 },
   sectionTitle: { fontSize: 14, fontWeight: 600, color: '#94a3b8', marginBottom: 12, textTransform: 'uppercase', letterSpacing: 0.8 },
   feedHeader:   { display: 'flex', alignItems: 'center', gap: 12, marginBottom: 12 },

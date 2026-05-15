@@ -29,12 +29,22 @@ export async function getAlertsSummary() {
 }
 
 /**
- * Fetch time-series traffic stats for charting.
+ * Fetch time-series traffic stats for the area chart.
  * GET /alerts/stats
- * @returns {Promise<Array<{ timestamp: string, high: number, medium: number, low: number }>>}
+ * @returns {Promise<Array<{ timestamp: string, HIGH: number, MEDIUM: number, LOW: number }>>}
  */
 export async function getAlertStats() {
   const { data } = await api.get('/alerts/stats')
+  return data
+}
+
+/**
+ * Fetch alert counts grouped by attack type.
+ * GET /alerts/stats?group_by=type
+ * @returns {Promise<Array<{ type: string, count: number, HIGH: number, MEDIUM: number, LOW: number }>>}
+ */
+export async function getAttackTypeStats() {
+  const { data } = await api.get('/alerts/stats', { params: { group_by: 'type' } })
   return data
 }
 
