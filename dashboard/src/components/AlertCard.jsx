@@ -1,26 +1,42 @@
 import SeverityBadge from './SeverityBadge'
-import { AlertTriangle } from 'lucide-react'
+import { AlertTriangle, ShieldAlert, Info } from 'lucide-react'
+
+const SEVERITY_ICON = {
+  HIGH:   <ShieldAlert size={16} color="#ef4444" />,
+  MEDIUM: <AlertTriangle size={16} color="#f59e0b" />,
+  LOW:    <Info size={16} color="#22c55e" />,
+}
+
+const BORDER_COLOR = { HIGH: '#ef4444', MEDIUM: '#f59e0b', LOW: '#22c55e' }
 
 export default function AlertCard({ alert }) {
+  const border = BORDER_COLOR[alert.severity] || '#334155'
   return (
-    <div style={styles.card}>
+    <div style={{ ...styles.card, borderLeft: `4px solid ${border}` }}>
       <div style={styles.header}>
-        <AlertTriangle size={16} color="#f59e0b" />
+        {SEVERITY_ICON[alert.severity] ?? <Info size={16} color="#94a3b8" />}
         <SeverityBadge severity={alert.severity} />
         <span style={styles.type}>{alert.type}</span>
+        <span style={styles.time}>{new Date(alert.timestamp).toLocaleTimeString()}</span>
       </div>
       <div style={styles.meta}>
-        <span>{alert.src_ip} → {alert.dst_ip}</span>
-        <span style={styles.time}>{new Date(alert.timestamp).toLocaleString()}</span>
+        <span style={styles.ip}>{alert.src_ip}</span>
+        <span style={styles.arrow}>→</span>
+        <span style={styles.ip}>{alert.dst_ip}</span>
+        {alert.protocol && <span style={styles.tag}>{alert.protocol}</span>}
+        {alert.dst_port && <span style={styles.tag}>:{alert.dst_port}</span>}
       </div>
     </div>
   )
 }
 
 const styles = {
-  card:   { background: '#1e293b', borderRadius: 8, padding: '14px 18px', marginBottom: 8 },
+  card:   { background: '#1e293b', borderRadius: 8, padding: '12px 16px', marginBottom: 8 },
   header: { display: 'flex', alignItems: 'center', gap: 10, marginBottom: 8 },
   type:   { flex: 1, fontSize: 14, fontWeight: 600, color: '#f1f5f9' },
-  meta:   { display: 'flex', justifyContent: 'space-between', fontSize: 13, color: '#94a3b8' },
-  time:   { color: '#475569', fontSize: 12 },
+  meta:   { display: 'flex', alignItems: 'center', gap: 8, fontSize: 13, color: '#94a3b8' },
+  ip:     { fontFamily: 'monospace', color: '#cbd5e1' },
+  arrow:  { color: '#475569' },
+  tag:    { background: '#0f172a', border: '1px solid #334155', borderRadius: 4, padding: '1px 6px', fontSize: 11, color: '#64748b' },
+  time:   { color: '#475569', fontSize: 12, marginLeft: 'auto' },
 }
