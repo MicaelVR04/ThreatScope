@@ -31,12 +31,12 @@ export default function App() {
 
   // ── Fetch alert history on load ─────────────────────────────────────────
   useEffect(() => {
-    fetch(⁠ ${API_URL}/alerts ⁠)
+    fetch(`${API_URL}/alerts`)
       .then(res => res.json())
       .then(data => setAlerts(data))
       .catch(err => console.error('Failed to fetch alerts:', err))
 
-    fetch(⁠ ${API_URL}/alerts/summary ⁠)
+    fetch(`${API_URL}/alerts/summary`)
       .then(res => res.json())
       .then(data => setSummary(data))
       .catch(err => console.error('Failed to fetch summary:', err))
@@ -121,7 +121,7 @@ export default function App() {
 
 function SummaryCard({ label, value, color }) {
   return (
-    <div style={{ ...styles.card, borderTop: ⁠ 4px solid ${color} ⁠ }}>
+    <div style={{ ...styles.card, borderTop: `4px solid ${color}` }}>
       <span style={styles.cardValue}>{value}</span>
       <span style={styles.cardLabel}>{label}</span>
     </div>
@@ -131,7 +131,7 @@ function SummaryCard({ label, value, color }) {
 function AlertRow({ alert }) {
   const color = SEVERITY_COLORS[alert.severity] || '#fff'
   return (
-    <div style={{ ...styles.alertRow, borderLeft: ⁠ 4px solid ${color} ⁠ }}>
+    <div style={{ ...styles.alertRow, borderLeft: `4px solid ${color}` }}>
       <span style={{ ...styles.severity, color }}>{alert.severity}</span>
       <span style={styles.alertType}>{alert.type}</span>
       <span style={styles.alertMeta}>{alert.src_ip} → {alert.dst_ip}</span>
