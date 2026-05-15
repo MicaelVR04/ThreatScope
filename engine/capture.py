@@ -13,7 +13,7 @@ import logging
 from scapy.all import sniff
 from dotenv import load_dotenv
 from rules import analyze_packet
-
+from alert_sender import send_alert
 # ── Setup ──────────────────────────────────────────────────────────────────
 load_dotenv()
 
@@ -40,8 +40,8 @@ def handle_packet(packet):
             f"Source: {alert['src_ip']} | "
             f"Severity: {alert['severity']}"
         )
-        # TODO (Person 2): replace this log with an HTTP POST to the API
-        # send_alert(alert)
+        
+        send_alert(alert)
 
 
 # ── Entry point ────────────────────────────────────────────────────────────
