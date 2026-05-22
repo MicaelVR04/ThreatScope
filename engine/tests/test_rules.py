@@ -22,15 +22,18 @@ import os
 sys.path.insert(0, os.path.abspath(os.path.join(os.path.dirname(__file__), '..')))
 
 import pytest
+import rules
 from scapy.all import IP, TCP, ICMP, Ether
 from rules import (
     analyze_packet,
     detect_port_scan,
     detect_syn_flood,
     detect_ping_sweep,
+    packet_allowed,
     port_scan_tracker,
     syn_flood_tracker,
     ping_sweep_tracker,
+    alert_cooldowns,
     PORT_SCAN_THRESHOLD,
     SYN_FLOOD_THRESHOLD,
     PING_SWEEP_THRESHOLD,
@@ -53,6 +56,7 @@ def clear_trackers():
     port_scan_tracker.clear()
     syn_flood_tracker.clear()
     ping_sweep_tracker.clear()
+    alert_cooldowns.clear()
 
 
 # ── Fixtures ───────────────────────────────────────────────────────────────
@@ -259,6 +263,51 @@ class TestAlertStructure:
             alert = detect_port_scan(packet)
 
         assert alert["severity"] in ["LOW", "MEDIUM", "HIGH"]
+
+
+class TestDemoStability:
+
+    @pytest.fixture(autouse=True)
+    def restore_demo_settings(self):
+        original_demo_mode = rules.DEMO_MODE
+        original_allowed_subnets = list(rules.ALLOWED_SUBNETS)
+        yield
+        rules.DEMO_MODE = original_demo_mode
+        rules.ALLOWED_SUBNETS = original_allowed_subnets
+
+    def test_packet_allowed_for_private_traffic(self):
+        rules.DEMO_MODE = True
+        rules.ALLOWED_SUBNETS = []
+        packet = make_tcp_packet("192.168.1.10", "10.0.0.1", 80)
+        assert packet_allowed(packet) is True
+
+    def test_packet_blocked_for_public_traffic(self):
+        rules.DEMO_MODE = True
+        rules.ALLOWED_SUBNETS = []
+        packet = make_tcp_packet("8.8.8.8", "1.1.1.1", 80)
+        assert packet_allowed(packet) is False
+
+    def test_packet_allowed_for_public_traffic_outside_demo_mode(self):
+        rules.DEMO_MODE = False
+        rules.ALLOWED_SUBNETS = []
+        packet = make_tcp_packet("8.8.8.8", "1.1.1.1", 80)
+        assert packet_allowed(packet) is True
+
+    def test_duplicate_port_scan_alert_is_suppressed_by_cooldown(self):
+        rules.DEMO_MODE = True
+        rules.ALLOWED_SUBNETS = []
+        src_ip = "192.168.1.10"
+
+        first_alert = None
+        for port in range(1, PORT_SCAN_THRESHOLD + 1):
+            first_alert = detect_port_scan(make_tcp_packet(src_ip, "10.0.0.1", port))
+
+        second_alert = None
+        for port in range(100, 100 + PORT_SCAN_THRESHOLD):
+            second_alert = detect_port_scan(make_tcp_packet(src_ip, "10.0.0.1", port))
+
+        assert first_alert is not None
+        assert second_alert is None
 
     def test_clean_packet_returns_none(self):
         """A normal TCP packet should return None from analyze_packet."""
