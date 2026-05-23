@@ -1,17 +1,19 @@
 """
-database.py — SQLite database connection for ThreatScope
-Person 2 owns this file.
+database.py — data access layer for ThreatScope
 
-Responsibilities:
-- Create and manage the SQLite database connection
-- Create the alerts table if it doesn't exist
-- Provide functions to insert and query alerts
+Primary mode:
+- Supabase Postgres via the official Python client
+
+Fallback mode:
+- local SQLite when Supabase env vars are not configured
 """
 
-import sqlite3
-import os
 import logging
+import os
+import sqlite3
+from collections import defaultdict
 from dotenv import load_dotenv
+from supabase import Client, create_client
 
 load_dotenv()
 
@@ -19,13 +21,20 @@ logger = logging.getLogger(__name__)
 
 DATABASE_URL = os.getenv("DATABASE_URL", "sqlite:///./threatscope.db")
 DB_PATH = DATABASE_URL.replace("sqlite:///", "")
+SUPABASE_URL = os.getenv("SUPABASE_URL", "").strip()
+SUPABASE_SERVICE_ROLE_KEY = os.getenv("SUPABASE_SERVICE_ROLE_KEY", "").strip()
+SUPABASE_ALERTS_TABLE = os.getenv("SUPABASE_ALERTS_TABLE", "alerts").strip() or "alerts"
+
+
+def _use_supabase() -> bool:
+    return bool(SUPABASE_URL and SUPABASE_SERVICE_ROLE_KEY)
+
+
+def _get_supabase() -> Client:
+    return create_client(SUPABASE_URL, SUPABASE_SERVICE_ROLE_KEY)
 
 
 def get_connection():
-    """
-    Returns a new SQLite connection.
-    Called at the start of each database operation.
-    """
     conn = sqlite3.connect(DB_PATH)
     conn.row_factory = sqlite3.Row
     return conn
@@ -33,9 +42,18 @@ def get_connection():
 
 def init_db():
     """
-    Creates the alerts table if it doesn't already exist.
-    Called once when the API starts up.
+    Initializes the configured backing store.
     """
+    if _use_supabase():
+        try:
+            client = _get_supabase()
+            client.table(SUPABASE_ALERTS_TABLE).select("id", count="exact").limit(1).execute()
+            logger.info("Supabase connection verified successfully.")
+            return
+        except Exception as e:
+            logger.error(f"Supabase init failed: {e}")
+            raise
+
     try:
         conn = get_connection()
         cursor = conn.cursor()
@@ -51,7 +69,7 @@ def init_db():
             )
         """)
         conn.commit()
-        logger.info("Database initialized successfully.")
+        logger.info("SQLite database initialized successfully.")
     except sqlite3.Error as e:
         logger.error(f"init_db failed: {e}")
         raise
@@ -61,14 +79,19 @@ def init_db():
 
 def insert_alert(alert: dict):
     """
-    Inserts a new alert into the database.
-
-    Args:
-        alert (dict): Alert data from the engine
-
-    Returns:
-        int: The ID of the newly inserted alert
+    Inserts a new alert and returns its id.
     """
+    if _use_supabase():
+        try:
+            client = _get_supabase()
+            response = client.table(SUPABASE_ALERTS_TABLE).insert(alert).execute()
+            row = response.data[0]
+            logger.info(f"Supabase alert inserted with ID {row['id']}")
+            return row["id"]
+        except Exception as e:
+            logger.error(f"insert_alert failed: {e}")
+            raise
+
     try:
         conn = get_connection()
         cursor = conn.cursor()
@@ -78,7 +101,7 @@ def insert_alert(alert: dict):
         """, alert)
         alert_id = cursor.lastrowid
         conn.commit()
-        logger.info(f"Alert inserted with ID {alert_id}")
+        logger.info(f"SQLite alert inserted with ID {alert_id}")
         return alert_id
     except sqlite3.Error as e:
         logger.error(f"insert_alert failed: {e}")
@@ -89,20 +112,24 @@ def insert_alert(alert: dict):
 
 def get_alerts(severity: str = None, limit: int = 50, offset: int = 0):
     """
-    Fetches alerts from the database with optional severity filter and pagination.
-
-    Args:
-        severity (str): Optional filter — "LOW", "MEDIUM", or "HIGH"
-        limit (int): Max number of alerts to return (default 50)
-        offset (int): Number of alerts to skip for pagination (default 0)
-
-    Returns:
-        list: List of alert dicts
+    Fetches alerts with optional severity filter and pagination.
     """
+    if _use_supabase():
+        try:
+            client = _get_supabase()
+            query = client.table(SUPABASE_ALERTS_TABLE).select("*").order("timestamp", desc=True)
+            if severity:
+                query = query.eq("severity", severity)
+            upper = offset + limit - 1
+            response = query.range(offset, upper).execute()
+            return response.data
+        except Exception as e:
+            logger.error(f"get_alerts failed: {e}")
+            raise
+
     try:
         conn = get_connection()
         cursor = conn.cursor()
-
         if severity:
             cursor.execute("""
                 SELECT * FROM alerts
@@ -116,7 +143,6 @@ def get_alerts(severity: str = None, limit: int = 50, offset: int = 0):
                 ORDER BY timestamp DESC
                 LIMIT ? OFFSET ?
             """, (limit, offset))
-
         rows = cursor.fetchall()
         return [dict(row) for row in rows]
     except sqlite3.Error as e:
@@ -129,104 +155,75 @@ def get_alerts(severity: str = None, limit: int = 50, offset: int = 0):
 def get_summary():
     """
     Returns a count of alerts grouped by severity.
-
-    Returns:
-        dict: { total, high, medium, low }
     """
-    try:
-        conn = get_connection()
-        cursor = conn.cursor()
-
-        cursor.execute("SELECT COUNT(*) FROM alerts")
-        total = cursor.fetchone()[0]
-
-        cursor.execute("SELECT COUNT(*) FROM alerts WHERE severity = 'HIGH'")
-        high = cursor.fetchone()[0]
-
-        cursor.execute("SELECT COUNT(*) FROM alerts WHERE severity = 'MEDIUM'")
-        medium = cursor.fetchone()[0]
-
-        cursor.execute("SELECT COUNT(*) FROM alerts WHERE severity = 'LOW'")
-        low = cursor.fetchone()[0]
-
-        return {"total": total, "high": high, "medium": medium, "low": low}
-    except sqlite3.Error as e:
-        logger.error(f"get_summary failed: {e}")
-        raise
-    finally:
-        conn.close()
+    alerts = get_alerts(limit=10000, offset=0)
+    summary = {"total": len(alerts), "high": 0, "medium": 0, "low": 0}
+    for alert in alerts:
+        severity = alert["severity"]
+        if severity == "HIGH":
+            summary["high"] += 1
+        elif severity == "MEDIUM":
+            summary["medium"] += 1
+        elif severity == "LOW":
+            summary["low"] += 1
+    return summary
 
 
 def get_stats(group_by: str | None = None):
     """
     Returns chart-ready stats for the dashboard.
-
-    Args:
-        group_by (str | None): When set to "type", groups by attack type.
-            Otherwise returns a time-series grouped by minute and severity.
-
-    Returns:
-        list: Chart-ready rows for the requested grouping.
     """
-    try:
-        conn = get_connection()
-        cursor = conn.cursor()
+    alerts = list(reversed(get_alerts(limit=10000, offset=0)))
 
-        if group_by == "type":
-            cursor.execute("""
-                SELECT
-                    type,
-                    COUNT(*) as count,
-                    SUM(CASE WHEN severity = 'HIGH' THEN 1 ELSE 0 END) as HIGH,
-                    SUM(CASE WHEN severity = 'MEDIUM' THEN 1 ELSE 0 END) as MEDIUM,
-                    SUM(CASE WHEN severity = 'LOW' THEN 1 ELSE 0 END) as LOW
-                FROM alerts
-                GROUP BY type
-                ORDER BY count DESC
-            """)
-            rows = cursor.fetchall()
-            return [dict(row) for row in rows]
+    if group_by == "type":
+        grouped = defaultdict(lambda: {"count": 0, "HIGH": 0, "MEDIUM": 0, "LOW": 0})
+        for alert in alerts:
+            bucket = grouped[alert["type"]]
+            bucket["count"] += 1
+            if alert["severity"] in bucket:
+                bucket[alert["severity"]] += 1
+        return [
+            {"type": alert_type, **values}
+            for alert_type, values in sorted(grouped.items(), key=lambda item: item[1]["count"], reverse=True)
+        ]
 
-        cursor.execute("""
-            SELECT timestamp, severity
-            FROM alerts
-            ORDER BY timestamp ASC
-        """)
-        rows = cursor.fetchall()
+    buckets = {}
+    for alert in alerts:
+        bucket = alert["timestamp"][:16]
+        if bucket not in buckets:
+            buckets[bucket] = {
+                "timestamp": bucket,
+                "HIGH": 0,
+                "MEDIUM": 0,
+                "LOW": 0,
+            }
+        severity = alert["severity"]
+        if severity in buckets[bucket]:
+            buckets[bucket][severity] += 1
 
-        buckets = {}
-        for row in rows:
-            bucket = row["timestamp"][:16]
-            if bucket not in buckets:
-                buckets[bucket] = {
-                    "timestamp": bucket,
-                    "HIGH": 0,
-                    "MEDIUM": 0,
-                    "LOW": 0,
-                }
-            severity = row["severity"]
-            if severity in buckets[bucket]:
-                buckets[bucket][severity] += 1
-
-        return list(buckets.values())
-    except sqlite3.Error as e:
-        logger.error(f"get_stats failed: {e}")
-        raise
-    finally:
-        conn.close()
+    return list(buckets.values())
 
 
 def clear_alerts():
     """
-    Deletes all alerts from the database.
-    Used for demo resets.
+    Deletes all alerts from the backing store.
     """
+    if _use_supabase():
+        try:
+            client = _get_supabase()
+            client.table(SUPABASE_ALERTS_TABLE).delete().neq("id", 0).execute()
+            logger.info("All alerts cleared from Supabase.")
+            return
+        except Exception as e:
+            logger.error(f"clear_alerts failed: {e}")
+            raise
+
     try:
         conn = get_connection()
         cursor = conn.cursor()
         cursor.execute("DELETE FROM alerts")
         conn.commit()
-        logger.info("All alerts cleared from database.")
+        logger.info("All alerts cleared from SQLite.")
     except sqlite3.Error as e:
         logger.error(f"clear_alerts failed: {e}")
         raise
