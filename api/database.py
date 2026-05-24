@@ -84,7 +84,8 @@ def insert_alert(alert: dict):
     if _use_supabase():
         try:
             client = _get_supabase()
-            response = client.table(SUPABASE_ALERTS_TABLE).insert(alert).execute()
+            supabase_alert = {k: v for k, v in alert.items() if k != "id"}
+            response = client.table(SUPABASE_ALERTS_TABLE).insert(supabase_alert).execute()
             row = response.data[0]
             logger.info(f"Supabase alert inserted with ID {row['id']}")
             return row["id"]
