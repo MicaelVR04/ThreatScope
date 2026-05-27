@@ -18,6 +18,16 @@ const SEV = {
 
 const FEED_LIMIT = 20
 
+function formatChartData(rawData) {
+  const buckets = {}
+  rawData.forEach(({ timestamp, severity }) => {
+    const time = new Date(timestamp).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })
+    if (!buckets[time]) buckets[time] = { timestamp: time, HIGH: 0, MEDIUM: 0, LOW: 0 }
+    buckets[time][severity] = (buckets[time][severity] || 0) + 1
+  })
+  return Object.values(buckets)
+}
+
 export default function Dashboard({ onConnectionChange }) {
   const { alerts: wsAlerts, connected } = useWebSocket()
   const [summary,    setSummary]    = useState({ total: 0, high: 0, medium: 0, low: 0 })
@@ -34,14 +44,13 @@ export default function Dashboard({ onConnectionChange }) {
         getAttackTypeStats(),
       ])
       setSummary(nextSummary)
-      setChartData(nextChartData)
+      setChartData(formatChartData(nextChartData))
       setTypeStats(nextTypeStats)
     } catch (error) {
       console.error(error)
     }
   }, [])
 
-  // Propagate connection state up to App / Navbar
   useEffect(() => { onConnectionChange?.(connected) }, [connected, onConnectionChange])
 
   useEffect(() => {
@@ -54,7 +63,6 @@ export default function Dashboard({ onConnectionChange }) {
     }
   }, [wsAlerts.length, refreshDashboardData])
 
-  // Freeze the feed when paused
   const displayAlerts = paused ? frozenRef.current : wsAlerts.slice(0, FEED_LIMIT)
   if (!paused) frozenRef.current = displayAlerts
 
@@ -80,22 +88,17 @@ export default function Dashboard({ onConnectionChange }) {
 
       {/* Charts row */}
       <div style={styles.chartsRow}>
-
-        {/* Severity donut — /alerts/summary */}
         <section style={styles.chartCard}>
           <h2 style={styles.sectionTitle}>Severity Breakdown</h2>
           <SeverityChart data={summary} />
         </section>
-
-        {/* Attack type bar — /alerts/stats?group_by=type */}
         <section style={{ ...styles.chartCard, flex: 2 }}>
           <h2 style={styles.sectionTitle}>Attack Types</h2>
           <AttackTypeChart data={typeStats} />
         </section>
-
       </div>
 
-      {/* Time-series area chart — /alerts/stats */}
+      {/* Time-series area chart */}
       <section style={styles.section}>
         <h2 style={styles.sectionTitle}>Alert Activity Over Time</h2>
         {chartData.length === 0 ? (
