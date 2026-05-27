@@ -10,6 +10,7 @@
     "lint": "eslint . --ext js,jsx --report-unused-disable-directives --max-warnings 0"
   },
   "dependencies": {
+    "@supabase/supabase-js": "^2.106.2",
     "axios": "^1.16.1",
     "lucide-react": "^1.16.0",
     "react": "^18.2.0",
