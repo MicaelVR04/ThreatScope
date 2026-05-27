@@ -21,7 +21,11 @@ const FEED_LIMIT = 20
 function formatChartData(rawData) {
   const buckets = {}
   rawData.forEach(({ timestamp, severity }) => {
-    const time = new Date(timestamp).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })
+    const time = new Date(timestamp).toLocaleTimeString([], { 
+      hour: '2-digit', 
+      minute: '2-digit',
+      second: '2-digit'
+    })
     if (!buckets[time]) buckets[time] = { timestamp: time, HIGH: 0, MEDIUM: 0, LOW: 0 }
     buckets[time][severity] = (buckets[time][severity] || 0) + 1
   })
