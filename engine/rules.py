@@ -11,12 +11,13 @@ Current rules:
     1. Port Scan detection      — many packets to different ports from one IP
     2. SYN Flood detection      — flood of SYN packets from one IP
     3. Ping Sweep detection     — ICMP echo requests to many different IPs
+    4. ARP Spoof detection      — multiple MAC addresses claiming the same IP
 """
 
 import os
 import ipaddress
 from time import time
-from scapy.all import IP, TCP, ICMP
+from scapy.all import ARP, IP, TCP, ICMP
 from collections import defaultdict
 from datetime import datetime
 from dotenv import load_dotenv
@@ -36,6 +37,9 @@ syn_flood_tracker = defaultdict(int)
 
 # { src_ip: set of destination IPs pinged }
 ping_sweep_tracker = defaultdict(set)
+
+# { claimed_ip: observed_mac }
+arp_claim_tracker = {}
 
 # { (alert_type, src_ip, dst_ip): last_sent_unix_time }
 alert_cooldowns = {}
@@ -68,8 +72,15 @@ def packet_allowed(packet):
     Filters noisy traffic during demos.
     In demo mode, only LAN/private traffic or explicitly allowed subnets are considered.
     """
-    src_ip = _parse_ip(packet[IP].src)
-    dst_ip = _parse_ip(packet[IP].dst)
+    if packet.haslayer(ARP):
+        src_ip = _parse_ip(packet[ARP].psrc)
+        dst_ip = _parse_ip(packet[ARP].pdst)
+    elif packet.haslayer(IP):
+        src_ip = _parse_ip(packet[IP].src)
+        dst_ip = _parse_ip(packet[IP].dst)
+    else:
+        return False
+
     if not src_ip or not dst_ip:
         return False
 
@@ -115,14 +126,11 @@ def analyze_packet(packet):
         "timestamp": str,   # ISO format timestamp
     }
     """
-    # Only analyze packets that have an IP layer
-    if not packet.haslayer(IP):
-        return None
-
     if not packet_allowed(packet):
         return None
 
     alert = (
+        detect_arp_spoof(packet) or
         detect_port_scan(packet) or
         detect_syn_flood(packet) or
         detect_ping_sweep(packet)
@@ -213,6 +221,44 @@ def detect_ping_sweep(packet):
         )
 
     return None
+
+
+# ── Rule 4: ARP Spoof ──────────────────────────────────────────────────────
+def detect_arp_spoof(packet):
+    """
+    Detects ARP spoofing by watching for multiple MAC addresses claiming
+    ownership of the same IPv4 address.
+    """
+    if not packet.haslayer(ARP):
+        return None
+
+    arp_layer = packet[ARP]
+
+    # ARP reply/op=2 is the strongest signal for poisoning attempts.
+    if arp_layer.op != 2:
+        return None
+
+    claimed_ip = arp_layer.psrc
+    claimed_mac = arp_layer.hwsrc.lower()
+    previous_mac = arp_claim_tracker.get(claimed_ip)
+
+    if previous_mac is None:
+        arp_claim_tracker[claimed_ip] = claimed_mac
+        return None
+
+    if previous_mac == claimed_mac:
+        return None
+
+    arp_claim_tracker[claimed_ip] = claimed_mac
+    return build_alert(
+        alert_type="ARP_SPOOF",
+        src_ip=claimed_ip,
+        dst_ip=arp_layer.pdst,
+        message=(
+            f"{claimed_ip} changed ARP ownership from {previous_mac} "
+            f"to {claimed_mac} — possible ARP spoofing"
+        ),
+    )
 
 
 # ── Alert builder ──────────────────────────────────────────────────────────

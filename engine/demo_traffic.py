@@ -11,7 +11,7 @@ import sys
 import time
 
 from dotenv import load_dotenv
-from scapy.all import ICMP, IP, TCP
+from scapy.all import ARP, Ether, ICMP, IP, TCP
 
 from capture import handle_packet
 
@@ -19,6 +19,7 @@ load_dotenv()
 
 DEFAULT_SRC_IP = os.getenv("DEMO_SRC_IP", "192.168.99.50")
 DEFAULT_DST_IP = os.getenv("DEMO_DST_IP", "192.168.99.10")
+DEFAULT_TARGET_MAC = os.getenv("DEMO_TARGET_MAC", "ff:ff:ff:ff:ff:ff")
 
 
 def trigger_port_scan(src_ip: str, dst_ip: str):
@@ -38,15 +39,35 @@ def trigger_syn_flood(src_ip: str, dst_ip: str):
         handle_packet(IP(src=src_ip, dst=dst_ip) / TCP(dport=80, flags=0x02))
 
 
+def trigger_arp_spoof(claimed_ip: str, target_ip: str, target_mac: str):
+    legitimate_mac = "aa:bb:cc:dd:ee:01"
+    spoofed_mac = "aa:bb:cc:dd:ee:99"
+
+    handle_packet(
+        Ether(src=legitimate_mac, dst=target_mac) /
+        ARP(op=2, psrc=claimed_ip, pdst=target_ip, hwsrc=legitimate_mac, hwdst=target_mac)
+    )
+    time.sleep(0.05)
+    handle_packet(
+        Ether(src=spoofed_mac, dst=target_mac) /
+        ARP(op=2, psrc=claimed_ip, pdst=target_ip, hwsrc=spoofed_mac, hwdst=target_mac)
+    )
+
+
 def main():
     parser = argparse.ArgumentParser(description="Trigger deterministic ThreatScope demo alerts.")
     parser.add_argument(
         "scenario",
-        choices=["port-scan", "ping-sweep", "syn-flood"],
+        choices=["port-scan", "ping-sweep", "syn-flood", "arp-spoof"],
         help="Alert scenario to trigger.",
     )
     parser.add_argument("--src-ip", default=DEFAULT_SRC_IP, help="Spoofed source IP used in crafted packets.")
     parser.add_argument("--dst-ip", default=DEFAULT_DST_IP, help="Destination IP for port-scan or syn-flood.")
+    parser.add_argument(
+        "--target-mac",
+        default=DEFAULT_TARGET_MAC,
+        help="Destination MAC used in crafted ARP replies.",
+    )
     parser.add_argument(
         "--dst-prefix",
         default="192.168.99",
@@ -58,6 +79,8 @@ def main():
         trigger_port_scan(args.src_ip, args.dst_ip)
     elif args.scenario == "ping-sweep":
         trigger_ping_sweep(args.src_ip, args.dst_prefix)
+    elif args.scenario == "arp-spoof":
+        trigger_arp_spoof(args.src_ip, args.dst_ip, args.target_mac)
     else:
         trigger_syn_flood(args.src_ip, args.dst_ip)
 

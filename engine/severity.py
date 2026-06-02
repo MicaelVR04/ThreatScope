@@ -20,6 +20,7 @@ SEVERITY_MAP = {
     "SYN_FLOOD":  "HIGH",    # active DoS attack
     "PORT_SCAN":  "MEDIUM",  # reconnaissance — attacker mapping the network
     "PING_SWEEP": "LOW",     # host discovery — early stage reconnaissance
+    "ARP_SPOOF":  "MEDIUM",  # LAN poisoning / MITM setup attempt
 }
 
 # ── Severity order (for sorting and comparison) ────────────────────────────

@@ -23,12 +23,14 @@ sys.path.insert(0, os.path.abspath(os.path.join(os.path.dirname(__file__), '..')
 
 import pytest
 import rules
-from scapy.all import IP, TCP, ICMP, Ether
+from scapy.all import ARP, IP, TCP, ICMP, Ether
 from rules import (
     analyze_packet,
+    detect_arp_spoof,
     detect_port_scan,
     detect_syn_flood,
     detect_ping_sweep,
+    arp_claim_tracker,
     packet_allowed,
     port_scan_tracker,
     syn_flood_tracker,
@@ -51,8 +53,19 @@ def make_icmp_packet(src_ip, dst_ip, icmp_type=8):
     """Creates an ICMP packet with the given parameters."""
     return IP(src=src_ip, dst=dst_ip) / ICMP(type=icmp_type)
 
+def make_arp_reply(claimed_ip, claimed_mac, target_ip="192.168.1.1", target_mac="ff:ff:ff:ff:ff:ff"):
+    """Creates an ARP reply packet with a claimed IP/MAC mapping."""
+    return Ether(src=claimed_mac, dst=target_mac) / ARP(
+        op=2,
+        psrc=claimed_ip,
+        pdst=target_ip,
+        hwsrc=claimed_mac,
+        hwdst=target_mac,
+    )
+
 def clear_trackers():
     """Resets all detection trackers between tests."""
+    arp_claim_tracker.clear()
     port_scan_tracker.clear()
     syn_flood_tracker.clear()
     ping_sweep_tracker.clear()
@@ -263,6 +276,38 @@ class TestAlertStructure:
             alert = detect_port_scan(packet)
 
         assert alert["severity"] in ["LOW", "MEDIUM", "HIGH"]
+
+
+class TestArpSpoof:
+
+    def test_first_arp_claim_does_not_alert(self):
+        packet = make_arp_reply("192.168.1.50", "aa:bb:cc:dd:ee:01")
+        assert detect_arp_spoof(packet) is None
+
+    def test_same_mac_repeat_does_not_alert(self):
+        first = make_arp_reply("192.168.1.50", "aa:bb:cc:dd:ee:01")
+        second = make_arp_reply("192.168.1.50", "aa:bb:cc:dd:ee:01")
+        detect_arp_spoof(first)
+        assert detect_arp_spoof(second) is None
+
+    def test_mac_change_triggers_arp_spoof_alert(self):
+        first = make_arp_reply("192.168.1.50", "aa:bb:cc:dd:ee:01")
+        second = make_arp_reply("192.168.1.50", "aa:bb:cc:dd:ee:02")
+        detect_arp_spoof(first)
+        alert = detect_arp_spoof(second)
+        assert alert is not None
+        assert alert["type"] == "ARP_SPOOF"
+        assert alert["severity"] == "MEDIUM"
+
+    def test_analyze_packet_supports_arp_spoof(self):
+        rules.DEMO_MODE = True
+        rules.ALLOWED_SUBNETS = []
+        first = make_arp_reply("192.168.1.50", "aa:bb:cc:dd:ee:01")
+        second = make_arp_reply("192.168.1.50", "aa:bb:cc:dd:ee:02")
+        assert analyze_packet(first) is None
+        alert = analyze_packet(second)
+        assert alert is not None
+        assert alert["type"] == "ARP_SPOOF"
 
 
 class TestDemoStability:
