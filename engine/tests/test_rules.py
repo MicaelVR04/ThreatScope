@@ -31,6 +31,7 @@ from rules import (
     detect_syn_flood,
     detect_ping_sweep,
     arp_claim_tracker,
+    arp_conflict_tracker,
     packet_allowed,
     port_scan_tracker,
     syn_flood_tracker,
@@ -66,6 +67,7 @@ def make_arp_reply(claimed_ip, claimed_mac, target_ip="192.168.1.1", target_mac=
 def clear_trackers():
     """Resets all detection trackers between tests."""
     arp_claim_tracker.clear()
+    arp_conflict_tracker.clear()
     port_scan_tracker.clear()
     syn_flood_tracker.clear()
     ping_sweep_tracker.clear()
@@ -280,6 +282,14 @@ class TestAlertStructure:
 
 class TestArpSpoof:
 
+    @pytest.fixture(autouse=True)
+    def restore_arp_settings(self):
+        original_ttl = rules.ARP_ENTRY_TTL_SECONDS
+        original_threshold = rules.ARP_SPOOF_CONFIRMATION_THRESHOLD
+        yield
+        rules.ARP_ENTRY_TTL_SECONDS = original_ttl
+        rules.ARP_SPOOF_CONFIRMATION_THRESHOLD = original_threshold
+
     def test_first_arp_claim_does_not_alert(self):
         packet = make_arp_reply("192.168.1.50", "aa:bb:cc:dd:ee:01")
         assert detect_arp_spoof(packet) is None
@@ -291,21 +301,37 @@ class TestArpSpoof:
         assert detect_arp_spoof(second) is None
 
     def test_mac_change_triggers_arp_spoof_alert(self):
+        rules.ARP_SPOOF_CONFIRMATION_THRESHOLD = 2
         first = make_arp_reply("192.168.1.50", "aa:bb:cc:dd:ee:01")
         second = make_arp_reply("192.168.1.50", "aa:bb:cc:dd:ee:02")
+        third = make_arp_reply("192.168.1.50", "aa:bb:cc:dd:ee:02")
         detect_arp_spoof(first)
-        alert = detect_arp_spoof(second)
+        assert detect_arp_spoof(second) is None
+        alert = detect_arp_spoof(third)
         assert alert is not None
         assert alert["type"] == "ARP_SPOOF"
         assert alert["severity"] == "MEDIUM"
 
+    def test_stale_mapping_change_does_not_alert(self, monkeypatch):
+        rules.ARP_ENTRY_TTL_SECONDS = 1
+        times = iter([100.0, 102.0])
+        monkeypatch.setattr(rules, "time", lambda: next(times))
+
+        first = make_arp_reply("192.168.1.50", "aa:bb:cc:dd:ee:01")
+        second = make_arp_reply("192.168.1.50", "aa:bb:cc:dd:ee:02")
+        assert detect_arp_spoof(first) is None
+        assert detect_arp_spoof(second) is None
+
     def test_analyze_packet_supports_arp_spoof(self):
         rules.DEMO_MODE = True
         rules.ALLOWED_SUBNETS = []
+        rules.ARP_SPOOF_CONFIRMATION_THRESHOLD = 2
         first = make_arp_reply("192.168.1.50", "aa:bb:cc:dd:ee:01")
         second = make_arp_reply("192.168.1.50", "aa:bb:cc:dd:ee:02")
+        third = make_arp_reply("192.168.1.50", "aa:bb:cc:dd:ee:02")
         assert analyze_packet(first) is None
-        alert = analyze_packet(second)
+        assert analyze_packet(second) is None
+        alert = analyze_packet(third)
         assert alert is not None
         assert alert["type"] == "ARP_SPOOF"
 

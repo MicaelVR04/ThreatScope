@@ -38,8 +38,11 @@ syn_flood_tracker = defaultdict(int)
 # { src_ip: set of destination IPs pinged }
 ping_sweep_tracker = defaultdict(set)
 
-# { claimed_ip: observed_mac }
+# { claimed_ip: {"mac": observed_mac, "last_seen": unix_time} }
 arp_claim_tracker = {}
+
+# { (claimed_ip, previous_mac, claimed_mac): {"count": int, "last_seen": unix_time} }
+arp_conflict_tracker = {}
 
 # { (alert_type, src_ip, dst_ip): last_sent_unix_time }
 alert_cooldowns = {}
@@ -53,6 +56,8 @@ PING_SWEEP_THRESHOLD = 5     # unique IPs pinged by one IP before alerting
 # ── Demo stability controls ────────────────────────────────────────────────
 DEMO_MODE = os.getenv("DEMO_MODE", "false").lower() == "true"
 ALERT_COOLDOWN_SECONDS = int(os.getenv("ALERT_COOLDOWN_SECONDS", "60"))
+ARP_ENTRY_TTL_SECONDS = int(os.getenv("ARP_ENTRY_TTL_SECONDS", "300"))
+ARP_SPOOF_CONFIRMATION_THRESHOLD = int(os.getenv("ARP_SPOOF_CONFIRMATION_THRESHOLD", "2"))
 ALLOWED_SUBNETS = [
     ipaddress.ip_network(value.strip(), strict=False)
     for value in os.getenv("ALLOWED_SUBNETS", "").split(",")
@@ -238,18 +243,35 @@ def detect_arp_spoof(packet):
     if arp_layer.op != 2:
         return None
 
+    now = time()
     claimed_ip = arp_layer.psrc
     claimed_mac = arp_layer.hwsrc.lower()
-    previous_mac = arp_claim_tracker.get(claimed_ip)
+    observed_claim = arp_claim_tracker.get(claimed_ip)
+    previous_mac = observed_claim["mac"] if observed_claim else None
 
     if previous_mac is None:
-        arp_claim_tracker[claimed_ip] = claimed_mac
+        arp_claim_tracker[claimed_ip] = {"mac": claimed_mac, "last_seen": now}
         return None
 
     if previous_mac == claimed_mac:
+        arp_claim_tracker[claimed_ip]["last_seen"] = now
         return None
 
-    arp_claim_tracker[claimed_ip] = claimed_mac
+    if now - observed_claim["last_seen"] > ARP_ENTRY_TTL_SECONDS:
+        arp_claim_tracker[claimed_ip] = {"mac": claimed_mac, "last_seen": now}
+        return None
+
+    conflict_key = (claimed_ip, previous_mac, claimed_mac)
+    conflict_entry = arp_conflict_tracker.get(conflict_key, {"count": 0, "last_seen": now})
+    conflict_entry["count"] += 1
+    conflict_entry["last_seen"] = now
+    arp_conflict_tracker[conflict_key] = conflict_entry
+
+    if conflict_entry["count"] < ARP_SPOOF_CONFIRMATION_THRESHOLD:
+        return None
+
+    arp_claim_tracker[claimed_ip] = {"mac": claimed_mac, "last_seen": now}
+    arp_conflict_tracker.pop(conflict_key, None)
     return build_alert(
         alert_type="ARP_SPOOF",
         src_ip=claimed_ip,

@@ -52,6 +52,11 @@ def trigger_arp_spoof(claimed_ip: str, target_ip: str, target_mac: str):
         Ether(src=spoofed_mac, dst=target_mac) /
         ARP(op=2, psrc=claimed_ip, pdst=target_ip, hwsrc=spoofed_mac, hwdst=target_mac)
     )
+    time.sleep(0.05)
+    handle_packet(
+        Ether(src=spoofed_mac, dst=target_mac) /
+        ARP(op=2, psrc=claimed_ip, pdst=target_ip, hwsrc=spoofed_mac, hwdst=target_mac)
+    )
 
 
 def main():
