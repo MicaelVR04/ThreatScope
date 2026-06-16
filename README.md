@@ -1,1 +1,299 @@
 # ThreatScope
+
+ThreatScope is a real-time Network Intrusion Detection System built for Holberton Demo Day. It captures network traffic with a Python/Scapy engine, detects suspicious behavior with rule-based signatures, sends alerts through a FastAPI ingestion API, stores alerts in Supabase Postgres, and displays live security activity in a React dashboard.
+
+The project is designed to show a complete security monitoring pipeline:
+
+```text
+Network traffic or demo packets
+        |
+        v
+Python Scapy detection engine
+        |
+        v
+FastAPI POST /alerts ingestion API
+        |
+        v
+Supabase Postgres alerts table
+        |
+        v
+React dashboard with Supabase Realtime
+```
+
+## Current Status
+
+The main team branch is `dev`.
+
+Working features:
+
+- Live alert ingestion through FastAPI
+- Supabase-backed alert storage
+- Dashboard reads alerts directly from Supabase
+- Dashboard receives live updates through Supabase Realtime
+- Summary cards, charts, and alert history update from real alert data
+- Deterministic demo traffic triggers for repeatable presentations
+- Engine detection rules for:
+  - `PORT_SCAN`
+  - `SYN_FLOOD`
+  - `PING_SWEEP`
+  - `ARP_SPOOF`
+
+The ARP spoof rule is a real rule in the engine, not only a simulated dashboard event. It watches for repeated conflicting ARP replies where multiple MAC addresses claim the same IP address.
+
+## Tech Stack
+
+| Layer | Technology |
+| --- | --- |
+| Packet capture and detection | Python, Scapy |
+| Ingestion API | FastAPI, Pydantic, Uvicorn |
+| Database and realtime | Supabase Postgres, Supabase Realtime |
+| Dashboard | React, Vite, Supabase JS, Recharts |
+| Local orchestration | Docker Compose |
+| Tests | Pytest |
+
+## Repository Structure
+
+```text
+ThreatScope/
+├── api/                 # FastAPI alert ingestion API
+├── dashboard/           # React/Vite dashboard
+├── engine/              # Scapy capture engine and detection rules
+├── supabase/            # Supabase SQL schema
+├── docs/                # Architecture and migration notes
+├── docker-compose.yml   # Local multi-service stack
+├── .env.example         # Safe environment variable template
+└── README.md
+```
+
+## Environment Setup
+
+Create a local `.env` from the safe template:
+
+```bash
+cp .env.example .env
+```
+
+Fill in the Supabase values in `.env`:
+
+```bash
+SUPABASE_URL=https://your-project.supabase.co
+SUPABASE_SERVICE_ROLE_KEY=your-service-role-key
+SUPABASE_ALERTS_TABLE=alerts
+
+VITE_SUPABASE_URL=https://your-project.supabase.co
+VITE_SUPABASE_ANON_KEY=your-anon-or-publishable-key
+```
+
+Do not commit `.env`. The service-role key is backend-only and must not be exposed in frontend code.
+
+Useful demo settings:
+
+```bash
+DEMO_MODE=true
+ALERT_COOLDOWN_SECONDS=60
+ARP_ENTRY_TTL_SECONDS=300
+ARP_SPOOF_CONFIRMATION_THRESHOLD=2
+# ALLOWED_SUBNETS=192.168.12.0/24
+```
+
+## Supabase Setup
+
+1. Create a Supabase project.
+2. Open the Supabase SQL Editor.
+3. Run the schema in:
+
+```text
+supabase/alerts_schema.sql
+```
+
+This creates the `alerts` table, indexes, read policy, and adds the table to the Supabase Realtime publication.
+
+The dashboard needs read access through the anon or publishable key. The API uses the service-role key to insert alerts.
+
+## Running Locally
+
+Start from the project root:
+
+```bash
+git switch dev
+git pull origin dev
+```
+
+### Option 1: Docker Compose
+
+```bash
+docker compose up --build
+```
+
+Services:
+
+- API: `http://localhost:8000`
+- API docs: `http://localhost:8000/docs`
+- Dashboard: `http://localhost:5173`
+
+### Option 2: Run Services Manually
+
+API:
+
+```bash
+cd api
+python3 -m venv .venv
+source .venv/bin/activate
+pip install -r requirements.txt
+uvicorn main:app --reload --host 0.0.0.0 --port 8000
+```
+
+Dashboard:
+
+```bash
+cd dashboard
+npm install
+npm run dev
+```
+
+Engine:
+
+```bash
+cd engine
+python3 -m venv .venv
+source .venv/bin/activate
+pip install -r requirements.txt
+sudo python capture.py
+```
+
+On macOS, live packet capture requires `sudo`. Set `NETWORK_INTERFACE` in `.env` if your active interface is not `en0`.
+
+## Demo Traffic
+
+The demo traffic script sends crafted packets through the real engine path:
+
+```text
+crafted packet -> engine rules -> alert sender -> FastAPI -> Supabase -> dashboard
+```
+
+Run from the `engine/` directory:
+
+```bash
+python demo_traffic.py port-scan
+python demo_traffic.py ping-sweep
+python demo_traffic.py syn-flood
+python demo_traffic.py arp-spoof
+```
+
+For the main demo, the most useful pair is:
+
+```bash
+python demo_traffic.py port-scan
+python demo_traffic.py arp-spoof
+```
+
+Then confirm:
+
+- Supabase `alerts` table receives new rows
+- Dashboard alert feed updates live
+- Summary cards update
+- Charts update
+- Alert history shows the new events
+
+## Tests
+
+Engine tests:
+
+```bash
+cd engine
+python -m pytest tests/ -v
+```
+
+API tests:
+
+```bash
+cd api
+python -m pytest tests/test_api.py -v
+```
+
+Dashboard build check:
+
+```bash
+cd dashboard
+npm run build
+```
+
+## What We Have Built
+
+For a project checkup, the short version is:
+
+ThreatScope is now a working end-to-end intrusion detection demo. The Python engine analyzes packets using rule-based detection, the API receives and validates alerts, Supabase stores them and pushes realtime updates, and the React dashboard shows live alert data with summary cards, charts, and history.
+
+Key progress:
+
+- Built a packet analysis engine with Scapy
+- Added detection rules for port scans, SYN floods, ping sweeps, and ARP spoofing
+- Added severity scoring for alerts
+- Added false-positive tuning for ARP spoof detection
+- Built a FastAPI ingestion layer
+- Migrated storage from local-only SQLite toward Supabase Postgres
+- Migrated dashboard realtime updates to Supabase Realtime
+- Added deterministic demo traffic so the presentation does not depend on random network activity
+- Verified the live pipeline from demo traffic to dashboard updates
+
+## Checkup Demo Flow
+
+Use this for a short Holberton progress meeting:
+
+1. Start with the problem:
+   - Networks generate too much traffic to inspect manually.
+   - ThreatScope watches traffic and surfaces suspicious behavior as alerts.
+
+2. Show the architecture:
+   - Engine captures or receives packets.
+   - Rules detect suspicious patterns.
+   - API ingests alerts.
+   - Supabase stores and streams alerts.
+   - Dashboard shows the live monitoring view.
+
+3. Show the dashboard:
+   - Point out the live feed, severity cards, charts, and history.
+
+4. Trigger a port scan demo:
+
+```bash
+cd engine
+python demo_traffic.py port-scan
+```
+
+5. Trigger an ARP spoof demo:
+
+```bash
+python demo_traffic.py arp-spoof
+```
+
+6. Explain what is real:
+   - The detection rules are implemented in the Python engine.
+   - Demo traffic is crafted to reliably trigger those rules.
+   - Live packet capture also works locally, but the deterministic triggers make the meeting reliable.
+
+7. Close with next steps:
+   - Run more real LAN validation with teammates.
+   - Continue reducing false positives.
+   - Polish dashboard presentation.
+   - Finalize Demo Day script and documentation.
+
+## Known Caveats
+
+- Live capture on macOS requires `sudo`.
+- Demo traffic uses crafted packets to reliably show the pipeline during presentations.
+- The dashboard currently reads directly from Supabase and subscribes through Supabase Realtime.
+- The FastAPI app still exposes older read and WebSocket endpoints, but the current dashboard path is Supabase-first.
+- Supabase service-role keys must stay server-side only.
+- `DEMO_MODE=true` is recommended for presentations to reduce noisy unrelated traffic.
+
+## Branch Workflow
+
+Use `dev` for team work:
+
+```bash
+git switch dev
+git pull origin dev
+```
+
+Keep `main` reserved for the final demo-ready release.
