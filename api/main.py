@@ -13,7 +13,7 @@ Endpoints:
 """
 
 import logging
-from fastapi import FastAPI, WebSocket, WebSocketDisconnect, Query, HTTPException, Request
+from fastapi import FastAPI, WebSocket, WebSocketDisconnect, Query, HTTPException, Request, Depends
 from fastapi.middleware.cors import CORSMiddleware
 from contextlib import asynccontextmanager
 from datetime import datetime, timezone
@@ -23,6 +23,7 @@ from slowapi.middleware import SlowAPIMiddleware
 from models import Alert, AlertSummary
 from database import init_db, insert_alert, get_alerts, get_summary, get_stats, clear_alerts
 from websocket import manager
+from auth import verify_token
 
 
 # ── Logging ────────────────────────────────────────────────────────────────
@@ -71,7 +72,7 @@ app.add_middleware(
 # ── REST Endpoints ─────────────────────────────────────────────────────────
 @app.post("/alerts", response_model=Alert)
 @limiter.limit("60/minute")
-async def create_alert(request: Request, alert: Alert):
+async def create_alert(request: Request, alert: Alert, user=Depends(verify_token)):
     """
     Receives a new alert from the engine.
     Validates severity, saves to DB, and broadcasts to all dashboards.
@@ -96,7 +97,8 @@ async def create_alert(request: Request, alert: Alert):
 def read_alerts(
     severity: str = Query(default=None, description="Filter by severity: LOW, MEDIUM, HIGH"),
     limit: int = Query(default=50, le=200, description="Max number of alerts to return"),
-    offset: int = Query(default=0, ge=0, description="Number of alerts to skip")
+    offset: int = Query(default=0, ge=0, description="Number of alerts to skip"),
+    user=Depends(verify_token)
 ):
     """
     Returns alert history from the database.
@@ -109,7 +111,7 @@ def read_alerts(
 
 
 @app.get("/alerts/summary", response_model=AlertSummary)
-def read_summary():
+def read_summary(user=Depends(verify_token)):
     """
     Returns alert counts grouped by severity.
     Used for the dashboard summary cards.
@@ -118,7 +120,10 @@ def read_summary():
 
 
 @app.get("/alerts/stats")
-def read_stats(group_by: str = Query(default=None, description='Use "type" for attack-type counts')):
+def read_stats(
+    group_by: str = Query(default=None, description='Use "type" for attack-type counts'),
+    user=Depends(verify_token)
+):
     """
     Returns chart data for the dashboard.
     - default: time-series counts by severity
@@ -131,7 +136,7 @@ def read_stats(group_by: str = Query(default=None, description='Use "type" for a
 
 
 @app.delete("/alerts")
-def delete_alerts():
+def delete_alerts(user=Depends(verify_token)):
     """
     Clears all alerts from the database.
     Useful for resetting between demos.
