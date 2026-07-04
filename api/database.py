@@ -43,6 +43,7 @@ def get_connection():
 def init_db():
     """
     Initializes the configured backing store.
+    Tries Supabase first, falls back to SQLite on failure.
     """
     if _use_supabase():
         try:
@@ -51,8 +52,7 @@ def init_db():
             logger.info("Supabase connection verified successfully.")
             return
         except Exception as e:
-            logger.error(f"Supabase init failed: {e}")
-            raise
+            logger.warning(f"Supabase init failed ({e}), falling back to SQLite.")
 
     try:
         conn = get_connection()

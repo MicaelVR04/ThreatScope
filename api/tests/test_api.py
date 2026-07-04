@@ -86,9 +86,9 @@ class TestCreateAlert:
     def test_reject_invalid_severity(self):
         """Should reject alerts with invalid severity values."""
         bad_alert = make_alert()
-        bad_alert["severity"] = "CRITICAL"  # not a valid value
+        bad_alert["severity"] = "CRITICAL"
         response = client.post("/alerts", json=bad_alert)
-        assert response.status_code == 422  # Pydantic validation error
+        assert response.status_code == 422
 
     def test_reject_missing_fields(self):
         """Should reject alerts missing required fields."""
@@ -201,7 +201,7 @@ class TestAlertStats:
         client.post("/alerts", json=make_alert("HIGH", "PORT_SCAN"))
         client.post("/alerts", json=make_alert("HIGH", "PORT_SCAN"))
         client.post("/alerts", json=make_alert("MEDIUM", "SYN_FLOOD"))
-        data = client.get("/alerts/stats").json()
+        data = client.get("/alerts/stats?group_by=type").json()
         types = {item["type"]: item["count"] for item in data}
         assert types["PORT_SCAN"] == 2
         assert types["SYN_FLOOD"] == 1
@@ -211,7 +211,7 @@ class TestAlertStats:
         for _ in range(3):
             client.post("/alerts", json=make_alert("HIGH", "PORT_SCAN"))
         client.post("/alerts", json=make_alert("MEDIUM", "SYN_FLOOD"))
-        data = client.get("/alerts/stats").json()
+        data = client.get("/alerts/stats?group_by=type").json()
         counts = [item["count"] for item in data]
         assert counts == sorted(counts, reverse=True)
 
