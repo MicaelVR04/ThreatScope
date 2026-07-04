@@ -1,8 +1,10 @@
 import { useState, useCallback, useEffect, Component } from 'react'
-import { BrowserRouter, Routes, Route, useLocation, Navigate } from 'react-router-dom'
+import { BrowserRouter, Routes, Route, useLocation, Navigate, useNavigate } from 'react-router-dom'
 import Navbar from './components/Navbar'
 import Dashboard from './pages/Dashboard'
 import AlertHistory from './pages/AlertHistory'
+import Login from './pages/Login'
+import { supabase } from './supabaseClient'
 
 // ── Scroll to top on every route change ─────────────────────────────────────
 function ScrollToTop() {
@@ -53,9 +55,33 @@ function NotFound() {
   )
 }
 
+// ── Protected route wrapper ──────────────────────────────────────────────────
+function ProtectedRoute({ session, children }) {
+  if (session === undefined) return null // still loading
+  if (!session) return <Navigate to="/login" replace />
+  return children
+}
+
 // ── App shell ─────────────────────────────────────────────────────────────────
 function AppShell() {
   const [connected, setConnected] = useState(false)
+  const [session, setSession] = useState(undefined)
+  const navigate = useNavigate()
+
+  useEffect(() => {
+    // Check for an existing session on mount
+    supabase.auth.getSession().then(({ data: { session } }) => {
+      setSession(session ?? null)
+    })
+
+    // Listen for sign-in / sign-out events
+    const { data: { subscription } } = supabase.auth.onAuthStateChange((_event, session) => {
+      setSession(session ?? null)
+      if (!session) navigate('/login', { replace: true })
+    })
+
+    return () => subscription.unsubscribe()
+  }, [navigate])
 
   const handleConnectionChange = useCallback((status) => {
     setConnected(status)
@@ -63,18 +89,30 @@ function AppShell() {
 
   return (
     <div style={styles.shell}>
-      <Navbar connected={connected} />
-
       <ErrorBoundary>
         <ScrollToTop />
         <Routes>
+          <Route path="/login" element={<Login />} />
           <Route
             path="/"
-            element={<Dashboard onConnectionChange={handleConnectionChange} />}
+            element={
+              <ProtectedRoute session={session}>
+                <Navbar connected={connected} />
+                <Dashboard onConnectionChange={handleConnectionChange} />
+              </ProtectedRoute>
+            }
           />
-          <Route path="/history" element={<AlertHistory />} />
-          <Route path="/404"     element={<NotFound />} />
-          <Route path="*"        element={<Navigate to="/404" replace />} />
+          <Route
+            path="/history"
+            element={
+              <ProtectedRoute session={session}>
+                <Navbar connected={connected} />
+                <AlertHistory />
+              </ProtectedRoute>
+            }
+          />
+          <Route path="/404" element={<NotFound />} />
+          <Route path="*"   element={<Navigate to="/404" replace />} />
         </Routes>
       </ErrorBoundary>
     </div>
