@@ -66,6 +66,7 @@ function ProtectedRoute({ session, children }) {
 function AppShell() {
   const [connected, setConnected] = useState(false)
   const [session, setSession] = useState(undefined)
+  const [signingOut, setSigningOut] = useState(false)
   const navigate = useNavigate()
 
   useEffect(() => {
@@ -87,6 +88,20 @@ function AppShell() {
     setConnected(status)
   }, [])
 
+  const handleLogout = useCallback(async () => {
+    setSigningOut(true)
+    const { error } = await supabase.auth.signOut()
+    setSigningOut(false)
+
+    if (error) {
+      console.error('Logout failed:', error.message)
+      return
+    }
+
+    setSession(null)
+    navigate('/login', { replace: true })
+  }, [navigate])
+
   return (
     <div style={styles.shell}>
       <ErrorBoundary>
@@ -97,7 +112,12 @@ function AppShell() {
             path="/"
             element={
               <ProtectedRoute session={session}>
-                <Navbar connected={connected} />
+                <Navbar
+                  connected={connected}
+                  userEmail={session?.user?.email}
+                  signingOut={signingOut}
+                  onLogout={handleLogout}
+                />
                 <Dashboard onConnectionChange={handleConnectionChange} />
               </ProtectedRoute>
             }
@@ -106,7 +126,12 @@ function AppShell() {
             path="/history"
             element={
               <ProtectedRoute session={session}>
-                <Navbar connected={connected} />
+                <Navbar
+                  connected={connected}
+                  userEmail={session?.user?.email}
+                  signingOut={signingOut}
+                  onLogout={handleLogout}
+                />
                 <AlertHistory />
               </ProtectedRoute>
             }

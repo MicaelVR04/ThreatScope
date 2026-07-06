@@ -10,10 +10,23 @@ async function getHeaders() {
   }
 }
 
-async function apiFetch(path) {
+async function apiFetch(path, options = {}) {
   const headers = await getHeaders()
-  const res = await fetch(`${API_URL}${path}`, { headers })
-  if (!res.ok) throw new Error(`API error: ${res.status}`)
+  const res = await fetch(`${API_URL}${path}`, {
+    ...options,
+    headers: {
+      ...headers,
+      ...(options.headers || {}),
+    },
+  })
+  if (!res.ok) {
+    let message = `API error: ${res.status}`
+    try {
+      const data = await res.json()
+      if (data?.detail) message = data.detail
+    } catch {}
+    throw new Error(message)
+  }
   return res.json()
 }
 
@@ -78,4 +91,8 @@ export async function getAttackTypeStats() {
     if (severity) grouped[type][severity]++
   })
   return Object.values(grouped)
+}
+
+export async function analyzeRecentAlerts() {
+  return apiFetch('/ai/analyze-alerts', { method: 'POST' })
 }

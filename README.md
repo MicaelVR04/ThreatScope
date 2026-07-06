@@ -96,6 +96,15 @@ ARP_SPOOF_CONFIRMATION_THRESHOLD=2
 # ALLOWED_SUBNETS=192.168.12.0/24
 ```
 
+Optional local AI diagnostics:
+
+```bash
+OLLAMA_BASE_URL=http://127.0.0.1:11434
+OLLAMA_MODEL=qwen2.5:7b
+OLLAMA_TIMEOUT_SECONDS=45
+OLLAMA_ALERT_LIMIT=20
+```
+
 ## Supabase Setup
 
 1. Create a Supabase project.
@@ -194,6 +203,38 @@ Then confirm:
 - Summary cards update
 - Charts update
 - Alert history shows the new events
+
+## Local AI Diagnostics With Ollama
+
+ThreatScope can use Ollama as a local developer-only analysis helper. The AI does not detect attacks and does not replace the rule engine. It summarizes recent stored alerts, describes likely patterns, and suggests rule-tuning ideas.
+
+Install Ollama from:
+
+```text
+https://ollama.com/download
+```
+
+Pull the recommended model:
+
+```bash
+ollama pull qwen2.5:7b
+```
+
+Optional lighter fallback:
+
+```bash
+ollama pull llama3.2:3b
+```
+
+Start or test the model:
+
+```bash
+ollama run qwen2.5:7b
+```
+
+When the API and dashboard are running, log in to the dashboard and use the **AI Analysis** panel to analyze recent alerts. If Ollama is not running or the configured model is missing, the dashboard will show a friendly setup error.
+
+For a clean presentation, clear older test alerts or set `OLLAMA_ALERT_LIMIT=4` so the AI only summarizes the latest four demo alerts. Historical simulated rows can make the AI describe older sources or severities that are not part of the current demo run.
 
 ## Tests
 

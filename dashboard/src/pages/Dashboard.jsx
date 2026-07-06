@@ -8,7 +8,7 @@ import AlertCard from '../components/AlertCard'
 import SeverityChart from '../components/SeverityChart'
 import AttackTypeChart from '../components/AttackTypeChart'
 import useWebSocket from '../hooks/useWebSocket'
-import { getAlertsSummary, getAlertStats, getAttackTypeStats } from '../services/api'
+import { analyzeRecentAlerts, getAlertsSummary, getAlertStats, getAttackTypeStats } from '../services/api'
 
 const SEV = {
   HIGH:   { color: '#ef4444', icon: <ShieldAlert  size={18} color="#ef4444" /> },
@@ -38,6 +38,9 @@ export default function Dashboard({ onConnectionChange }) {
   const [chartData,  setChartData]  = useState([])
   const [typeStats,  setTypeStats]  = useState([])
   const [paused,     setPaused]     = useState(false)
+  const [aiResult,   setAiResult]   = useState(null)
+  const [aiError,    setAiError]    = useState(null)
+  const [aiLoading,  setAiLoading]  = useState(false)
   const frozenRef = useRef([])
 
   const refreshDashboardData = useCallback(async () => {
@@ -66,6 +69,20 @@ export default function Dashboard({ onConnectionChange }) {
       refreshDashboardData()
     }
   }, [wsAlerts.length, refreshDashboardData])
+
+  const handleAnalyzeAlerts = async () => {
+    setAiLoading(true)
+    setAiError(null)
+    try {
+      const result = await analyzeRecentAlerts()
+      setAiResult(result)
+    } catch (error) {
+      console.error(error)
+      setAiError(error.message || 'Ollama is not available. Start Ollama and pull the configured model.')
+    } finally {
+      setAiLoading(false)
+    }
+  }
 
   const displayAlerts = paused ? frozenRef.current : wsAlerts.slice(0, FEED_LIMIT)
   if (!paused) frozenRef.current = displayAlerts
@@ -138,6 +155,55 @@ export default function Dashboard({ onConnectionChange }) {
         )}
       </section>
 
+      {/* AI developer diagnostics */}
+      <section style={styles.aiSection}>
+        <div style={styles.aiHeader}>
+          <div>
+            <h2 style={styles.sectionTitle}>AI Analysis</h2>
+            <p style={styles.aiSubtext}>Developer diagnostics from local Ollama. Rule detections stay authoritative.</p>
+          </div>
+          <button style={styles.aiButton} onClick={handleAnalyzeAlerts} disabled={aiLoading}>
+            <Activity size={14} />
+            {aiLoading ? 'Analyzing...' : 'Analyze recent alerts'}
+          </button>
+        </div>
+
+        {aiError && (
+          <div style={styles.aiError}>
+            <AlertTriangle size={16} />
+            <span>{aiError}</span>
+          </div>
+        )}
+
+        {!aiError && !aiResult && (
+          <p style={styles.aiEmpty}>Run analysis after alerts appear in the dashboard.</p>
+        )}
+
+        {aiResult && (
+          <div style={styles.aiResult}>
+            <div style={styles.aiMeta}>
+              <span style={styles.aiMetaItem}>Model: {aiResult.model}</span>
+              <span style={styles.aiMetaItem}>{aiResult.alert_count} alerts analyzed</span>
+              <span style={{ ...styles.aiRisk, ...riskStyle(aiResult.risk_level) }}>{aiResult.risk_level}</span>
+            </div>
+            <p style={styles.aiText}><strong>Summary:</strong> {aiResult.summary}</p>
+            <p style={styles.aiText}><strong>Pattern:</strong> {aiResult.pattern}</p>
+            <p style={styles.aiText}><strong>Demo note:</strong> {aiResult.demo_note}</p>
+            {aiResult.rule_tuning_suggestions?.length > 0 && (
+              <div>
+                <p style={styles.aiLabel}>Rule tuning suggestions</p>
+                <ul style={styles.aiList}>
+                  {aiResult.rule_tuning_suggestions.map((item, index) => (
+                    <li key={`${item}-${index}`}>{item}</li>
+                  ))}
+                </ul>
+              </div>
+            )}
+            <p style={styles.aiDisclaimer}>{aiResult.disclaimer}</p>
+          </div>
+        )}
+      </section>
+
       {/* Live alert feed */}
       <section style={styles.section}>
         <div style={styles.feedHeader}>
@@ -159,6 +225,12 @@ export default function Dashboard({ onConnectionChange }) {
   )
 }
 
+function riskStyle(riskLevel) {
+  if (riskLevel === 'HIGH') return { borderColor: '#ef444440', color: '#ef4444' }
+  if (riskLevel === 'LOW') return { borderColor: '#22c55e40', color: '#22c55e' }
+  return { borderColor: '#f59e0b40', color: '#f59e0b' }
+}
+
 const styles = {
   main:         { padding: '24px 32px' },
   cards:        { display: 'flex', gap: 16, marginBottom: 32, flexWrap: 'wrap' },
@@ -170,6 +242,20 @@ const styles = {
   chartCard:    { flex: 1, minWidth: 260, background: '#1e293b', borderRadius: 8, padding: '20px 24px' },
   section:      { marginBottom: 32 },
   sectionTitle: { fontSize: 14, fontWeight: 600, color: '#94a3b8', marginBottom: 12, textTransform: 'uppercase', letterSpacing: 0.8 },
+  aiSection:    { marginBottom: 32, background: '#1e293b', borderRadius: 8, padding: '20px 24px', border: '1px solid #334155' },
+  aiHeader:     { display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 16, marginBottom: 16, flexWrap: 'wrap' },
+  aiSubtext:    { color: '#64748b', fontSize: 13, marginTop: -4 },
+  aiButton:     { display: 'flex', alignItems: 'center', gap: 8, border: '1px solid #6366f1', borderRadius: 6, padding: '8px 12px', background: '#111827', color: '#c7d2fe', fontSize: 13, fontWeight: 700, cursor: 'pointer' },
+  aiEmpty:      { color: '#64748b', fontStyle: 'italic', fontSize: 14 },
+  aiError:      { display: 'flex', alignItems: 'center', gap: 8, color: '#fca5a5', background: '#7f1d1d33', border: '1px solid #ef444440', borderRadius: 6, padding: '10px 12px', fontSize: 13 },
+  aiResult:     { display: 'flex', flexDirection: 'column', gap: 10 },
+  aiMeta:       { display: 'flex', alignItems: 'center', gap: 10, flexWrap: 'wrap', marginBottom: 2 },
+  aiMetaItem:   { color: '#94a3b8', fontSize: 12, border: '1px solid #334155', borderRadius: 99, padding: '4px 9px' },
+  aiRisk:       { fontSize: 12, fontWeight: 800, border: '1px solid', borderRadius: 99, padding: '4px 9px' },
+  aiText:       { color: '#cbd5e1', fontSize: 14, lineHeight: 1.55 },
+  aiLabel:      { color: '#94a3b8', fontSize: 12, textTransform: 'uppercase', letterSpacing: 0.8, marginTop: 4, marginBottom: 6 },
+  aiList:       { color: '#cbd5e1', fontSize: 14, lineHeight: 1.55, paddingLeft: 20 },
+  aiDisclaimer: { color: '#64748b', fontSize: 12, marginTop: 2 },
   feedHeader:   { display: 'flex', alignItems: 'center', gap: 12, marginBottom: 12 },
   feedCount:    { fontSize: 12, color: '#475569', flex: 1 },
   pauseBtn:     { display: 'flex', alignItems: 'center', gap: 6, background: '#1e293b', border: '1px solid #334155', color: '#94a3b8', padding: '4px 12px', borderRadius: 6, fontSize: 12, cursor: 'pointer' },

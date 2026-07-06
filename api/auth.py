@@ -10,6 +10,7 @@ Responsibilities:
 import os
 import logging
 import jwt
+from typing import Optional
 from fastapi import HTTPException, Security
 from fastapi.security import HTTPAuthorizationCredentials, HTTPBearer
 
@@ -20,7 +21,7 @@ security = HTTPBearer(auto_error=False)
 SUPABASE_JWT_SECRET = os.getenv("SUPABASE_JWT_SECRET", "").strip()
 
 
-def verify_token(credentials: HTTPAuthorizationCredentials | None = Security(security)):
+def verify_token(credentials: Optional[HTTPAuthorizationCredentials] = Security(security)):
     """
     Verifies the JWT token sent by the dashboard.
     Raises 401 if the token is missing or invalid.

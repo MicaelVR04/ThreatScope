@@ -13,7 +13,7 @@ API_URL = "http://localhost:8000/alerts"
 ATTACKS = [
     {
         "type": "PORT_SCAN",
-        "severity": "HIGH",
+        "severity": "MEDIUM",
         "message": "Port scan detected — 1000 ports scanned in 2 seconds"
     },
     {
@@ -23,7 +23,7 @@ ATTACKS = [
     },
     {
         "type": "PING_SWEEP",
-        "severity": "MEDIUM",
+        "severity": "LOW",
         "message": "Ping sweep detected — 254 hosts pinged sequentially"
     },
     {
