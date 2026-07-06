@@ -12,6 +12,7 @@ import logging
 import os
 import sqlite3
 from collections import defaultdict
+from typing import Optional
 from dotenv import load_dotenv
 from supabase import Client, create_client
 
@@ -170,7 +171,7 @@ def get_summary():
     return summary
 
 
-def get_stats(group_by: str | None = None):
+def get_stats(group_by: Optional[str] = None):
     """
     Returns chart-ready stats for the dashboard.
     """

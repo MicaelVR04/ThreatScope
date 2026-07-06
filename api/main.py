@@ -24,6 +24,7 @@ from models import Alert, AlertSummary
 from database import init_db, insert_alert, get_alerts, get_summary, get_stats, clear_alerts
 from websocket import manager
 from auth import verify_token
+from ai_analysis import analyze_alerts_with_ollama, get_ollama_config
 
 
 # ── Logging ────────────────────────────────────────────────────────────────
@@ -63,7 +64,7 @@ app.add_middleware(SlowAPIMiddleware)
 # ── CORS ───────────────────────────────────────────────────────────────────
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=["http://localhost:5173"],
+    allow_origins=["http://localhost:5173", "http://127.0.0.1:5173"],
     allow_methods=["*"],
     allow_headers=["*"],
 )
@@ -143,6 +144,17 @@ def delete_alerts(user=Depends(verify_token)):
     """
     clear_alerts()
     return {"message": "All alerts cleared"}
+
+
+@app.post("/ai/analyze-alerts")
+def analyze_recent_alerts(user=Depends(verify_token)):
+    """
+    Runs local Ollama diagnostics over recent alerts.
+    AI output is advisory; rule-based detections remain the source of truth.
+    """
+    config = get_ollama_config()
+    alerts = get_alerts(limit=config["alert_limit"], offset=0)
+    return analyze_alerts_with_ollama(alerts)
 
 
 @app.get("/health")
