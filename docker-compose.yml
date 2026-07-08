@@ -11,7 +11,7 @@ services:
     env_file:
       - .env
     environment:
-      API_URL: http://api:8000/alerts
+      API_URL: http://localhost:8000/alerts
     volumes:
       - ./engine:/app
     depends_on:

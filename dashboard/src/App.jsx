@@ -95,6 +95,11 @@ function AppShell() {
   }, [])
 
   const handleLogout = useCallback(async () => {
+    if (!supabase) {
+      setSession(null)
+      navigate('/login', { replace: true })
+      return
+    }
     setSigningOut(true)
     const { error } = await supabase.auth.signOut()
     setSigningOut(false)
