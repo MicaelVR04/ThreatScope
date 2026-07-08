@@ -13,6 +13,7 @@ Endpoints:
 """
 
 import logging
+import asyncio
 from fastapi import FastAPI, WebSocket, WebSocketDisconnect, Query, HTTPException, Request, Depends
 from fastapi.middleware.cors import CORSMiddleware
 from contextlib import asynccontextmanager
@@ -86,7 +87,7 @@ async def create_alert(request: Request, alert: Alert, user=Depends(verify_token
     if not alert_dict.get("timestamp"):
         alert_dict["timestamp"] = datetime.now(timezone.utc).isoformat()
 
-    alert_id = insert_alert(alert_dict)
+    alert_id = await asyncio.to_thread(insert_alert, alert_dict)
     alert_dict["id"] = alert_id
 
     await manager.broadcast(alert_dict)
