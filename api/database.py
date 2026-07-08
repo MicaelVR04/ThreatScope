@@ -55,6 +55,7 @@ def init_db():
         except Exception as e:
             logger.warning(f"Supabase init failed ({e}), falling back to SQLite.")
 
+    conn = None
     try:
         conn = get_connection()
         cursor = conn.cursor()
@@ -75,7 +76,8 @@ def init_db():
         logger.error(f"init_db failed: {e}")
         raise
     finally:
-        conn.close()
+        if conn:
+            conn.close()
 
 
 def insert_alert(alert: dict):
@@ -94,6 +96,7 @@ def insert_alert(alert: dict):
             logger.error(f"insert_alert failed: {e}")
             raise
 
+    conn = None
     try:
         conn = get_connection()
         cursor = conn.cursor()
@@ -109,7 +112,8 @@ def insert_alert(alert: dict):
         logger.error(f"insert_alert failed: {e}")
         raise
     finally:
-        conn.close()
+        if conn:
+            conn.close()
 
 
 def get_alerts(severity: str = None, limit: int = 50, offset: int = 0):
@@ -129,6 +133,7 @@ def get_alerts(severity: str = None, limit: int = 50, offset: int = 0):
             logger.error(f"get_alerts failed: {e}")
             raise
 
+    conn = None
     try:
         conn = get_connection()
         cursor = conn.cursor()
@@ -151,7 +156,8 @@ def get_alerts(severity: str = None, limit: int = 50, offset: int = 0):
         logger.error(f"get_alerts failed: {e}")
         raise
     finally:
-        conn.close()
+        if conn:
+            conn.close()
 
 
 def get_summary():
@@ -220,6 +226,7 @@ def clear_alerts():
             logger.error(f"clear_alerts failed: {e}")
             raise
 
+    conn = None
     try:
         conn = get_connection()
         cursor = conn.cursor()
@@ -230,4 +237,5 @@ def clear_alerts():
         logger.error(f"clear_alerts failed: {e}")
         raise
     finally:
-        conn.close()
+        if conn:
+            conn.close()

@@ -19,7 +19,7 @@ import ipaddress
 from time import time
 from scapy.all import ARP, IP, TCP, ICMP
 from collections import defaultdict
-from datetime import datetime
+from datetime import datetime, timezone
 from dotenv import load_dotenv
 from severity import score_severity
 
@@ -300,5 +300,5 @@ def build_alert(alert_type, src_ip, dst_ip, message):
         "dst_ip":    dst_ip,
         "severity":  severity,
         "message":   message,
-        "timestamp": datetime.utcnow().isoformat()
+        "timestamp": datetime.now(timezone.utc).isoformat()
     }
