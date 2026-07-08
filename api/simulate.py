@@ -43,7 +43,7 @@ def send_alert(attack):
         "timestamp": datetime.now(timezone.utc).isoformat()
     }
     try:
-        response = requests.post(API_URL, json=payload)
+        response = requests.post(API_URL, json=payload, timeout=5)
         print(f"[{payload['severity']}] {payload['type']} from {payload['src_ip']} — status {response.status_code}")
     except Exception as e:
         print(f"[ERROR] Could not reach API: {e}")
