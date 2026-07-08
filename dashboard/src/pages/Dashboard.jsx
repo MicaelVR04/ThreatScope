@@ -19,6 +19,10 @@ const SEV = {
 const FEED_LIMIT = 20
 
 function formatChartData(rawData) {
+  // API /alerts/stats returns pre-bucketed {timestamp, HIGH, MEDIUM, LOW} — use directly
+  if (rawData.length > 0 && 'HIGH' in rawData[0]) return rawData
+
+  // Supabase returns raw {timestamp, severity} rows — bucket them here
   const buckets = {}
   rawData.forEach(({ timestamp, severity }) => {
     const time = new Date(timestamp).toLocaleTimeString([], { 
