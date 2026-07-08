@@ -79,9 +79,6 @@ async def create_alert(request: Request, alert: Alert, user=Depends(verify_token
     Receives a new alert from the engine.
     Validates severity, saves to DB, and broadcasts to all dashboards.
     """
-    if alert.severity not in ["LOW", "MEDIUM", "HIGH"]:
-        raise HTTPException(status_code=400, detail="severity must be LOW, MEDIUM, or HIGH")
-
     alert_dict = alert.model_dump()
 
     if not alert_dict.get("timestamp"):
