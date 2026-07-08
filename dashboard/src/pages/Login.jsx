@@ -10,6 +10,10 @@ export default function Login() {
   const navigate = useNavigate()
 
   const handleLogin = async () => {
+    if (!supabase) {
+      navigate('/')
+      return
+    }
     setError(null)
     setLoading(true)
     const { error: authError } = await supabase.auth.signInWithPassword({ email, password })

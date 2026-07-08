@@ -57,6 +57,7 @@ function NotFound() {
 
 // ── Protected route wrapper ──────────────────────────────────────────────────
 function ProtectedRoute({ session, children }) {
+  if (!supabase) return children       // no auth configured — allow access
   if (session === undefined) return null // still loading
   if (!session) return <Navigate to="/login" replace />
   return children
@@ -70,6 +71,11 @@ function AppShell() {
   const navigate = useNavigate()
 
   useEffect(() => {
+    if (!supabase) {
+      setSession(null) // Supabase not configured — skip auth
+      return
+    }
+
     // Check for an existing session on mount
     supabase.auth.getSession().then(({ data: { session } }) => {
       setSession(session ?? null)
