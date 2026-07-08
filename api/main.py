@@ -14,7 +14,7 @@ Endpoints:
 
 import logging
 import asyncio
-from fastapi import FastAPI, WebSocket, WebSocketDisconnect, Query, HTTPException, Request, Depends
+from fastapi import FastAPI, WebSocket, Query, HTTPException, Request, Depends
 from fastapi.middleware.cors import CORSMiddleware
 from contextlib import asynccontextmanager
 from datetime import datetime, timezone
@@ -175,5 +175,7 @@ async def websocket_endpoint(websocket: WebSocket):
     try:
         while True:
             await websocket.receive_text()
-    except WebSocketDisconnect:
+    except Exception:
+        pass
+    finally:
         manager.disconnect(websocket)

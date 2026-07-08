@@ -16,8 +16,11 @@ REQUEST_TIMEOUT = int(os.getenv("API_REQUEST_TIMEOUT", "5"))
 def send_alert(alert: dict):
     try:
         response = requests.post(API_URL, json=alert, timeout=REQUEST_TIMEOUT)
+        response.raise_for_status()
         logger.info(f"[ALERT SENT] {alert['type']} — status {response.status_code}")
     except requests.exceptions.Timeout:
         logger.error(f"[ERROR] Request to API timed out after {REQUEST_TIMEOUT}s")
+    except requests.exceptions.HTTPError as e:
+        logger.error(f"[ERROR] API rejected alert (status {e.response.status_code}): {e}")
     except Exception as e:
         logger.error(f"[ERROR] Could not reach API: {e}")
