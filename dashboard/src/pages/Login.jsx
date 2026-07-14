@@ -141,7 +141,7 @@ export default function Login() {
         <p style={{ textAlign: 'center', marginTop: '20px', fontSize: '0.875rem', color: '#94a3b8' }}>
           Don't have an account?{' '}
           <button
-            onClick={() => navigate('/register')}
+            onClick={() => window.location.href = '/register'}
             style={{
               background: 'none',
               border: 'none',
