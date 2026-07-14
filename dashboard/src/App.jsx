@@ -85,7 +85,12 @@ function AppShell() {
     // Listen for sign-in / sign-out events
     const { data: { subscription } } = supabase.auth.onAuthStateChange((_event, session) => {
       setSession(session ?? null)
-      if (!session) navigate('/login', { replace: true })
+      if (!session) {
+        const path = window.location.pathname
+        if (path !== '/login' && path !== '/register') {
+          navigate('/login', { replace: true })
+        }
+      }
     })
 
     return () => subscription.unsubscribe()
