@@ -140,12 +140,20 @@ export default function Login() {
 
         <p style={{ textAlign: 'center', marginTop: '20px', fontSize: '0.875rem', color: '#94a3b8' }}>
           Don't have an account?{' '}
-          <span
+          <button
             onClick={() => navigate('/register')}
-            style={{ color: '#6366f1', cursor: 'pointer', fontWeight: '500' }}
+            style={{
+              background: 'none',
+              border: 'none',
+              padding: 0,
+              color: '#6366f1',
+              cursor: 'pointer',
+              fontWeight: '500',
+              fontSize: '0.875rem',
+            }}
           >
             Create an account
-          </span>
+          </button>
         </p>
       </div>
     </div>
