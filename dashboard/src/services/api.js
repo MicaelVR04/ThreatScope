@@ -2,6 +2,11 @@ import { supabase } from '../supabaseClient'
 
 const API_URL = import.meta.env.VITE_API_URL || 'http://localhost:8000'
 
+async function getUserId() {
+  const { data: { session } } = await supabase.auth.getSession()
+  return session?.user?.id
+}
+
 async function getHeaders() {
   const { data: { session } } = await supabase.auth.getSession()
   return {
@@ -32,9 +37,11 @@ async function apiFetch(path, options = {}) {
 
 export async function getAlerts() {
   if (supabase) {
+    const userId = await getUserId()
     const { data, error } = await supabase
       .from('alerts')
       .select('*')
+      .eq('user_id', userId)
       .order('timestamp', { ascending: false })
     if (error) throw error
     return data
@@ -44,9 +51,11 @@ export async function getAlerts() {
 
 export async function getAlertsSummary() {
   if (supabase) {
+    const userId = await getUserId()
     const { data, error } = await supabase
       .from('alerts')
       .select('severity')
+      .eq('user_id', userId)
     if (error) throw error
     const total  = data.length
     const high   = data.filter(a => a.severity === 'HIGH').length
@@ -59,9 +68,11 @@ export async function getAlertsSummary() {
 
 export async function getAlertStats() {
   if (supabase) {
+    const userId = await getUserId()
     const { data, error } = await supabase
       .from('alerts')
       .select('timestamp, severity')
+      .eq('user_id', userId)
       .order('timestamp', { ascending: true })
     if (error) throw error
     return data
@@ -71,9 +82,11 @@ export async function getAlertStats() {
 
 export async function getAttackTypeStats() {
   if (supabase) {
+    const userId = await getUserId()
     const { data, error } = await supabase
       .from('alerts')
       .select('type, severity')
+      .eq('user_id', userId)
     if (error) throw error
     const grouped = {}
     data.forEach(({ type, severity }) => {

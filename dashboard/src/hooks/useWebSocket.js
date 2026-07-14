@@ -15,9 +15,14 @@ export default function useWebSocket() {
     if (supabase) {
       // --- Supabase path ---
       async function fetchInitialAlerts() {
+        const { data: { session } } = await supabase.auth.getSession()
+        const userId = session?.user?.id
+        if (!userId) return
+
         const { data, error } = await supabase
           .from('alerts')
           .select('*')
+          .eq('user_id', userId)
           .order('timestamp', { ascending: false })
           .limit(20)
         if (!error) {
@@ -27,20 +32,26 @@ export default function useWebSocket() {
       }
       fetchInitialAlerts()
 
-      const channel = supabase
-        .channel('alerts-channel')
-        .on(
-          'postgres_changes',
-          { event: 'INSERT', schema: 'public', table: 'alerts' },
-          (payload) => {
-            setAlerts(prev => [payload.new, ...prev])
-          }
-        )
-        .subscribe((status) => {
-          setConnected(status === 'SUBSCRIBED')
-        })
+      let channel
+      supabase.auth.getSession().then(({ data: { session } }) => {
+        const userId = session?.user?.id
+        if (!userId) return
 
-      return () => { supabase.removeChannel(channel) }
+        channel = supabase
+          .channel('alerts-channel')
+          .on(
+            'postgres_changes',
+            { event: 'INSERT', schema: 'public', table: 'alerts', filter: `user_id=eq.${userId}` },
+            (payload) => {
+              setAlerts(prev => [payload.new, ...prev])
+            }
+          )
+          .subscribe((status) => {
+            setConnected(status === 'SUBSCRIBED')
+          })
+      })
+
+      return () => { if (channel) supabase.removeChannel(channel) }
     }
 
     // --- Local API / WebSocket path ---
