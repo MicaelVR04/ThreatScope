@@ -2,24 +2,24 @@ import { useState } from 'react'
 import { useNavigate } from 'react-router-dom'
 import { supabase } from '../supabaseClient'
 
-export default function Login() {
+export default function Register() {
   const [email, setEmail] = useState('')
   const [password, setPassword] = useState('')
   const [error, setError] = useState(null)
+  const [success, setSuccess] = useState(null)
   const [loading, setLoading] = useState(false)
   const navigate = useNavigate()
 
-  const handleLogin = async () => {
-    if (!supabase) {
-      navigate('/')
-      return
-    }
+  const handleRegister = async () => {
     setError(null)
+    setSuccess(null)
     setLoading(true)
-    const { error: authError } = await supabase.auth.signInWithPassword({ email, password })
+    const { data, error: authError } = await supabase.auth.signUp({ email, password })
     setLoading(false)
     if (authError) {
       setError(authError.message)
+    } else if (data?.user && !data.session) {
+      setSuccess('Check your email to confirm your account before signing in.')
     } else {
       navigate('/')
     }
@@ -54,7 +54,7 @@ export default function Login() {
             ThreatScope
           </h1>
           <p style={{ color: '#94a3b8', marginTop: '8px', fontSize: '0.875rem' }}>
-            Sign in to your account
+            Create your account
           </p>
         </div>
 
@@ -118,8 +118,22 @@ export default function Login() {
           </div>
         )}
 
+        {success && (
+          <div style={{
+            color: '#22c55e',
+            backgroundColor: 'rgba(34,197,94,0.1)',
+            border: '1px solid rgba(34,197,94,0.3)',
+            borderRadius: '6px',
+            padding: '10px 12px',
+            fontSize: '0.875rem',
+            marginBottom: '16px',
+          }}>
+            {success}
+          </div>
+        )}
+
         <button
-          onClick={handleLogin}
+          onClick={handleRegister}
           disabled={loading}
           style={{
             width: '100%',
@@ -135,16 +149,16 @@ export default function Login() {
             transition: 'background-color 0.15s',
           }}
         >
-          {loading ? 'Signing in…' : 'Login'}
+          {loading ? 'Registering…' : 'Register'}
         </button>
 
         <p style={{ textAlign: 'center', marginTop: '20px', fontSize: '0.875rem', color: '#94a3b8' }}>
-          Don't have an account?{' '}
+          Already have an account?{' '}
           <span
-            onClick={() => navigate('/register')}
+            onClick={() => navigate('/login')}
             style={{ color: '#6366f1', cursor: 'pointer', fontWeight: '500' }}
           >
-            Create an account
+            Login
           </span>
         </p>
       </div>

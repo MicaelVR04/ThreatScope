@@ -4,6 +4,7 @@ import Navbar from './components/Navbar'
 import Dashboard from './pages/Dashboard'
 import AlertHistory from './pages/AlertHistory'
 import Login from './pages/Login'
+import Register from './pages/Register'
 import { supabase } from './supabaseClient'
 
 // ── Scroll to top on every route change ─────────────────────────────────────
@@ -119,6 +120,7 @@ function AppShell() {
         <ScrollToTop />
         <Routes>
           <Route path="/login" element={<Login />} />
+          <Route path="/register" element={<Register />} />
           <Route
             path="/"
             element={
