@@ -140,20 +140,18 @@ export default function Login() {
 
         <p style={{ textAlign: 'center', marginTop: '20px', fontSize: '0.875rem', color: '#94a3b8' }}>
           Don't have an account?{' '}
-          <button
-            onClick={() => window.location.href = '/register'}
+          <a
+            href="/register"
             style={{
-              background: 'none',
-              border: 'none',
-              padding: 0,
               color: '#6366f1',
               cursor: 'pointer',
               fontWeight: '500',
               fontSize: '0.875rem',
+              textDecoration: 'none',
             }}
           >
             Create an account
-          </button>
+          </a>
         </p>
       </div>
     </div>
