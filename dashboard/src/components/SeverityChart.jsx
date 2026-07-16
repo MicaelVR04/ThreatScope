@@ -1,4 +1,4 @@
-import { PieChart, Pie, Cell, Tooltip, ResponsiveContainer, Legend } from 'recharts'
+import { PieChart, Pie, Cell, Label, Tooltip, ResponsiveContainer, Legend } from 'recharts'
 
 const SLICES = [
   { key: 'high',   label: 'HIGH',   color: '#ef4444' },
@@ -69,7 +69,7 @@ export default function SeverityChart({ data }) {
           {chartData.map(({ name, color }) => (
             <Cell key={name} fill={color} stroke="transparent" />
           ))}
-          <CenterLabel total={total} />
+          <Label content={<CenterLabel total={total} />} position="center" />
         </Pie>
         <Tooltip content={<CustomTooltip />} />
         <Legend content={<CustomLegend />} />

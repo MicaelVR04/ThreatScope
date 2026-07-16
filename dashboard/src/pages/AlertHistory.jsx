@@ -36,10 +36,15 @@ export default function AlertHistory() {
     })
   }, [alerts, search, dateFrom, dateTo])
 
+  function csvField(value) {
+    const str = String(value ?? '')
+    return `"${str.replace(/"/g, '""')}"`
+  }
+
   function exportCSV() {
     const headers = ['id', 'severity', 'type', 'src_ip', 'dst_ip', 'timestamp']
-    const rows = filtered.map(a => headers.map(h => JSON.stringify(a[h] ?? '')).join(','))
-    const csv = [headers.join(','), ...rows].join('\n')
+    const rows = filtered.map(a => headers.map(h => csvField(a[h])).join(','))
+    const csv = [headers.map(csvField).join(','), ...rows].join('\n')
     const blob = new Blob([csv], { type: 'text/csv' })
     const url  = URL.createObjectURL(blob)
     const a    = document.createElement('a')

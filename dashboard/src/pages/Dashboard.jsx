@@ -19,34 +19,41 @@ const SEV = {
 const FEED_LIMIT = 20
 
 export default function Dashboard({ onConnectionChange }) {
-  const { alerts: wsAlerts, connected } = useWebSocket()
+  const { alerts: wsAlerts, receivedCount, connected } = useWebSocket()
   const [summary,    setSummary]    = useState({ total: 0, high: 0, medium: 0, low: 0 })
   const [chartData,  setChartData]  = useState([])
   const [typeStats,  setTypeStats]  = useState([])
   const [paused,     setPaused]     = useState(false)
+  const [error,      setError]      = useState(null)
   const frozenRef = useRef([])
 
-  // Propagate connection state up to App / Navbar
-  useEffect(() => { onConnectionChange?.(connected) }, [connected, onConnectionChange])
+  // Propagate connection state up to App / Navbar, and clear it on unmount
+  // so the Navbar doesn't keep showing "LIVE" after navigating away.
+  useEffect(() => {
+    onConnectionChange?.(connected)
+    return () => onConnectionChange?.(false)
+  }, [connected, onConnectionChange])
 
   // Fetch summary counts
   useEffect(() => {
-    getAlertsSummary().then(setSummary).catch(console.error)
+    getAlertsSummary().then(setSummary).catch(err => setError(err.message))
   }, [])
 
   // Fetch time-series chart data from /alerts/stats
   useEffect(() => {
-    getAlertStats().then(setChartData).catch(console.error)
+    getAlertStats().then(setChartData).catch(err => setError(err.message))
   }, [])
 
   // Fetch attack-type breakdown from /alerts/stats?group_by=type
   useEffect(() => {
-    getAttackTypeStats().then(setTypeStats).catch(console.error)
+    getAttackTypeStats().then(setTypeStats).catch(err => setError(err.message))
   }, [])
 
   // Freeze the feed when paused
   const displayAlerts = paused ? frozenRef.current : wsAlerts.slice(0, FEED_LIMIT)
-  if (!paused) frozenRef.current = displayAlerts
+  useEffect(() => {
+    if (!paused) frozenRef.current = displayAlerts
+  })
 
   const CARDS = [
     { label: 'Total',  value: summary.total,  color: '#6366f1', icon: <Activity size={18} color="#6366f1" /> },
@@ -57,6 +64,8 @@ export default function Dashboard({ onConnectionChange }) {
 
   return (
     <main style={styles.main}>
+
+      {error && <p style={styles.error}>Error: {error}</p>}
 
       {/* Summary cards */}
       <div style={styles.cards}>
@@ -125,7 +134,7 @@ export default function Dashboard({ onConnectionChange }) {
       <section style={styles.section}>
         <div style={styles.feedHeader}>
           <h2 style={styles.sectionTitle}>Live Alert Feed</h2>
-          <span style={styles.feedCount}>{wsAlerts.length} received</span>
+          <span style={styles.feedCount}>{receivedCount} received</span>
           <button style={styles.pauseBtn} onClick={() => setPaused(p => !p)}>
             {paused
               ? <><PlayCircle  size={14} /> Resume</>
@@ -157,4 +166,5 @@ const styles = {
   feedCount:    { fontSize: 12, color: '#475569', flex: 1 },
   pauseBtn:     { display: 'flex', alignItems: 'center', gap: 6, background: '#1e293b', border: '1px solid #334155', color: '#94a3b8', padding: '4px 12px', borderRadius: 6, fontSize: 12, cursor: 'pointer' },
   empty:        { color: '#475569', fontStyle: 'italic' },
+  error:        { color: '#ef4444', marginBottom: 16 },
 }
