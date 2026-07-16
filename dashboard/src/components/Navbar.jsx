@@ -10,7 +10,7 @@ export default function Navbar({ connected }) {
       </div>
 
       <nav style={styles.links}>
-        <NavLink to="/" end style={({ isActive }) => ({ ...styles.link, ...(isActive ? styles.active : {}) })}>
+        <NavLink to="/dashboard" end style={({ isActive }) => ({ ...styles.link, ...(isActive ? styles.active : {}) })}>
           <LayoutDashboard size={15} />
           Dashboard
         </NavLink>

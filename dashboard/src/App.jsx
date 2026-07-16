@@ -1,6 +1,7 @@
 import { useState, useCallback, useEffect, Component } from 'react'
-import { BrowserRouter, Routes, Route, useLocation, Navigate } from 'react-router-dom'
+import { BrowserRouter, Routes, Route, Outlet, useLocation, Navigate } from 'react-router-dom'
 import Navbar from './components/Navbar'
+import Landing from './pages/Landing'
 import Dashboard from './pages/Dashboard'
 import AlertHistory from './pages/AlertHistory'
 
@@ -9,6 +10,14 @@ function ScrollToTop() {
   const { pathname } = useLocation()
   useEffect(() => { window.scrollTo(0, 0) }, [pathname])
   return null
+}
+
+// ── Auth gate seam ────────────────────────────────────────────────────────────
+// No auth exists on this branch yet. This is a pure pass-through today so that
+// wiring up a real check later (redirect to "/" or a future "/login" when
+// unauthenticated) is a one-line change here rather than a routing rework.
+function RequireAuth({ children }) {
+  return children
 }
 
 // ── Error boundary (class component — React requires it) ─────────────────────
@@ -48,12 +57,22 @@ function NotFound() {
     <div style={{ padding: '80px 32px', textAlign: 'center' }}>
       <h1 style={{ fontSize: 64, color: '#1e293b', margin: 0 }}>404</h1>
       <p style={{ color: '#94a3b8', margin: '12px 0 24px' }}>Page not found</p>
-      <a href="/" style={{ color: '#6366f1', fontSize: 14 }}>← Back to Dashboard</a>
+      <a href="/" style={{ color: '#6366f1', fontSize: 14 }}>← Back to home</a>
     </div>
   )
 }
 
-// ── App shell ─────────────────────────────────────────────────────────────────
+// ── App layout (Navbar + shell chrome) — everything behind RequireAuth ────────
+function AppLayout({ connected }) {
+  return (
+    <div style={styles.shell}>
+      <Navbar connected={connected} />
+      <Outlet />
+    </div>
+  )
+}
+
+// ── Root shell ────────────────────────────────────────────────────────────────
 function AppShell() {
   const [connected, setConnected] = useState(false)
 
@@ -62,22 +81,29 @@ function AppShell() {
   }, [])
 
   return (
-    <div style={styles.shell}>
-      <Navbar connected={connected} />
+    <ErrorBoundary>
+      <ScrollToTop />
+      <Routes>
+        <Route path="/" element={<Landing />} />
 
-      <ErrorBoundary>
-        <ScrollToTop />
-        <Routes>
+        <Route
+          element={
+            <RequireAuth>
+              <AppLayout connected={connected} />
+            </RequireAuth>
+          }
+        >
           <Route
-            path="/"
+            path="/dashboard"
             element={<Dashboard onConnectionChange={handleConnectionChange} />}
           />
           <Route path="/history" element={<AlertHistory />} />
-          <Route path="/404"     element={<NotFound />} />
-          <Route path="*"        element={<Navigate to="/404" replace />} />
-        </Routes>
-      </ErrorBoundary>
-    </div>
+        </Route>
+
+        <Route path="/404" element={<NotFound />} />
+        <Route path="*"    element={<Navigate to="/404" replace />} />
+      </Routes>
+    </ErrorBoundary>
   )
 }
 
