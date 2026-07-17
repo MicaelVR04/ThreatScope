@@ -44,7 +44,7 @@ export default function LandingNav() {
         </div>
 
         <Link
-          to="/dashboard"
+          to="/login"
           className={`inline-flex shrink-0 cursor-pointer items-center rounded-md bg-signal px-4 py-2 font-display text-sm font-semibold text-base transition-all duration-150 ease-swift hover:scale-[1.02] hover:shadow-[0_0_24px_-4px_rgba(46,235,209,0.6)] active:scale-[0.97] ${FOCUS_RING}`}
         >
           <span className="sm:hidden">Launch</span>

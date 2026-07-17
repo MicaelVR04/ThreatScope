@@ -179,7 +179,7 @@ export default function Hero() {
             style={{ transitionDelay: '320ms' }}
           >
             <Link
-              to="/dashboard"
+              to="/login"
               className="group inline-flex cursor-pointer items-center gap-2 rounded-md bg-signal px-6 py-3 font-display text-sm font-semibold text-base transition-all duration-150 ease-swift hover:scale-[1.02] hover:shadow-[0_0_28px_-4px_rgba(46,235,209,0.65)] active:scale-[0.97] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-signal focus-visible:ring-offset-2 focus-visible:ring-offset-base"
             >
               Launch Dashboard

@@ -1,7 +1,7 @@
 import {
   Radar, ShieldCheck, GaugeCircle, Zap, PieChart, History,
 } from 'lucide-react'
-import useReveal from '../../hooks/useReveal'
+import useReveal from '../../hooks/landing/useReveal'
 
 const ITEMS = [
   {

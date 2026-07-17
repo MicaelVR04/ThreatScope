@@ -1,5 +1,5 @@
 import { useEffect, useState } from 'react'
-import useReveal from '../../hooks/useReveal'
+import useReveal from '../../hooks/landing/useReveal'
 
 const BADGES = ['Python', 'Scapy', 'FastAPI', 'WebSocket', 'React', 'Recharts']
 

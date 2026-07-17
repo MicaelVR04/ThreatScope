@@ -1,5 +1,5 @@
 import { Antenna, ScanSearch, Tags, BellRing, LayoutDashboard } from 'lucide-react'
-import useReveal from '../../hooks/useReveal'
+import useReveal from '../../hooks/landing/useReveal'
 
 const STEPS = [
   { n: '01', Icon: Antenna, title: 'Capture', body: 'The Scapy engine sniffs raw packets straight off the network interface.' },
