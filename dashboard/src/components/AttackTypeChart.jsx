@@ -2,6 +2,7 @@ import {
   BarChart, Bar, XAxis, YAxis, Tooltip,
   ResponsiveContainer, CartesianGrid, Legend, Cell,
 } from 'recharts'
+import { threatLabel, threatPlainEnglish } from '../utils/threatLabels'
 
 const SEV_COLORS = { HIGH: '#ef4444', MEDIUM: '#f59e0b', LOW: '#22c55e' }
 
@@ -10,6 +11,7 @@ function CustomTooltip({ active, payload, label }) {
   return (
     <div style={styles.tooltip}>
       <p style={styles.tooltipLabel}>{label}</p>
+      <p style={styles.tooltipHelp}>{threatPlainEnglish(label)}</p>
       {payload.map(({ name, value, color }) => (
         <p key={name} style={{ margin: '2px 0', color, fontSize: 12 }}>
           {name}: <strong>{value}</strong>
@@ -46,6 +48,7 @@ export default function AttackTypeChart({ data = [] }) {
           dataKey="type"
           stroke="#475569"
           tick={{ fontSize: 11, fill: '#94a3b8' }}
+          tickFormatter={threatLabel}
           width={110}
         />
         <Tooltip content={<CustomTooltip />} cursor={{ fill: '#1e293b' }} />
@@ -64,5 +67,6 @@ export default function AttackTypeChart({ data = [] }) {
 const styles = {
   tooltip:      { background: '#1e293b', border: '1px solid #334155', borderRadius: 6, padding: '8px 12px' },
   tooltipLabel: { fontSize: 13, fontWeight: 600, color: '#f1f5f9', margin: '0 0 4px' },
+  tooltipHelp:  { fontSize: 12, color: '#94a3b8', margin: '0 0 6px', maxWidth: 240, lineHeight: 1.4 },
   empty:        { textAlign: 'center', color: '#475569', fontStyle: 'italic', padding: '60px 0' },
 }

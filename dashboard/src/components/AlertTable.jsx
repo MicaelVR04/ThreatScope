@@ -1,6 +1,7 @@
 import { useState, useMemo } from 'react'
 import SeverityBadge from './SeverityBadge'
 import { ChevronUp, ChevronDown, ChevronsUpDown } from 'lucide-react'
+import { threatLabel, threatPlainEnglish } from '../utils/threatLabels'
 
 const COLUMNS = [
   { key: 'severity',  label: 'Severity' },
@@ -79,7 +80,11 @@ export default function AlertTable({ alerts = [] }) {
               {sorted.map((alert, i) => (
                 <tr key={alert.id ?? i} style={styles.row}>
                   <td style={styles.td}><SeverityBadge severity={alert.severity} /></td>
-                  <td style={styles.td}>{alert.type}</td>
+                  <td style={styles.td}>
+                    <span style={styles.typeLabel}>{threatLabel(alert.type)}</span>
+                    <span style={styles.typeCode}>{alert.type}</span>
+                    <span style={styles.typeHelp}>{threatPlainEnglish(alert.type)}</span>
+                  </td>
                   <td style={{ ...styles.td, fontFamily: 'monospace' }}>{alert.src_ip}</td>
                   <td style={{ ...styles.td, fontFamily: 'monospace' }}>{alert.dst_ip}</td>
                   <td style={{ ...styles.td, color: '#475569', fontSize: 12 }}>
@@ -104,5 +109,8 @@ const styles = {
   th:           { textAlign: 'left', padding: '10px 14px', color: '#94a3b8', borderBottom: '1px solid #1e293b', fontWeight: 600, cursor: 'pointer', userSelect: 'none' },
   thInner:      { display: 'inline-flex', alignItems: 'center', gap: 4 },
   td:           { padding: '10px 14px', borderBottom: '1px solid #1e293b' },
+  typeLabel:    { display: 'block', color: '#f1f5f9', fontWeight: 700 },
+  typeCode:     { display: 'inline-block', color: '#64748b', fontSize: 11, marginTop: 2 },
+  typeHelp:     { display: 'block', color: '#94a3b8', fontSize: 12, marginTop: 4, maxWidth: 360, lineHeight: 1.4 },
   row:          { background: '#0f172a' },
 }

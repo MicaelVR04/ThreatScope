@@ -34,6 +34,12 @@ Honest framing:
 Ollama / AI framing:
 "Ollama is used locally as a developer diagnostic helper. It reads recent alerts after the rule engine has already detected them, then summarizes the pattern and suggests possible rule tuning. It does not replace the detection rules and it is not a public chatbot."
 
+Cloud AI framing:
+"The AI layer can also be switched to a cloud provider with an API key. That makes the analysis feature work without relying on one teammate's local machine, while the detection rules still remain the source of truth."
+
+Scheduled scan framing:
+"The dashboard can start a scan now or schedule scan windows every 5 or 10 minutes. When a scan starts, the dashboard tells the user ThreatScope is checking the network. If no new alerts appear during that scan window, it reports Network is secure."
+
 Best setup:
 Use one machine as the demo machine if possible.
 
@@ -71,6 +77,8 @@ DEMO_MODE=true
 ALERT_COOLDOWN_SECONDS=60
 ARP_ENTRY_TTL_SECONDS=300
 ARP_SPOOF_CONFIRMATION_THRESHOLD=2
+SCAN_WINDOW_SECONDS=8
+SCAN_INTERVAL_MINUTES=5
 
 Terminal 1: Start the API
 
@@ -125,6 +133,7 @@ ollama pull llama3.2:3b
 
 Required .env values:
 
+AI_PROVIDER=ollama
 OLLAMA_BASE_URL=http://127.0.0.1:11434
 OLLAMA_MODEL=qwen2.5:7b
 OLLAMA_TIMEOUT_SECONDS=45
@@ -135,6 +144,13 @@ For a clean demo AI summary, either clear older test alerts before presenting or
 OLLAMA_ALERT_LIMIT=4
 
 This keeps Ollama focused on the four current demo alerts instead of older test/simulated rows.
+
+Optional cloud AI values:
+
+AI_PROVIDER=openai
+OPENAI_API_KEY=your-api-key
+OPENAI_MODEL=gpt-4o-mini
+OPENAI_BASE_URL=https://api.openai.com/v1
 
 Terminal 3: Trigger demo alerts
 
@@ -161,18 +177,21 @@ What Micael says:
 
 What to show on screen:
 1. Open the dashboard at http://localhost:5173
-2. Run: python demo_traffic.py port-scan
-3. Show the PORT_SCAN alert appearing live.
-4. Show the summary cards and charts updating.
-5. Run: python demo_traffic.py ping-sweep
-6. Show the LOW severity PING_SWEEP alert.
-7. Run: python demo_traffic.py arp-spoof
-8. Show the MEDIUM severity ARP_SPOOF alert.
-9. Run: python demo_traffic.py syn-flood
-10. Show the HIGH severity SYN_FLOOD alert.
-11. Click Analyze recent alerts in the AI Analysis panel.
-12. Explain that Ollama summarizes the stored alerts but the rules still do the detection.
-13. Open alert history and show the alerts stored.
+2. Show the scan status panel.
+3. Click Run scan now and point out the Scan started message.
+4. If no new alerts appear, show Network is secure.
+5. Run: python demo_traffic.py port-scan
+6. Show the Port scan alert appearing live with the plain-English explanation.
+7. Show the summary cards and charts updating.
+8. Run: python demo_traffic.py ping-sweep
+9. Show the LOW severity Host discovery alert.
+10. Run: python demo_traffic.py arp-spoof
+11. Show the MEDIUM severity Network impersonation alert.
+12. Run: python demo_traffic.py syn-flood
+13. Show the HIGH severity Connection flood alert.
+14. Click Analyze recent alerts in the AI Analysis panel.
+15. Explain that AI summarizes the stored alerts but the rules still do the detection.
+16. Open alert history and show the alerts stored with plain-English descriptions.
 
 Meeting script:
 

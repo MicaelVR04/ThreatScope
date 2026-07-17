@@ -20,11 +20,12 @@ from datetime import datetime, timezone
 from slowapi import Limiter
 from slowapi.util import get_remote_address
 from slowapi.middleware import SlowAPIMiddleware
-from models import Alert, AlertSummary
+from models import Alert, AlertSummary, ScanScheduleRequest
 from database import init_db, insert_alert, get_alerts, get_summary, get_stats, clear_alerts
 from websocket import manager
 from auth import verify_token
-from ai_analysis import analyze_alerts_with_ollama, get_ollama_config
+from ai_analysis import analyze_alerts, get_ai_config
+from scan_manager import get_scan_status, set_schedule, start_scan
 
 
 # ── Logging ────────────────────────────────────────────────────────────────
@@ -152,9 +153,33 @@ def analyze_recent_alerts(user=Depends(verify_token)):
     Runs local Ollama diagnostics over recent alerts.
     AI output is advisory; rule-based detections remain the source of truth.
     """
-    config = get_ollama_config()
+    config = get_ai_config()
     alerts = get_alerts(limit=config["alert_limit"], offset=0)
-    return analyze_alerts_with_ollama(alerts)
+    return analyze_alerts(alerts)
+
+
+@app.get("/scan/status")
+def scan_status(user=Depends(verify_token)):
+    """Returns current scan and scheduled scan state."""
+    return get_scan_status()
+
+
+@app.post("/scan/run")
+def run_scan_now(user=Depends(verify_token)):
+    """
+    Starts a short scan window immediately.
+    If no new alerts arrive during the window, the dashboard reports the network as secure.
+    """
+    return start_scan()
+
+
+@app.post("/scan/schedule")
+def update_scan_schedule(request: ScanScheduleRequest, user=Depends(verify_token)):
+    """Turns scheduled scan windows on or off at a 5 or 10 minute interval."""
+    try:
+        return set_schedule(request.enabled, request.interval_minutes)
+    except ValueError as e:
+        raise HTTPException(status_code=400, detail=str(e))
 
 
 @app.get("/health")

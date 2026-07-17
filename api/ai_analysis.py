@@ -1,8 +1,8 @@
 """
-ai_analysis.py — Ollama-backed developer diagnostics for ThreatScope.
+ai_analysis.py — AI-backed developer diagnostics for ThreatScope.
 
 The rule engine remains the source of truth. This module only asks a local
-Ollama model to summarize recent alerts and suggest rule-tuning ideas.
+or cloud model to summarize recent alerts and suggest rule-tuning ideas.
 """
 
 import json
@@ -18,13 +18,21 @@ load_dotenv()
 DISCLAIMER = "AI analysis is advisory. Rule-based detections remain the source of truth."
 
 
-def get_ollama_config() -> Dict[str, Any]:
+def get_ai_config() -> Dict[str, Any]:
     return {
+        "provider": os.getenv("AI_PROVIDER", "ollama").strip().lower() or "ollama",
         "base_url": os.getenv("OLLAMA_BASE_URL", "http://127.0.0.1:11434").rstrip("/"),
         "model": os.getenv("OLLAMA_MODEL", "qwen2.5:7b").strip() or "qwen2.5:7b",
         "timeout": int(os.getenv("OLLAMA_TIMEOUT_SECONDS", "45")),
         "alert_limit": int(os.getenv("OLLAMA_ALERT_LIMIT", "20")),
+        "openai_base_url": os.getenv("OPENAI_BASE_URL", "https://api.openai.com/v1").rstrip("/"),
+        "openai_api_key": os.getenv("OPENAI_API_KEY", "").strip(),
+        "openai_model": os.getenv("OPENAI_MODEL", "gpt-4o-mini").strip() or "gpt-4o-mini",
     }
+
+
+def get_ollama_config() -> Dict[str, Any]:
+    return get_ai_config()
 
 
 def compact_alerts(alerts: List[dict]) -> List[dict]:
@@ -53,7 +61,9 @@ def build_prompt(alerts: List[dict]) -> str:
         "- demo_note: whether this looks like deterministic demo traffic or what it would mean in a real network\n"
         "- rule_tuning_suggestions: array of 2 to 4 practical suggestions\n\n"
         "Keep the language short, practical, and honest. Do not recommend "
-        "replacing rule-based detection with AI.\n\n"
+        "replacing rule-based detection with AI. Do not suggest ignoring "
+        "private/internal IP ranges because this MVP is focused on LAN traffic. "
+        "Only mention IP reputation if public internet IPs appear.\n\n"
         f"Recent alerts:\n{json.dumps(compact_alerts(alerts), indent=2)}"
     )
 
@@ -83,19 +93,10 @@ def normalize_analysis(raw: Any) -> Dict[str, Any]:
 
 
 def analyze_alerts_with_ollama(alerts: List[dict]) -> Dict[str, Any]:
-    config = get_ollama_config()
+    config = get_ai_config()
 
     if not alerts:
-        return {
-            "model": config["model"],
-            "alert_count": 0,
-            "summary": "No recent alerts are available to analyze.",
-            "pattern": "No alert pattern available.",
-            "risk_level": "LOW",
-            "demo_note": "Trigger demo traffic or capture live traffic before running AI analysis.",
-            "rule_tuning_suggestions": [],
-            "disclaimer": DISCLAIMER,
-        }
+        return empty_analysis(config["model"])
 
     payload = {
         "model": config["model"],
@@ -129,5 +130,81 @@ def analyze_alerts_with_ollama(alerts: List[dict]) -> Dict[str, Any]:
         "model": config["model"],
         "alert_count": len(alerts),
         **normalized,
+        "disclaimer": DISCLAIMER,
+    }
+
+
+def analyze_alerts_with_openai(alerts: List[dict]) -> Dict[str, Any]:
+    config = get_ai_config()
+
+    if not alerts:
+        return empty_analysis(config["openai_model"])
+
+    if not config["openai_api_key"]:
+        raise HTTPException(
+            status_code=503,
+            detail="Cloud AI is not configured. Set OPENAI_API_KEY or switch AI_PROVIDER back to ollama.",
+        )
+
+    payload = {
+        "model": config["openai_model"],
+        "messages": [
+            {
+                "role": "developer",
+                "content": "You return strict JSON for a cybersecurity dashboard. No markdown.",
+            },
+            {
+                "role": "user",
+                "content": build_prompt(alerts),
+            },
+        ],
+        "response_format": {"type": "json_object"},
+        "temperature": 0.2,
+    }
+
+    try:
+        response = requests.post(
+            f"{config['openai_base_url']}/chat/completions",
+            headers={
+                "Authorization": f"Bearer {config['openai_api_key']}",
+                "Content-Type": "application/json",
+            },
+            json=payload,
+            timeout=config["timeout"],
+        )
+        response.raise_for_status()
+    except requests.exceptions.RequestException as exc:
+        raise HTTPException(
+            status_code=503,
+            detail="Cloud AI is not available. Check OPENAI_API_KEY, OPENAI_MODEL, and network access.",
+        ) from exc
+
+    data = response.json()
+    content = data.get("choices", [{}])[0].get("message", {}).get("content", "{}")
+    normalized = normalize_analysis(content)
+    return {
+        "model": config["openai_model"],
+        "alert_count": len(alerts),
+        **normalized,
+        "disclaimer": DISCLAIMER,
+    }
+
+
+def analyze_alerts(alerts: List[dict]) -> Dict[str, Any]:
+    config = get_ai_config()
+    if config["provider"] in {"openai", "cloud"}:
+        return analyze_alerts_with_openai(alerts)
+    return analyze_alerts_with_ollama(alerts)
+
+
+def empty_analysis(model: str) -> Dict[str, Any]:
+    return {
+        "model": model,
+        "alert_count": 0,
+        "summary": "No recent alerts are available to analyze.",
+        "pattern": "No alert pattern available.",
+        "risk_level": "LOW",
+        "demo_note": "Trigger demo traffic or capture live traffic before running AI analysis.",
+        "rule_tuning_suggestions": [],
         "disclaimer": DISCLAIMER,
     }
