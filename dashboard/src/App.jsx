@@ -5,7 +5,6 @@ import Dashboard from './pages/Dashboard'
 import AlertHistory from './pages/AlertHistory'
 import Login from './pages/Login'
 import Landing from './pages/Landing'
-import ThemePreview from './pages/ThemePreview'
 import { supabase } from './supabaseClient'
 
 // ── Scroll to top on every route change ─────────────────────────────────────
@@ -116,9 +115,6 @@ function AppShell() {
         <Routes>
           <Route path="/" element={<Landing />} />
           <Route path="/login" element={<Login />} />
-          {/* Temporary review-only route for the theme/ component set — not
-              part of the finished product surface, safe to remove after review. */}
-          <Route path="/theme-preview" element={<ThemePreview />} />
           <Route
             path="/dashboard"
             element={
