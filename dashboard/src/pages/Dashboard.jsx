@@ -8,7 +8,15 @@ import AlertCard from '../components/AlertCard'
 import SeverityChart from '../components/SeverityChart'
 import AttackTypeChart from '../components/AttackTypeChart'
 import useWebSocket from '../hooks/useWebSocket'
-import { analyzeRecentAlerts, getAlertsSummary, getAlertStats, getAttackTypeStats } from '../services/api'
+import {
+  analyzeRecentAlerts,
+  getAlertStats,
+  getAlertsSummary,
+  getAttackTypeStats,
+  getScanStatus,
+  runScanNow,
+  setScanSchedule,
+} from '../services/api'
 
 const SEV = {
   HIGH:   { color: '#ef4444', icon: <ShieldAlert  size={18} color="#ef4444" /> },
@@ -41,6 +49,8 @@ export default function Dashboard({ onConnectionChange }) {
   const [aiResult,   setAiResult]   = useState(null)
   const [aiError,    setAiError]    = useState(null)
   const [aiLoading,  setAiLoading]  = useState(false)
+  const [scanStatus, setScanStatus] = useState(null)
+  const [scanLoading, setScanLoading] = useState(false)
   const frozenRef = useRef([])
 
   const refreshDashboardData = useCallback(async () => {
@@ -64,6 +74,20 @@ export default function Dashboard({ onConnectionChange }) {
     refreshDashboardData()
   }, [refreshDashboardData])
 
+  const refreshScanStatus = useCallback(async () => {
+    try {
+      setScanStatus(await getScanStatus())
+    } catch (error) {
+      console.error(error)
+    }
+  }, [])
+
+  useEffect(() => {
+    refreshScanStatus()
+    const id = setInterval(refreshScanStatus, 5000)
+    return () => clearInterval(id)
+  }, [refreshScanStatus])
+
   useEffect(() => {
     if (wsAlerts.length > 0) {
       refreshDashboardData()
@@ -84,6 +108,28 @@ export default function Dashboard({ onConnectionChange }) {
     }
   }
 
+  const handleRunScan = async () => {
+    setScanLoading(true)
+    try {
+      setScanStatus(await runScanNow())
+    } catch (error) {
+      console.error(error)
+    } finally {
+      setScanLoading(false)
+    }
+  }
+
+  const handleSchedule = async (enabled, intervalMinutes = scanStatus?.interval_minutes || 5) => {
+    setScanLoading(true)
+    try {
+      setScanStatus(await setScanSchedule(enabled, intervalMinutes))
+    } catch (error) {
+      console.error(error)
+    } finally {
+      setScanLoading(false)
+    }
+  }
+
   const displayAlerts = paused ? frozenRef.current : wsAlerts.slice(0, FEED_LIMIT)
   if (!paused) frozenRef.current = displayAlerts
 
@@ -96,6 +142,37 @@ export default function Dashboard({ onConnectionChange }) {
 
   return (
     <main style={styles.main}>
+
+      {/* Scan status */}
+      <section style={{ ...styles.scanPanel, ...scanPanelTone(scanStatus, summary) }}>
+        <div style={styles.scanHeader}>
+          <div>
+            <h1 style={styles.scanTitle}>{scanHeadline(scanStatus, summary)}</h1>
+            <p style={styles.scanText}>{scanMessage(scanStatus, summary)}</p>
+          </div>
+          <div style={styles.scanActions}>
+            <button style={styles.scanBtn} onClick={handleRunScan} disabled={scanLoading || scanStatus?.state === 'running'}>
+              {scanStatus?.state === 'running' ? 'Scan running...' : 'Run scan now'}
+            </button>
+            <button style={styles.scanBtn} onClick={() => handleSchedule(true, 5)} disabled={scanLoading}>
+              Every 5 min
+            </button>
+            <button style={styles.scanBtn} onClick={() => handleSchedule(true, 10)} disabled={scanLoading}>
+              Every 10 min
+            </button>
+            {scanStatus?.enabled && (
+              <button style={styles.stopBtn} onClick={() => handleSchedule(false, scanStatus.interval_minutes)} disabled={scanLoading}>
+                Stop schedule
+              </button>
+            )}
+          </div>
+        </div>
+        <div style={styles.scanMeta}>
+          <span>Scheduled scans: {scanStatus?.enabled ? `on every ${scanStatus.interval_minutes} minutes` : 'off'}</span>
+          {scanStatus?.next_scan_at && <span>Next scan: {new Date(scanStatus.next_scan_at).toLocaleTimeString()}</span>}
+          {scanStatus?.last_finished_at && <span>Last finished: {new Date(scanStatus.last_finished_at).toLocaleTimeString()}</span>}
+        </div>
+      </section>
 
       {/* Summary cards */}
       <div style={styles.cards}>
@@ -231,8 +308,41 @@ function riskStyle(riskLevel) {
   return { borderColor: '#f59e0b40', color: '#f59e0b' }
 }
 
+function scanHeadline(scanStatus, summary) {
+  if (scanStatus?.state === 'running') return 'Scan started'
+  if (scanStatus?.state === 'threats_found') return 'Threats detected'
+  if (scanStatus?.state === 'secure' || summary.total === 0) return 'Network is secure'
+  return 'Network monitoring active'
+}
+
+function scanMessage(scanStatus, summary) {
+  if (scanStatus?.state === 'running') {
+    return 'ThreatScope is checking recent network activity. New alerts will appear below if suspicious traffic is found.'
+  }
+  if (scanStatus?.state === 'threats_found') return scanStatus.message
+  if (scanStatus?.state === 'secure' || summary.total === 0) {
+    return 'No threats were detected in the latest scan window. Keep scheduled scans on for continuous checks.'
+  }
+  return 'Alerts below explain suspicious behavior in plain English so non-technical users can understand what happened.'
+}
+
+function scanPanelTone(scanStatus, summary) {
+  if (scanStatus?.state === 'threats_found') return { borderColor: '#ef444440', background: '#7f1d1d22' }
+  if (scanStatus?.state === 'running') return { borderColor: '#6366f166', background: '#312e8122' }
+  if (scanStatus?.state === 'secure' || summary.total === 0) return { borderColor: '#22c55e55', background: '#064e3b22' }
+  return { borderColor: '#334155', background: '#1e293b' }
+}
+
 const styles = {
   main:         { padding: '24px 32px' },
+  scanPanel:    { border: '1px solid', borderRadius: 8, padding: '18px 20px', marginBottom: 24 },
+  scanHeader:   { display: 'flex', alignItems: 'flex-start', justifyContent: 'space-between', gap: 18, flexWrap: 'wrap' },
+  scanTitle:    { fontSize: 22, color: '#f1f5f9', margin: '0 0 6px' },
+  scanText:     { color: '#cbd5e1', fontSize: 14, lineHeight: 1.55, maxWidth: 760 },
+  scanActions:  { display: 'flex', alignItems: 'center', gap: 8, flexWrap: 'wrap' },
+  scanBtn:      { background: '#111827', border: '1px solid #6366f1', color: '#c7d2fe', borderRadius: 6, padding: '8px 12px', fontSize: 13, fontWeight: 700, cursor: 'pointer' },
+  stopBtn:      { background: '#111827', border: '1px solid #ef4444', color: '#fca5a5', borderRadius: 6, padding: '8px 12px', fontSize: 13, fontWeight: 700, cursor: 'pointer' },
+  scanMeta:     { display: 'flex', gap: 12, flexWrap: 'wrap', color: '#94a3b8', fontSize: 12, marginTop: 12 },
   cards:        { display: 'flex', gap: 16, marginBottom: 32, flexWrap: 'wrap' },
   card:         { flex: 1, minWidth: 140, background: '#1e293b', borderRadius: 8, padding: '16px 20px', display: 'flex', flexDirection: 'column', gap: 8 },
   cardHeader:   { display: 'flex', alignItems: 'center', gap: 8 },

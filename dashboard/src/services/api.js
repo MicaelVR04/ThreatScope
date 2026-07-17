@@ -96,3 +96,21 @@ export async function getAttackTypeStats() {
 export async function analyzeRecentAlerts() {
   return apiFetch('/ai/analyze-alerts', { method: 'POST' })
 }
+
+export async function getScanStatus() {
+  return apiFetch('/scan/status')
+}
+
+export async function runScanNow() {
+  return apiFetch('/scan/run', { method: 'POST' })
+}
+
+export async function setScanSchedule(enabled, intervalMinutes) {
+  return apiFetch('/scan/schedule', {
+    method: 'POST',
+    body: JSON.stringify({
+      enabled,
+      interval_minutes: intervalMinutes,
+    }),
+  })
+}

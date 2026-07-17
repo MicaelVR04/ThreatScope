@@ -11,7 +11,7 @@ from fastapi import HTTPException
 
 sys.path.insert(0, os.path.abspath(os.path.join(os.path.dirname(__file__), "..")))
 
-from ai_analysis import analyze_alerts_with_ollama, compact_alerts
+from ai_analysis import analyze_alerts, analyze_alerts_with_ollama, compact_alerts
 
 
 def make_alert():
@@ -106,3 +106,35 @@ def test_analyze_alerts_empty_short_circuits(monkeypatch):
 
     assert result["alert_count"] == 0
     assert result["risk_level"] == "LOW"
+
+
+def test_analyze_alerts_with_mocked_cloud_provider(monkeypatch):
+    monkeypatch.setenv("AI_PROVIDER", "openai")
+    monkeypatch.setenv("OPENAI_API_KEY", "test-key")
+    monkeypatch.setenv("OPENAI_MODEL", "gpt-test")
+
+    def fake_post(url, headers, json, timeout):
+        assert url.endswith("/chat/completions")
+        assert headers["Authorization"] == "Bearer test-key"
+        assert json["model"] == "gpt-test"
+        return FakeResponse({
+            "choices": [{
+                "message": {
+                    "content": (
+                        '{"summary":"Recent alerts look like a demo scan.",'
+                        '"pattern":"Recon followed by active disruption.",'
+                        '"risk_level":"HIGH",'
+                        '"demo_note":"Likely deterministic demo traffic.",'
+                        '"rule_tuning_suggestions":["Tune cooldown windows.","Explain alert names in the UI."]}'
+                    )
+                }
+            }]
+        })
+
+    monkeypatch.setattr(requests, "post", fake_post)
+
+    result = analyze_alerts([make_alert()])
+
+    assert result["model"] == "gpt-test"
+    assert result["risk_level"] == "HIGH"
+    assert "demo scan" in result["summary"]

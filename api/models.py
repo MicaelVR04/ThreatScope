@@ -40,3 +40,18 @@ class AlertSummary(BaseModel):
     high:   int
     medium: int
     low:    int
+
+
+class ScanScheduleRequest(BaseModel):
+    """
+    Dashboard request for enabling/disabling scheduled scan windows.
+    """
+    enabled: bool
+    interval_minutes: int
+
+    @field_validator("interval_minutes")
+    @classmethod
+    def validate_interval(cls, v):
+        if v not in [5, 10]:
+            raise ValueError("interval_minutes must be 5 or 10")
+        return v

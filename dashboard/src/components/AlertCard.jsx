@@ -1,5 +1,6 @@
 import SeverityBadge from './SeverityBadge'
 import { AlertTriangle, ShieldAlert, Info } from 'lucide-react'
+import { threatLabel, threatPlainEnglish } from '../utils/threatLabels'
 
 const SEVERITY_ICON = {
   HIGH:   <ShieldAlert size={16} color="#ef4444" />,
@@ -16,9 +17,10 @@ export default function AlertCard({ alert }) {
       <div style={styles.header}>
         {SEVERITY_ICON[alert.severity] ?? <Info size={16} color="#94a3b8" />}
         <SeverityBadge severity={alert.severity} />
-        <span style={styles.type}>{alert.type}</span>
+        <span style={styles.type}>{threatLabel(alert.type)}</span>
         <span style={styles.time}>{new Date(alert.timestamp).toLocaleTimeString()}</span>
       </div>
+      <p style={styles.description}>{threatPlainEnglish(alert.type)}</p>
       <div style={styles.meta}>
         <span style={styles.ip}>{alert.src_ip}</span>
         <span style={styles.arrow}>→</span>
@@ -34,6 +36,7 @@ const styles = {
   card:   { background: '#1e293b', borderRadius: 8, padding: '12px 16px', marginBottom: 8 },
   header: { display: 'flex', alignItems: 'center', gap: 10, marginBottom: 8 },
   type:   { flex: 1, fontSize: 14, fontWeight: 600, color: '#f1f5f9' },
+  description: { color: '#94a3b8', fontSize: 12, lineHeight: 1.45, margin: '0 0 8px' },
   meta:   { display: 'flex', alignItems: 'center', gap: 8, fontSize: 13, color: '#94a3b8' },
   ip:     { fontFamily: 'monospace', color: '#cbd5e1' },
   arrow:  { color: '#475569' },

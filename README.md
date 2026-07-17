@@ -99,10 +99,18 @@ ARP_SPOOF_CONFIRMATION_THRESHOLD=2
 Optional local AI diagnostics:
 
 ```bash
+AI_PROVIDER=ollama
 OLLAMA_BASE_URL=http://127.0.0.1:11434
 OLLAMA_MODEL=qwen2.5:7b
 OLLAMA_TIMEOUT_SECONDS=45
 OLLAMA_ALERT_LIMIT=20
+```
+
+Optional scheduled scan settings:
+
+```bash
+SCAN_WINDOW_SECONDS=8
+SCAN_INTERVAL_MINUTES=5
 ```
 
 ## Supabase Setup
@@ -235,6 +243,23 @@ ollama run qwen2.5:7b
 When the API and dashboard are running, log in to the dashboard and use the **AI Analysis** panel to analyze recent alerts. If Ollama is not running or the configured model is missing, the dashboard will show a friendly setup error.
 
 For a clean presentation, clear older test alerts or set `OLLAMA_ALERT_LIMIT=4` so the AI only summarizes the latest four demo alerts. Historical simulated rows can make the AI describe older sources or severities that are not part of the current demo run.
+
+To use a cloud AI provider instead of local Ollama, set:
+
+```bash
+AI_PROVIDER=openai
+OPENAI_API_KEY=your-api-key
+OPENAI_MODEL=gpt-4o-mini
+OPENAI_BASE_URL=https://api.openai.com/v1
+```
+
+Keep the API key server-side in `.env`. Do not expose it in dashboard code.
+
+## Scheduled Scans
+
+The dashboard includes scan controls for running a scan now or scheduling scan windows every 5 or 10 minutes. During a scan window, ThreatScope watches for newly inserted alerts. If no new alerts appear, the dashboard reports **Network is secure**. If alerts arrive during the window, the dashboard reports that threats were detected and points users to the live feed.
+
+The scan control is dashboard-friendly orchestration around the existing engine/API pipeline. The Python engine still owns packet analysis and alert generation.
 
 ## Tests
 
