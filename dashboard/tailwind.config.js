@@ -61,6 +61,16 @@ export default {
           '0%, 100%': { transform: 'translateY(0px)' },
           '50%': { transform: 'translateY(-14px)' },
         },
+        // Opacity-only, deliberately — each dot also carries a static
+        // -translate-x/y-1/2 centering transform, and a CSS `animation`
+        // replaces an element's whole computed transform per frame, so a
+        // transform here would fight that centering (same conflict already
+        // hit once with the CTA glow's float animation).
+        'radar-ping': {
+          '0%': { opacity: '0' },
+          '3%': { opacity: '1' },
+          '9%, 100%': { opacity: '0' },
+        },
       },
       animation: {
         'radar-sweep': 'radar-sweep 6s linear infinite',
@@ -68,6 +78,9 @@ export default {
         pulse: 'pulse 1.4s ease-in-out infinite',
         'pipeline-pulse': 'pipeline-pulse 4s ease-in-out infinite',
         float: 'float 7s ease-in-out infinite',
+        // Duration matches radar-sweep's 6s exactly so each ping repeats in
+        // sync with the sweep's rotation instead of drifting out of phase.
+        'radar-ping': 'radar-ping 6s ease-out infinite',
       },
     },
   },

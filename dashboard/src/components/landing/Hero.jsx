@@ -31,6 +31,36 @@ const DEMO_FEED = [
   },
 ]
 
+// Angle (clockwise from top, matching the conic-gradient's own coordinate
+// system) and radius (fraction of the radar's own radius, 0-0.5) for each
+// detection ping. Positioned via top/left percentages — not transform:
+// translate, which is relative to the dot's own size, not the radar's —
+// so they scale automatically with the radar at every breakpoint with no
+// extra responsive logic needed.
+const RADAR_DOTS = [
+  { angle: 40, radius: 0.36 },
+  { angle: 145, radius: 0.22 },
+  { angle: 235, radius: 0.44 },
+  { angle: 320, radius: 0.3 },
+]
+
+function radarDotStyle({ angle, radius }) {
+  const rad = (angle * Math.PI) / 180
+  const left = 50 + radius * 50 * Math.sin(rad)
+  const top = 50 - radius * 50 * Math.cos(rad)
+  // The sweep's brightest edge sits 18deg into its wedge (see the
+  // conic-gradient below), so a ping at `angle` lights up when the sweep's
+  // rotation has carried that edge to the same angle — approximated here
+  // rather than solved exactly, since a ~100ms timing error is imperceptible
+  // in a flash this brief.
+  const delaySeconds = (((angle - 18 + 360) % 360) / 360) * 6
+  return {
+    left: `${left}%`,
+    top: `${top}%`,
+    animationDelay: `-${delaySeconds}s`,
+  }
+}
+
 // Subtle scroll-tied drift on the radar sweep and telemetry panel — skipped
 // entirely under prefers-reduced-motion rather than just running slower.
 function useParallax(factor) {
@@ -70,16 +100,36 @@ export default function Hero() {
 
   return (
     <section id="top" className="relative overflow-hidden pt-24 pb-28 md:pt-32 md:pb-36">
-      {/* Radar sweep — decorative, GPU-composited (transform only), hidden from a11y tree */}
+      {/* Radar sweep — decorative, GPU-composited (transform only), hidden from a11y tree.
+          Sized per breakpoint rather than a single fixed 640px: at a half-width
+          browser window 640px reads fine against the hero's narrower column, but
+          at full width the hero column is much wider and the same 640px starts
+          to look small and lost in the corner. md stays untouched — that size
+          was already confirmed correct. lg/xl/2xl land between the original
+          640px (too small at full width) and a prior pass at 1120px (too big,
+          and positioned too far right/down) — smaller than that attempt and
+          shifted left/up (more right-inset, more negative top) from it. */}
       <div
         ref={radarRef}
         aria-hidden="true"
-        className="pointer-events-none absolute -right-32 -top-32 h-[640px] w-[640px] opacity-[0.18] md:-right-10"
+        className="pointer-events-none absolute -right-32 -top-32 h-[640px] w-[640px] opacity-[0.18] md:-right-10 lg:-right-6 lg:-top-24 lg:h-[720px] lg:w-[720px] xl:right-4 xl:-top-12 xl:h-[820px] xl:w-[820px] 2xl:right-16 2xl:-top-8 2xl:h-[900px] 2xl:w-[900px]"
       >
         <div className="h-full w-full animate-radar-sweep rounded-full [background:conic-gradient(from_0deg,transparent_0deg,theme(colors.signal.DEFAULT)_18deg,transparent_60deg)]" />
         <div className="absolute inset-0 rounded-full border border-signal/20" />
         <div className="absolute inset-12 rounded-full border border-signal/10" />
         <div className="absolute inset-24 rounded-full border border-signal/10" />
+
+        {/* Detection pings — brief flashes timed to when the sweep's leading
+            edge passes each dot's position, so it reads as "detecting"
+            rather than decorative. animation-duration matches the sweep's
+            own 6s rotation so each ping repeats in sync every cycle. */}
+        {RADAR_DOTS.map((dot, i) => (
+          <span
+            key={i}
+            className="absolute h-1.5 w-1.5 -translate-x-1/2 -translate-y-1/2 animate-radar-ping rounded-full bg-signal"
+            style={radarDotStyle(dot)}
+          />
+        ))}
       </div>
 
       <div className="relative mx-auto grid max-w-6xl gap-16 px-6 md:grid-cols-[1.15fr_0.85fr] md:items-center">
