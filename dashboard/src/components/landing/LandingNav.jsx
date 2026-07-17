@@ -26,9 +26,10 @@ export default function LandingNav() {
             <a
               key={href}
               href={href}
-              className={`cursor-pointer rounded-sm font-mono text-[13px] uppercase tracking-wide text-ink-muted transition-colors duration-150 ease-swift hover:text-signal ${FOCUS_RING}`}
+              className={`group relative cursor-pointer rounded-sm font-mono text-[13px] uppercase tracking-wide text-ink-muted transition-colors duration-150 ease-swift hover:text-signal ${FOCUS_RING}`}
             >
               {label}
+              <span className="absolute -bottom-1 left-0 h-px w-full origin-left scale-x-0 bg-signal transition-transform duration-200 ease-swift group-hover:scale-x-100" />
             </a>
           ))}
         </nav>
@@ -44,7 +45,7 @@ export default function LandingNav() {
 
         <Link
           to="/dashboard"
-          className={`inline-flex shrink-0 cursor-pointer items-center rounded-md bg-signal px-4 py-2 font-display text-sm font-semibold text-base transition-all duration-150 ease-swift hover:scale-[1.02] hover:shadow-[0_0_24px_-4px_rgba(46,235,209,0.6)] ${FOCUS_RING}`}
+          className={`inline-flex shrink-0 cursor-pointer items-center rounded-md bg-signal px-4 py-2 font-display text-sm font-semibold text-base transition-all duration-150 ease-swift hover:scale-[1.02] hover:shadow-[0_0_24px_-4px_rgba(46,235,209,0.6)] active:scale-[0.97] ${FOCUS_RING}`}
         >
           <span className="sm:hidden">Launch</span>
           <span className="hidden sm:inline">Launch Dashboard</span>

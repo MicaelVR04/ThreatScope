@@ -21,7 +21,16 @@ export default function useReveal({ threshold = 0.2, rootMargin = '0px 0px -10% 
     )
 
     observer.observe(el)
-    return () => observer.disconnect()
+
+    // Safety net: reveals must enhance content that's already there, never
+    // gate its existence. If the observer somehow never fires, don't leave
+    // the section permanently at opacity-0.
+    const fallback = setTimeout(() => setVisible(true), 2000)
+
+    return () => {
+      observer.disconnect()
+      clearTimeout(fallback)
+    }
   }, [threshold, rootMargin])
 
   return [ref, visible]

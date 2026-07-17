@@ -46,25 +46,32 @@ export default function Capabilities() {
           <p className="font-mono text-xs font-medium uppercase tracking-[0.2em] text-signal">
             Capabilities
           </p>
-          <h2 className="mt-4 font-display text-3xl font-bold tracking-tight text-ink md:text-4xl">
+          <h2 className="mt-4 font-display text-3xl font-bold tracking-tight text-ink md:text-5xl">
             Built to catch what others miss.
           </h2>
+          <p className="mt-4 text-lg text-ink-muted">
+            Six things happen between a packet crossing the wire and an alert on your screen.
+          </p>
         </div>
 
-        <div ref={ref} className="mt-14 grid gap-5 sm:grid-cols-2 lg:grid-cols-3">
+        <div ref={ref} className="mt-14 grid gap-x-10 border-t border-white/[0.08] md:grid-cols-2">
           {ITEMS.map(({ Icon, title, body }, i) => (
             <div
               key={title}
-              className={`rounded-xl border border-white/[0.08] bg-surface p-6 transition-all duration-200 ease-swift hover:border-signal/30 hover:bg-surface-2 ${
+              className={`group flex items-start gap-4 border-b border-white/[0.08] py-6 transition-all duration-200 ease-swift ${
                 visible ? 'opacity-100 translate-y-0' : 'opacity-0 translate-y-3'
               }`}
               style={{ transitionDelay: visible ? `${i * 60}ms` : '0ms' }}
             >
-              <div className="flex h-10 w-10 items-center justify-center rounded-lg bg-signal-dim">
-                <Icon size={19} className="text-signal" strokeWidth={2} />
+              <Icon
+                size={20}
+                className="mt-0.5 shrink-0 text-signal transition-transform duration-200 ease-swift group-hover:rotate-6 group-hover:scale-110"
+                strokeWidth={1.75}
+              />
+              <div>
+                <h3 className="font-display text-base font-semibold text-ink">{title}</h3>
+                <p className="mt-1.5 text-sm leading-relaxed text-ink-muted">{body}</p>
               </div>
-              <h3 className="mt-4 font-display text-base font-semibold text-ink">{title}</h3>
-              <p className="mt-2 text-sm leading-relaxed text-ink-muted">{body}</p>
             </div>
           ))}
         </div>

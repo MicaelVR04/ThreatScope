@@ -53,36 +53,39 @@ export default function Stats() {
   const [ref, visible] = useReveal()
 
   return (
-    <section id="stack" className="border-t border-white/[0.06] py-24">
+    <section id="stack" className="border-t border-white/[0.06] py-28">
       <div className="mx-auto max-w-6xl px-6">
         <div className="max-w-2xl">
           <p className="font-mono text-xs font-medium uppercase tracking-[0.2em] text-signal">
-            Under the hood
+            Stack
           </p>
-          <h2 className="mt-4 font-display text-3xl font-bold tracking-tight text-ink md:text-4xl">
+          <h2 className="mt-4 font-display text-3xl font-bold tracking-tight text-ink md:text-5xl">
             Built on a real detection pipeline, not a mockup.
           </h2>
         </div>
 
-        <div className="mt-10 flex flex-wrap gap-2.5">
-          {BADGES.map((badge) => (
+        <div ref={ref} className="mt-10 flex flex-wrap gap-2.5">
+          {BADGES.map((badge, i) => (
             <span
               key={badge}
-              className="rounded-full border border-white/[0.08] bg-surface px-3.5 py-1.5 font-mono text-xs text-ink-muted"
+              className={`cursor-default rounded-full border border-white/[0.08] bg-surface px-3.5 py-1.5 font-mono text-xs text-ink-muted transition-all duration-200 ease-swift hover:scale-105 hover:border-signal/40 hover:bg-surface-2 hover:text-signal ${
+                visible ? 'opacity-100 translate-y-0' : 'opacity-0 translate-y-2'
+              }`}
+              style={{ transitionDelay: visible ? `${i * 40}ms` : '0ms' }}
             >
               {badge}
             </span>
           ))}
         </div>
 
-        <div ref={ref} className="mt-14 grid gap-5 sm:grid-cols-3">
+        <div className="mt-14 grid gap-5 sm:grid-cols-3">
           {TILES.map(({ value, suffix, display, label }, i) => (
             <div
               key={label}
               className={`rounded-xl border border-white/[0.08] bg-surface p-7 transition-all duration-300 ease-swift ${
                 visible ? 'opacity-100 translate-y-0' : 'opacity-0 translate-y-3'
               }`}
-              style={{ transitionDelay: visible ? `${i * 90}ms` : '0ms' }}
+              style={{ transitionDelay: visible ? `${240 + i * 90}ms` : '0ms' }}
             >
               <p className="text-4xl font-semibold text-signal">
                 <StatValue value={value} suffix={suffix} display={display} visible={visible} />

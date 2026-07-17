@@ -13,13 +13,13 @@ export default function HowItWorks() {
   const [ref, visible] = useReveal()
 
   return (
-    <section id="how-it-works" className="border-t border-white/[0.06] py-24">
+    <section id="how-it-works" className="py-16">
       <div className="mx-auto max-w-6xl px-6">
         <div className="max-w-2xl">
           <p className="font-mono text-xs font-medium uppercase tracking-[0.2em] text-signal">
             How it works
           </p>
-          <h2 className="mt-4 font-display text-3xl font-bold tracking-tight text-ink md:text-4xl">
+          <h2 className="mt-4 font-display text-3xl font-bold tracking-tight text-ink md:text-5xl">
             One pipeline, from packet to alert.
           </h2>
         </div>
@@ -31,6 +31,19 @@ export default function HowItWorks() {
               width: 'calc(100% - 3rem)',
               transform: visible ? 'scaleX(1)' : 'scaleX(0)',
             }}
+          />
+          {/* A signal traveling along the pipeline once the line is drawn —
+              purely decorative, so it's hidden from the a11y tree. Height
+              must be real (not h-px like the line itself): a radial-gradient
+              painted inside a 1px-tall box has no vertical room to render as
+              a visible glow — it was previously invisible for exactly this
+              reason, not because the animation wasn't running. */}
+          <div
+            aria-hidden="true"
+            className={`absolute left-0 top-6 hidden h-3 -translate-y-1/2 bg-[length:32px_12px] bg-no-repeat [background-image:radial-gradient(circle,theme(colors.signal.DEFAULT)_0%,transparent_70%)] md:block ${
+              visible ? 'animate-pipeline-pulse' : 'opacity-0'
+            }`}
+            style={{ width: 'calc(100% - 3rem)' }}
           />
 
           <div className="grid gap-10 md:grid-cols-5 md:gap-6">

@@ -45,11 +45,29 @@ export default {
           '0%, 100%': { opacity: '1', transform: 'scale(1)' },
           '50%': { opacity: '0.4', transform: 'scale(1.5)' },
         },
+        // A small glow traveling once per cycle along the HowItWorks connector
+        // line, via background-position rather than left/transform — the line's
+        // width is fluid (calc(100% - 3rem)), and background-position % is
+        // relative to the container while transform % is relative to the dot
+        // itself, so this is the only composited-friendly way to cover the
+        // full fluid width without measuring it in JS.
+        'pipeline-pulse': {
+          '0%, 12%': { backgroundPosition: '0% 50%', opacity: '0' },
+          '20%': { opacity: '1' },
+          '78%': { opacity: '1' },
+          '88%, 100%': { backgroundPosition: '100% 50%', opacity: '0' },
+        },
+        float: {
+          '0%, 100%': { transform: 'translateY(0px)' },
+          '50%': { transform: 'translateY(-14px)' },
+        },
       },
       animation: {
         'radar-sweep': 'radar-sweep 6s linear infinite',
         'fade-up': 'fade-up 240ms cubic-bezier(0.16, 1, 0.3, 1) both',
         pulse: 'pulse 1.4s ease-in-out infinite',
+        'pipeline-pulse': 'pipeline-pulse 4s ease-in-out infinite',
+        float: 'float 7s ease-in-out infinite',
       },
     },
   },
