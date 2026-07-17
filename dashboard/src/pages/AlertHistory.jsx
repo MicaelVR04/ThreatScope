@@ -1,4 +1,5 @@
 import { useState, useEffect, useMemo } from 'react'
+import Button from '../components/theme/Button'
 import AlertTable from '../components/AlertTable'
 import { getAlerts } from '../services/api'
 import { RefreshCw, Download } from 'lucide-react'
@@ -53,13 +54,13 @@ export default function AlertHistory() {
       {/* Header row */}
       <div style={styles.headerRow}>
         <h1 style={styles.heading}>Alert History</h1>
-        <button style={styles.iconBtn} onClick={load} title="Refresh" disabled={loading}>
+        <Button variant="secondary" size="sm" onClick={load} title="Refresh" disabled={loading}>
           <RefreshCw size={14} style={{ animation: loading ? 'ts-spin 1s linear infinite' : 'none' }} />
           Refresh
-        </button>
-        <button style={styles.iconBtn} onClick={exportCSV} title="Export CSV" disabled={!filtered.length}>
+        </Button>
+        <Button variant="secondary" size="sm" onClick={exportCSV} title="Export CSV" disabled={!filtered.length}>
           <Download size={14} /> Export CSV
-        </button>
+        </Button>
       </div>
 
       {/* Filters */}
@@ -80,9 +81,9 @@ export default function AlertHistory() {
           <input style={styles.dateInput} type="date" value={dateTo} onChange={e => setDateTo(e.target.value)} />
         </label>
         {(search || dateFrom || dateTo) && (
-          <button style={styles.clearBtn} onClick={() => { setSearch(''); setDateFrom(''); setDateTo('') }}>
+          <Button variant="ghost" size="sm" onClick={() => { setSearch(''); setDateFrom(''); setDateTo('') }}>
             Clear
-          </button>
+          </Button>
         )}
       </div>
 

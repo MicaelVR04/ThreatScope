@@ -1,4 +1,4 @@
-import SeverityBadge from './SeverityBadge'
+import Tag from './theme/Tag'
 import { AlertTriangle, ShieldAlert, Info } from 'lucide-react'
 import { threatLabel, threatPlainEnglish } from '../utils/threatLabels'
 
@@ -16,7 +16,7 @@ export default function AlertCard({ alert }) {
     <div style={{ ...styles.card, borderLeft: `4px solid ${border}` }}>
       <div style={styles.header}>
         {SEVERITY_ICON[alert.severity] ?? <Info size={16} color="#94a3b8" />}
-        <SeverityBadge severity={alert.severity} />
+        <Tag severity={alert.severity}>{alert.severity}</Tag>
         <span style={styles.type}>{threatLabel(alert.type)}</span>
         <span style={styles.time}>{new Date(alert.timestamp).toLocaleTimeString()}</span>
       </div>

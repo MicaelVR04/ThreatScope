@@ -1,5 +1,6 @@
 import { NavLink } from 'react-router-dom'
 import { Shield, LayoutDashboard, Clock, Wifi, WifiOff, LogOut } from 'lucide-react'
+import Button from './theme/Button'
 
 export default function Navbar({ connected, userEmail, signingOut, onLogout }) {
   return (
@@ -47,9 +48,10 @@ export default function Navbar({ connected, userEmail, signingOut, onLogout }) {
           </span>
         )}
 
-        <button
+        <Button
           type="button"
-          style={{ ...styles.logoutBtn, ...(signingOut ? styles.logoutBtnDisabled : {}) }}
+          variant="secondary"
+          size="sm"
           onClick={onLogout}
           disabled={signingOut}
           title="Sign out"
@@ -57,7 +59,7 @@ export default function Navbar({ connected, userEmail, signingOut, onLogout }) {
         >
           <LogOut size={15} />
           <span className="ts-logout-text" style={styles.logoutText}>{signingOut ? 'Signing out' : 'Logout'}</span>
-        </button>
+        </Button>
       </div>
 
       <style>{`

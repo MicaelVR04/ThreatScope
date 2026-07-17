@@ -1,4 +1,4 @@
-import { ScanSearch, ShieldCheck, ShieldAlert } from 'lucide-react'
+import { ScanSearch, ShieldCheck, ShieldAlert, Eye } from 'lucide-react'
 
 const STATES = {
   scanning: {
@@ -15,6 +15,14 @@ const STATES = {
     Icon: ShieldAlert,
     label: 'Alert',
     color: 'text-severity-high border-severity-high/30 bg-severity-high/10',
+  },
+  // Idle baseline — watching, nothing confirmed either way yet. Deliberately
+  // static (no pulse) and ink-muted, distinct from "secure" (a confirmed-clean
+  // result) rather than a lower-key version of it.
+  monitoring: {
+    Icon: Eye,
+    label: 'Monitoring',
+    color: 'text-ink-muted border-white/[0.12] bg-surface',
   },
 }
 

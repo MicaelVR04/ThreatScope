@@ -1,5 +1,6 @@
 import { useState, useMemo } from 'react'
-import SeverityBadge from './SeverityBadge'
+import Button from './theme/Button'
+import Tag from './theme/Tag'
 import { ChevronUp, ChevronDown, ChevronsUpDown } from 'lucide-react'
 import { threatLabel, threatPlainEnglish } from '../utils/threatLabels'
 
@@ -48,13 +49,15 @@ export default function AlertTable({ alerts = [] }) {
       {/* Filter bar */}
       <div style={styles.filterBar}>
         {['ALL', 'HIGH', 'MEDIUM', 'LOW'].map(f => (
-          <button
+          <Button
             key={f}
+            variant="ghost"
+            size="sm"
             onClick={() => setFilter(f)}
-            style={{ ...styles.filterBtn, ...(filter === f ? styles.filterActive : {}) }}
+            className={filter === f ? 'bg-signal-dim text-signal' : ''}
           >
             {f}
-          </button>
+          </Button>
         ))}
         <span style={styles.count}>{sorted.length} alert{sorted.length !== 1 ? 's' : ''}</span>
       </div>
@@ -79,7 +82,7 @@ export default function AlertTable({ alerts = [] }) {
             <tbody>
               {sorted.map((alert, i) => (
                 <tr key={alert.id ?? i} style={styles.row}>
-                  <td style={styles.td}><SeverityBadge severity={alert.severity} /></td>
+                  <td style={styles.td}><Tag severity={alert.severity}>{alert.severity}</Tag></td>
                   <td style={styles.td}>
                     <span style={styles.typeLabel}>{threatLabel(alert.type)}</span>
                     <span style={styles.typeCode}>{alert.type}</span>

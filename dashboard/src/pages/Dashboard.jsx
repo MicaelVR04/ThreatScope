@@ -4,6 +4,7 @@ import {
   ResponsiveContainer, CartesianGrid, Legend,
 } from 'recharts'
 import { Activity, ShieldAlert, AlertTriangle, Info, PauseCircle, PlayCircle } from 'lucide-react'
+import Button from '../components/theme/Button'
 import AlertCard from '../components/AlertCard'
 import SeverityChart from '../components/SeverityChart'
 import AttackTypeChart from '../components/AttackTypeChart'
@@ -151,19 +152,19 @@ export default function Dashboard({ onConnectionChange }) {
             <p style={styles.scanText}>{scanMessage(scanStatus, summary)}</p>
           </div>
           <div style={styles.scanActions}>
-            <button style={styles.scanBtn} onClick={handleRunScan} disabled={scanLoading || scanStatus?.state === 'running'}>
+            <Button variant="primary" size="sm" onClick={handleRunScan} disabled={scanLoading || scanStatus?.state === 'running'}>
               {scanStatus?.state === 'running' ? 'Scan running...' : 'Run scan now'}
-            </button>
-            <button style={styles.scanBtn} onClick={() => handleSchedule(true, 5)} disabled={scanLoading}>
+            </Button>
+            <Button variant="secondary" size="sm" onClick={() => handleSchedule(true, 5)} disabled={scanLoading}>
               Every 5 min
-            </button>
-            <button style={styles.scanBtn} onClick={() => handleSchedule(true, 10)} disabled={scanLoading}>
+            </Button>
+            <Button variant="secondary" size="sm" onClick={() => handleSchedule(true, 10)} disabled={scanLoading}>
               Every 10 min
-            </button>
+            </Button>
             {scanStatus?.enabled && (
-              <button style={styles.stopBtn} onClick={() => handleSchedule(false, scanStatus.interval_minutes)} disabled={scanLoading}>
+              <Button variant="danger" size="sm" onClick={() => handleSchedule(false, scanStatus.interval_minutes)} disabled={scanLoading}>
                 Stop schedule
-              </button>
+              </Button>
             )}
           </div>
         </div>
@@ -239,10 +240,10 @@ export default function Dashboard({ onConnectionChange }) {
             <h2 style={styles.sectionTitle}>AI Analysis</h2>
             <p style={styles.aiSubtext}>Developer diagnostics from local Ollama. Rule detections stay authoritative.</p>
           </div>
-          <button style={styles.aiButton} onClick={handleAnalyzeAlerts} disabled={aiLoading}>
+          <Button variant="secondary" size="sm" onClick={handleAnalyzeAlerts} disabled={aiLoading}>
             <Activity size={14} />
             {aiLoading ? 'Analyzing...' : 'Analyze recent alerts'}
-          </button>
+          </Button>
         </div>
 
         {aiError && (
@@ -286,11 +287,11 @@ export default function Dashboard({ onConnectionChange }) {
         <div style={styles.feedHeader}>
           <h2 style={styles.sectionTitle}>Live Alert Feed</h2>
           <span style={styles.feedCount}>{wsAlerts.length} received</span>
-          <button style={styles.pauseBtn} onClick={() => setPaused(p => !p)}>
+          <Button variant="ghost" size="sm" onClick={() => setPaused(p => !p)}>
             {paused
               ? <><PlayCircle  size={14} /> Resume</>
               : <><PauseCircle size={14} /> Pause</>}
-          </button>
+          </Button>
         </div>
         {displayAlerts.length === 0
           ? <p style={styles.empty}>No alerts detected yet. Listening...</p>

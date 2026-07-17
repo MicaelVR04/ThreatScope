@@ -7,6 +7,10 @@ const VARIANTS = {
   secondary:
     'border border-white/[0.12] text-ink-muted hover:border-signal/30 hover:text-signal',
   ghost: 'text-ink-muted hover:text-signal',
+  // For destructive actions (e.g. "Stop schedule") — outlined rather than
+  // filled, so it doesn't compete with primary for visual weight.
+  danger:
+    'border border-severity-high/30 text-severity-high hover:border-severity-high/60 hover:bg-severity-high/10',
 }
 
 const SIZES = {

@@ -5,9 +5,10 @@ const SEVERITY_COLOR = {
 }
 
 export default function Tag({ severity = 'low', children }) {
+  const color = SEVERITY_COLOR[severity.toLowerCase()] || SEVERITY_COLOR.low
   return (
     <span
-      className={`inline-flex items-center rounded-full border px-2.5 py-1 font-mono text-[11px] uppercase tracking-wide ${SEVERITY_COLOR[severity]}`}
+      className={`inline-flex items-center rounded-full border px-2.5 py-1 font-mono text-[11px] uppercase tracking-wide ${color}`}
     >
       {children}
     </span>
