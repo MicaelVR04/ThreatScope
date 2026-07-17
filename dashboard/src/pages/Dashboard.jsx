@@ -5,6 +5,7 @@ import {
 } from 'recharts'
 import { Activity, ShieldAlert, AlertTriangle, Info, PauseCircle, PlayCircle } from 'lucide-react'
 import Button from '../components/theme/Button'
+import StatusBadge from '../components/theme/StatusBadge'
 import AlertCard from '../components/AlertCard'
 import SeverityChart from '../components/SeverityChart'
 import AttackTypeChart from '../components/AttackTypeChart'
@@ -19,11 +20,15 @@ import {
   setScanSchedule,
 } from '../services/api'
 
-const SEV = {
-  HIGH:   { color: '#ef4444', icon: <ShieldAlert  size={18} color="#ef4444" /> },
-  MEDIUM: { color: '#f59e0b', icon: <AlertTriangle size={18} color="#f59e0b" /> },
-  LOW:    { color: '#22c55e', icon: <Info          size={18} color="#22c55e" /> },
-}
+// Hex-only — feeds the Recharts gradient/Area loop below, which needs
+// literal color values (Recharts renders its own SVG, it doesn't consume
+// Tailwind classes). Values match the severity design-system tokens exactly.
+const SEV_COLOR = { HIGH: '#ef4444', MEDIUM: '#f59e0b', LOW: '#22c55e' }
+
+// Section-label eyebrow style, reused identically across every section below
+// — matches the design system's documented eyebrow pattern (font-mono,
+// uppercase, tracked, muted).
+const SECTION_TITLE = 'mb-3 font-mono text-sm font-semibold uppercase tracking-[0.8px] text-ink-muted'
 
 const FEED_LIMIT = 20
 
@@ -135,23 +140,28 @@ export default function Dashboard({ onConnectionChange }) {
   if (!paused) frozenRef.current = displayAlerts
 
   const CARDS = [
-    { label: 'Total',  value: summary.total,  color: '#6366f1', icon: <Activity size={18} color="#6366f1" /> },
-    { label: 'High',   value: summary.high,   ...SEV.HIGH },
-    { label: 'Medium', value: summary.medium, ...SEV.MEDIUM },
-    { label: 'Low',    value: summary.low,    ...SEV.LOW },
+    { label: 'Total',  value: summary.total,  Icon: Activity,     tone: 'border-t-signal text-signal' },
+    { label: 'High',   value: summary.high,   Icon: ShieldAlert,  tone: 'border-t-severity-high text-severity-high' },
+    { label: 'Medium', value: summary.medium, Icon: AlertTriangle, tone: 'border-t-severity-medium text-severity-medium' },
+    { label: 'Low',    value: summary.low,    Icon: Info,         tone: 'border-t-severity-low text-severity-low' },
   ]
 
+  const scanState = mapScanState(scanStatus, summary)
+
   return (
-    <main style={styles.main}>
+    <main className="px-8 py-6">
 
       {/* Scan status */}
-      <section style={{ ...styles.scanPanel, ...scanPanelTone(scanStatus, summary) }}>
-        <div style={styles.scanHeader}>
+      <section className={`mb-6 rounded-lg border p-5 ${scanToneClass(scanState)}`}>
+        <div className="flex flex-wrap items-start justify-between gap-[18px]">
           <div>
-            <h1 style={styles.scanTitle}>{scanHeadline(scanStatus, summary)}</h1>
-            <p style={styles.scanText}>{scanMessage(scanStatus, summary)}</p>
+            <div className="mb-1.5 flex flex-wrap items-center gap-3">
+              <h1 className="font-display text-[22px] font-bold text-ink">{scanHeadline(scanStatus, summary)}</h1>
+              <StatusBadge status={scanState} />
+            </div>
+            <p className="max-w-[760px] text-sm leading-[1.55] text-ink-muted">{scanMessage(scanStatus, summary)}</p>
           </div>
-          <div style={styles.scanActions}>
+          <div className="flex flex-wrap items-center gap-2">
             <Button variant="primary" size="sm" onClick={handleRunScan} disabled={scanLoading || scanStatus?.state === 'running'}>
               {scanStatus?.state === 'running' ? 'Scan running...' : 'Run scan now'}
             </Button>
@@ -168,7 +178,7 @@ export default function Dashboard({ onConnectionChange }) {
             )}
           </div>
         </div>
-        <div style={styles.scanMeta}>
+        <div className="mt-3 flex flex-wrap gap-3 text-xs text-ink-muted">
           <span>Scheduled scans: {scanStatus?.enabled ? `on every ${scanStatus.interval_minutes} minutes` : 'off'}</span>
           {scanStatus?.next_scan_at && <span>Next scan: {new Date(scanStatus.next_scan_at).toLocaleTimeString()}</span>}
           {scanStatus?.last_finished_at && <span>Last finished: {new Date(scanStatus.last_finished_at).toLocaleTimeString()}</span>}
@@ -176,52 +186,55 @@ export default function Dashboard({ onConnectionChange }) {
       </section>
 
       {/* Summary cards */}
-      <div style={styles.cards}>
-        {CARDS.map(({ label, value, color, icon }) => (
-          <div key={label} style={{ ...styles.card, borderTop: `4px solid ${color}` }}>
-            <div style={styles.cardHeader}>{icon}<span style={styles.cardLabel}>{label}</span></div>
-            <span style={{ ...styles.cardValue, color }}>{value}</span>
+      <div className="mb-8 flex flex-wrap gap-4">
+        {CARDS.map(({ label, value, Icon, tone }) => (
+          <div key={label} className={`flex min-w-[140px] flex-1 flex-col gap-2 rounded-lg border-t-4 bg-surface px-5 py-4 ${tone}`}>
+            <div className="flex items-center gap-2">
+              <Icon size={18} />
+              <span className="text-[13px] text-ink-muted">{label}</span>
+            </div>
+            <span className="text-[34px] font-bold">{value}</span>
           </div>
         ))}
       </div>
 
       {/* Charts row */}
-      <div style={styles.chartsRow}>
-        <section style={styles.chartCard}>
-          <h2 style={styles.sectionTitle}>Severity Breakdown</h2>
+      <div className="mb-8 flex flex-wrap gap-4">
+        <section className="min-w-[260px] flex-1 rounded-lg bg-surface px-6 py-5">
+          <h2 className={SECTION_TITLE}>Severity Breakdown</h2>
           <SeverityChart data={summary} />
         </section>
-        <section style={{ ...styles.chartCard, flex: 2 }}>
-          <h2 style={styles.sectionTitle}>Attack Types</h2>
+        <section className="min-w-[260px] flex-[2] rounded-lg bg-surface px-6 py-5">
+          <h2 className={SECTION_TITLE}>Attack Types</h2>
           <AttackTypeChart data={typeStats} />
         </section>
       </div>
 
       {/* Time-series area chart */}
-      <section style={styles.section}>
-        <h2 style={styles.sectionTitle}>Alert Activity Over Time</h2>
+      <section className="mb-8">
+        <h2 className={SECTION_TITLE}>Alert Activity Over Time</h2>
         {chartData.length === 0 ? (
-          <p style={styles.empty}>No stats data available.</p>
+          <p className="italic text-ink-faint">No stats data available.</p>
         ) : (
           <ResponsiveContainer width="100%" height={220}>
             <AreaChart data={chartData} margin={{ top: 5, right: 10, left: -20, bottom: 0 }}>
               <defs>
-                {Object.entries(SEV).map(([k, { color }]) => (
+                {Object.entries(SEV_COLOR).map(([k, color]) => (
                   <linearGradient key={k} id={`grad-${k}`} x1="0" y1="0" x2="0" y2="1">
                     <stop offset="5%"  stopColor={color} stopOpacity={0.25} />
                     <stop offset="95%" stopColor={color} stopOpacity={0.02} />
                   </linearGradient>
                 ))}
               </defs>
-              <CartesianGrid strokeDasharray="3 3" stroke="#1e293b" />
-              <XAxis dataKey="timestamp" stroke="#475569" tick={{ fontSize: 11 }} />
-              <YAxis stroke="#475569" allowDecimals={false} tick={{ fontSize: 11 }} />
+              <CartesianGrid strokeDasharray="3 3" stroke="rgba(255,255,255,0.08)" />
+              <XAxis dataKey="timestamp" stroke="#8B96A5" tick={{ fontSize: 11 }} />
+              <YAxis stroke="#8B96A5" allowDecimals={false} tick={{ fontSize: 11 }} />
               <Tooltip
-                contentStyle={{ background: '#1e293b', border: '1px solid #334155', borderRadius: 6 }}
-                labelStyle={{ color: '#94a3b8', fontSize: 11 }}
+                contentStyle={{ background: '#0D131B', border: '1px solid rgba(255,255,255,0.12)', borderRadius: 6 }}
+                labelStyle={{ color: '#8B96A5', fontSize: 11 }}
               />
-              <Legend wrapperStyle={{ fontSize: 12, color: '#94a3b8' }} />
-              {Object.entries(SEV).map(([k, { color }]) => (
+              <Legend wrapperStyle={{ fontSize: 12, color: '#8B96A5' }} />
+              {Object.entries(SEV_COLOR).map(([k, color]) => (
                 <Area
                   key={k} type="monotone" dataKey={k}
                   stroke={color} strokeWidth={2}
@@ -234,11 +247,11 @@ export default function Dashboard({ onConnectionChange }) {
       </section>
 
       {/* AI developer diagnostics */}
-      <section style={styles.aiSection}>
-        <div style={styles.aiHeader}>
+      <section className="mb-8 rounded-lg border border-white/[0.08] bg-surface px-6 py-5">
+        <div className="mb-4 flex flex-wrap items-center justify-between gap-4">
           <div>
-            <h2 style={styles.sectionTitle}>AI Analysis</h2>
-            <p style={styles.aiSubtext}>Developer diagnostics from local Ollama. Rule detections stay authoritative.</p>
+            <h2 className={SECTION_TITLE}>AI Analysis</h2>
+            <p className="-mt-1 text-[13px] text-ink-faint">Developer diagnostics from local Ollama. Rule detections stay authoritative.</p>
           </div>
           <Button variant="secondary" size="sm" onClick={handleAnalyzeAlerts} disabled={aiLoading}>
             <Activity size={14} />
@@ -247,46 +260,46 @@ export default function Dashboard({ onConnectionChange }) {
         </div>
 
         {aiError && (
-          <div style={styles.aiError}>
+          <div className="flex items-center gap-2 rounded-md border border-severity-high/25 bg-severity-high/10 px-3 py-2.5 text-[13px] text-severity-high">
             <AlertTriangle size={16} />
             <span>{aiError}</span>
           </div>
         )}
 
         {!aiError && !aiResult && (
-          <p style={styles.aiEmpty}>Run analysis after alerts appear in the dashboard.</p>
+          <p className="italic text-sm text-ink-faint">Run analysis after alerts appear in the dashboard.</p>
         )}
 
         {aiResult && (
-          <div style={styles.aiResult}>
-            <div style={styles.aiMeta}>
-              <span style={styles.aiMetaItem}>Model: {aiResult.model}</span>
-              <span style={styles.aiMetaItem}>{aiResult.alert_count} alerts analyzed</span>
-              <span style={{ ...styles.aiRisk, ...riskStyle(aiResult.risk_level) }}>{aiResult.risk_level}</span>
+          <div className="flex flex-col gap-2.5">
+            <div className="mb-0.5 flex flex-wrap items-center gap-2.5">
+              <span className="rounded-full border border-white/[0.12] px-[9px] py-1 text-xs text-ink-muted">Model: {aiResult.model}</span>
+              <span className="rounded-full border border-white/[0.12] px-[9px] py-1 text-xs text-ink-muted">{aiResult.alert_count} alerts analyzed</span>
+              <span className={`rounded-full border px-[9px] py-1 text-xs font-extrabold ${riskClass(aiResult.risk_level)}`}>{aiResult.risk_level}</span>
             </div>
-            <p style={styles.aiText}><strong>Summary:</strong> {aiResult.summary}</p>
-            <p style={styles.aiText}><strong>Pattern:</strong> {aiResult.pattern}</p>
-            <p style={styles.aiText}><strong>Demo note:</strong> {aiResult.demo_note}</p>
+            <p className="text-sm leading-[1.55] text-ink-muted"><strong>Summary:</strong> {aiResult.summary}</p>
+            <p className="text-sm leading-[1.55] text-ink-muted"><strong>Pattern:</strong> {aiResult.pattern}</p>
+            <p className="text-sm leading-[1.55] text-ink-muted"><strong>Demo note:</strong> {aiResult.demo_note}</p>
             {aiResult.rule_tuning_suggestions?.length > 0 && (
               <div>
-                <p style={styles.aiLabel}>Rule tuning suggestions</p>
-                <ul style={styles.aiList}>
+                <p className="mb-1.5 mt-1 font-mono text-xs uppercase tracking-[0.8px] text-ink-muted">Rule tuning suggestions</p>
+                <ul className="list-inside list-disc pl-5 text-sm leading-[1.55] text-ink-muted">
                   {aiResult.rule_tuning_suggestions.map((item, index) => (
                     <li key={`${item}-${index}`}>{item}</li>
                   ))}
                 </ul>
               </div>
             )}
-            <p style={styles.aiDisclaimer}>{aiResult.disclaimer}</p>
+            <p className="mt-0.5 text-xs text-ink-faint">{aiResult.disclaimer}</p>
           </div>
         )}
       </section>
 
       {/* Live alert feed */}
-      <section style={styles.section}>
-        <div style={styles.feedHeader}>
-          <h2 style={styles.sectionTitle}>Live Alert Feed</h2>
-          <span style={styles.feedCount}>{wsAlerts.length} received</span>
+      <section className="mb-8">
+        <div className="mb-3 flex items-center gap-3">
+          <h2 className={SECTION_TITLE}>Live Alert Feed</h2>
+          <span className="flex-1 text-xs text-ink-faint">{wsAlerts.length} received</span>
           <Button variant="ghost" size="sm" onClick={() => setPaused(p => !p)}>
             {paused
               ? <><PlayCircle  size={14} /> Resume</>
@@ -294,7 +307,7 @@ export default function Dashboard({ onConnectionChange }) {
           </Button>
         </div>
         {displayAlerts.length === 0
-          ? <p style={styles.empty}>No alerts detected yet. Listening...</p>
+          ? <p className="italic text-ink-faint">No alerts detected yet. Listening...</p>
           : displayAlerts.map((alert, i) => <AlertCard key={alert.id ?? i} alert={alert} />)
         }
       </section>
@@ -303,10 +316,10 @@ export default function Dashboard({ onConnectionChange }) {
   )
 }
 
-function riskStyle(riskLevel) {
-  if (riskLevel === 'HIGH') return { borderColor: '#ef444440', color: '#ef4444' }
-  if (riskLevel === 'LOW') return { borderColor: '#22c55e40', color: '#22c55e' }
-  return { borderColor: '#f59e0b40', color: '#f59e0b' }
+function riskClass(riskLevel) {
+  if (riskLevel === 'HIGH') return 'border-severity-high/25 text-severity-high'
+  if (riskLevel === 'LOW') return 'border-severity-low/25 text-severity-low'
+  return 'border-severity-medium/25 text-severity-medium'
 }
 
 function scanHeadline(scanStatus, summary) {
@@ -327,48 +340,20 @@ function scanMessage(scanStatus, summary) {
   return 'Alerts below explain suspicious behavior in plain English so non-technical users can understand what happened.'
 }
 
-function scanPanelTone(scanStatus, summary) {
-  if (scanStatus?.state === 'threats_found') return { borderColor: '#ef444440', background: '#7f1d1d22' }
-  if (scanStatus?.state === 'running') return { borderColor: '#6366f166', background: '#312e8122' }
-  if (scanStatus?.state === 'secure' || summary.total === 0) return { borderColor: '#22c55e55', background: '#064e3b22' }
-  return { borderColor: '#334155', background: '#1e293b' }
+// Same 4 states StatusBadge exposes (scanning/alert/secure/monitoring),
+// derived from the exact same conditions scanHeadline/scanMessage already
+// check — kept as one shared mapper so the badge and the panel's own
+// border/background tone can't drift out of sync with each other.
+function mapScanState(scanStatus, summary) {
+  if (scanStatus?.state === 'running') return 'scanning'
+  if (scanStatus?.state === 'threats_found') return 'alert'
+  if (scanStatus?.state === 'secure' || summary.total === 0) return 'secure'
+  return 'monitoring'
 }
 
-const styles = {
-  main:         { padding: '24px 32px' },
-  scanPanel:    { border: '1px solid', borderRadius: 8, padding: '18px 20px', marginBottom: 24 },
-  scanHeader:   { display: 'flex', alignItems: 'flex-start', justifyContent: 'space-between', gap: 18, flexWrap: 'wrap' },
-  scanTitle:    { fontSize: 22, color: '#f1f5f9', margin: '0 0 6px' },
-  scanText:     { color: '#cbd5e1', fontSize: 14, lineHeight: 1.55, maxWidth: 760 },
-  scanActions:  { display: 'flex', alignItems: 'center', gap: 8, flexWrap: 'wrap' },
-  scanBtn:      { background: '#111827', border: '1px solid #6366f1', color: '#c7d2fe', borderRadius: 6, padding: '8px 12px', fontSize: 13, fontWeight: 700, cursor: 'pointer' },
-  stopBtn:      { background: '#111827', border: '1px solid #ef4444', color: '#fca5a5', borderRadius: 6, padding: '8px 12px', fontSize: 13, fontWeight: 700, cursor: 'pointer' },
-  scanMeta:     { display: 'flex', gap: 12, flexWrap: 'wrap', color: '#94a3b8', fontSize: 12, marginTop: 12 },
-  cards:        { display: 'flex', gap: 16, marginBottom: 32, flexWrap: 'wrap' },
-  card:         { flex: 1, minWidth: 140, background: '#1e293b', borderRadius: 8, padding: '16px 20px', display: 'flex', flexDirection: 'column', gap: 8 },
-  cardHeader:   { display: 'flex', alignItems: 'center', gap: 8 },
-  cardLabel:    { fontSize: 13, color: '#94a3b8' },
-  cardValue:    { fontSize: 34, fontWeight: 'bold' },
-  chartsRow:    { display: 'flex', gap: 16, marginBottom: 32, flexWrap: 'wrap' },
-  chartCard:    { flex: 1, minWidth: 260, background: '#1e293b', borderRadius: 8, padding: '20px 24px' },
-  section:      { marginBottom: 32 },
-  sectionTitle: { fontSize: 14, fontWeight: 600, color: '#94a3b8', marginBottom: 12, textTransform: 'uppercase', letterSpacing: 0.8 },
-  aiSection:    { marginBottom: 32, background: '#1e293b', borderRadius: 8, padding: '20px 24px', border: '1px solid #334155' },
-  aiHeader:     { display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 16, marginBottom: 16, flexWrap: 'wrap' },
-  aiSubtext:    { color: '#64748b', fontSize: 13, marginTop: -4 },
-  aiButton:     { display: 'flex', alignItems: 'center', gap: 8, border: '1px solid #6366f1', borderRadius: 6, padding: '8px 12px', background: '#111827', color: '#c7d2fe', fontSize: 13, fontWeight: 700, cursor: 'pointer' },
-  aiEmpty:      { color: '#64748b', fontStyle: 'italic', fontSize: 14 },
-  aiError:      { display: 'flex', alignItems: 'center', gap: 8, color: '#fca5a5', background: '#7f1d1d33', border: '1px solid #ef444440', borderRadius: 6, padding: '10px 12px', fontSize: 13 },
-  aiResult:     { display: 'flex', flexDirection: 'column', gap: 10 },
-  aiMeta:       { display: 'flex', alignItems: 'center', gap: 10, flexWrap: 'wrap', marginBottom: 2 },
-  aiMetaItem:   { color: '#94a3b8', fontSize: 12, border: '1px solid #334155', borderRadius: 99, padding: '4px 9px' },
-  aiRisk:       { fontSize: 12, fontWeight: 800, border: '1px solid', borderRadius: 99, padding: '4px 9px' },
-  aiText:       { color: '#cbd5e1', fontSize: 14, lineHeight: 1.55 },
-  aiLabel:      { color: '#94a3b8', fontSize: 12, textTransform: 'uppercase', letterSpacing: 0.8, marginTop: 4, marginBottom: 6 },
-  aiList:       { color: '#cbd5e1', fontSize: 14, lineHeight: 1.55, paddingLeft: 20 },
-  aiDisclaimer: { color: '#64748b', fontSize: 12, marginTop: 2 },
-  feedHeader:   { display: 'flex', alignItems: 'center', gap: 12, marginBottom: 12 },
-  feedCount:    { fontSize: 12, color: '#475569', flex: 1 },
-  pauseBtn:     { display: 'flex', alignItems: 'center', gap: 6, background: '#1e293b', border: '1px solid #334155', color: '#94a3b8', padding: '4px 12px', borderRadius: 6, fontSize: 12, cursor: 'pointer' },
-  empty:        { color: '#475569', fontStyle: 'italic' },
+function scanToneClass(state) {
+  if (state === 'alert') return 'border-severity-high/30 bg-severity-high/10'
+  if (state === 'scanning') return 'border-signal/30 bg-signal-dim'
+  if (state === 'secure') return 'border-severity-low/30 bg-severity-low/10'
+  return 'border-white/[0.12] bg-surface'
 }

@@ -6,6 +6,8 @@ import Tag from '../components/theme/Tag'
 import AlertCard from '../components/AlertCard'
 import AlertTable from '../components/AlertTable'
 import Navbar from '../components/Navbar'
+import AlertHistory from './AlertHistory'
+import Dashboard from './Dashboard'
 
 // Mock data purely for visually verifying the Tag migration inside the real
 // AlertCard/AlertTable components — no API calls, no real dashboard route.
@@ -84,6 +86,24 @@ export default function ThemePreview() {
             AlertTable (real component, mock data)
           </p>
           <AlertTable alerts={MOCK_ALERTS} />
+        </section>
+
+        <section className="mb-16">
+          <p className="mb-4 font-mono text-xs font-medium uppercase tracking-[0.2em] text-signal">
+            AlertHistory (real page, no backend — shows loading/error state)
+          </p>
+          <div className="border border-white/[0.08]">
+            <AlertHistory />
+          </div>
+        </section>
+
+        <section className="mb-16">
+          <p className="mb-4 font-mono text-xs font-medium uppercase tracking-[0.2em] text-signal">
+            Dashboard (real page, no backend — shows "monitoring" default state)
+          </p>
+          <div className="border border-white/[0.08]">
+            <Dashboard onConnectionChange={() => {}} />
+          </div>
         </section>
 
         <section className="mb-16">

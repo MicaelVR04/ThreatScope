@@ -49,13 +49,13 @@ export default function AlertHistory() {
   }
 
   return (
-    <main style={styles.main}>
+    <main className="px-8 py-6">
 
       {/* Header row */}
-      <div style={styles.headerRow}>
-        <h1 style={styles.heading}>Alert History</h1>
+      <div className="mb-5 flex items-center gap-2.5">
+        <h1 className="flex-1 font-display text-xl font-bold text-ink">Alert History</h1>
         <Button variant="secondary" size="sm" onClick={load} title="Refresh" disabled={loading}>
-          <RefreshCw size={14} style={{ animation: loading ? 'ts-spin 1s linear infinite' : 'none' }} />
+          <RefreshCw size={14} className={loading ? 'animate-[ts-spin_1s_linear_infinite]' : ''} />
           Refresh
         </Button>
         <Button variant="secondary" size="sm" onClick={exportCSV} title="Export CSV" disabled={!filtered.length}>
@@ -64,21 +64,31 @@ export default function AlertHistory() {
       </div>
 
       {/* Filters */}
-      <div style={styles.filters}>
+      <div className="mb-5 flex flex-wrap items-center gap-3">
         <input
-          style={styles.input}
+          className="w-[260px] rounded-md border border-white/[0.12] bg-surface px-3 py-[7px] text-[13px] text-ink outline-none placeholder:text-ink-faint"
           type="text"
           placeholder="Search by type or IP…"
           value={search}
           onChange={e => setSearch(e.target.value)}
         />
-        <label style={styles.dateLabel}>
+        <label className="flex items-center gap-2 text-[13px] text-ink-muted">
           From
-          <input style={styles.dateInput} type="date" value={dateFrom} onChange={e => setDateFrom(e.target.value)} />
+          <input
+            className="rounded-md border border-white/[0.12] bg-surface px-2.5 py-1.5 text-[13px] text-ink outline-none"
+            type="date"
+            value={dateFrom}
+            onChange={e => setDateFrom(e.target.value)}
+          />
         </label>
-        <label style={styles.dateLabel}>
+        <label className="flex items-center gap-2 text-[13px] text-ink-muted">
           To
-          <input style={styles.dateInput} type="date" value={dateTo} onChange={e => setDateTo(e.target.value)} />
+          <input
+            className="rounded-md border border-white/[0.12] bg-surface px-2.5 py-1.5 text-[13px] text-ink outline-none"
+            type="date"
+            value={dateTo}
+            onChange={e => setDateTo(e.target.value)}
+          />
         </label>
         {(search || dateFrom || dateTo) && (
           <Button variant="ghost" size="sm" onClick={() => { setSearch(''); setDateFrom(''); setDateTo('') }}>
@@ -88,8 +98,8 @@ export default function AlertHistory() {
       </div>
 
       {/* Content */}
-      {loading && <p style={styles.muted}>Loading alerts…</p>}
-      {error   && <p style={styles.error}>Error: {error}</p>}
+      {loading && <p className="italic text-ink-faint">Loading alerts…</p>}
+      {error   && <p className="text-severity-high">Error: {error}</p>}
       {!loading && !error && <AlertTable alerts={filtered} />}
 
       <style>{`
@@ -97,18 +107,4 @@ export default function AlertHistory() {
       `}</style>
     </main>
   )
-}
-
-const styles = {
-  main:       { padding: '24px 32px' },
-  headerRow:  { display: 'flex', alignItems: 'center', gap: 10, marginBottom: 20 },
-  heading:    { fontSize: 20, color: '#f1f5f9', flex: 1 },
-  iconBtn:    { display: 'flex', alignItems: 'center', gap: 6, background: '#1e293b', border: '1px solid #334155', color: '#94a3b8', padding: '6px 14px', borderRadius: 6, fontSize: 13, cursor: 'pointer' },
-  filters:    { display: 'flex', alignItems: 'center', gap: 12, marginBottom: 20, flexWrap: 'wrap' },
-  input:      { background: '#1e293b', border: '1px solid #334155', color: '#f1f5f9', borderRadius: 6, padding: '7px 12px', fontSize: 13, width: 260, outline: 'none' },
-  dateLabel:  { display: 'flex', alignItems: 'center', gap: 8, fontSize: 13, color: '#94a3b8' },
-  dateInput:  { background: '#1e293b', border: '1px solid #334155', color: '#f1f5f9', borderRadius: 6, padding: '6px 10px', fontSize: 13, outline: 'none' },
-  clearBtn:   { background: 'none', border: '1px solid #334155', color: '#64748b', borderRadius: 6, padding: '6px 12px', fontSize: 13, cursor: 'pointer' },
-  muted:      { color: '#475569', fontStyle: 'italic' },
-  error:      { color: '#ef4444' },
 }
