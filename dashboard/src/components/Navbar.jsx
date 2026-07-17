@@ -20,7 +20,7 @@ export default function Navbar({ connected, userEmail, signingOut, onLogout }) {
 
       <nav className="ml-3 flex flex-1 gap-5">
         <NavLink
-          to="/"
+          to="/dashboard"
           end
           className={({ isActive }) =>
             `flex items-center gap-1.5 py-1 font-sans text-sm no-underline transition-colors duration-150 ease-swift ${
