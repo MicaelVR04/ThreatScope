@@ -19,7 +19,9 @@ import os
 sys.path.insert(0, os.path.abspath(os.path.join(os.path.dirname(__file__), "..")))
 
 from main import app
-from database import init_db, clear_alerts
+import database
+from database import init_db, clear_alerts, get_alerts, insert_alert
+from auth import verify_token
 
 # ── Test Client ────────────────────────────────────────────────────────────
 client = TestClient(app)
@@ -101,6 +103,42 @@ class TestCreateAlert:
         r1 = client.post("/alerts", json=make_alert())
         r2 = client.post("/alerts", json=make_alert())
         assert r1.json()["id"] != r2.json()["id"]
+
+    def test_alert_is_stored_with_authenticated_user_id(self):
+        """The JWT subject is persisted for Supabase ownership and RLS."""
+        app.dependency_overrides[verify_token] = lambda: {"sub": "user-123"}
+        try:
+            response = client.post("/alerts", json=make_alert())
+            assert response.status_code == 200
+            assert get_alerts()[0]["user_id"] == "user-123"
+        finally:
+            app.dependency_overrides.pop(verify_token, None)
+
+    def test_supabase_insert_keeps_user_id(self, monkeypatch):
+        """Supabase receives the owner column alongside the alert payload."""
+        inserted = {}
+
+        class Query:
+            def insert(self, payload):
+                inserted.update(payload)
+                return self
+
+            def execute(self):
+                return type("Result", (), {"data": [{"id": "alert-1"}]})()
+
+        class Client:
+            def table(self, name):
+                assert name == database.SUPABASE_ALERTS_TABLE
+                return Query()
+
+        monkeypatch.setattr(database, "SUPABASE_ACTIVE", True)
+        monkeypatch.setattr(database, "_get_supabase", lambda: Client())
+        alert = make_alert()
+        alert.update({"id": None, "user_id": "user-123"})
+
+        assert insert_alert(alert) == "alert-1"
+        assert inserted["user_id"] == "user-123"
+        assert "id" not in inserted
 
 
 # ── GET /alerts ────────────────────────────────────────────────────────────

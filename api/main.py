@@ -13,7 +13,7 @@ Endpoints:
 """
 
 import logging
-from fastapi import FastAPI, WebSocket, WebSocketDisconnect, Query, HTTPException, Request
+from fastapi import FastAPI, WebSocket, WebSocketDisconnect, Query, HTTPException, Request, Depends
 from fastapi.middleware.cors import CORSMiddleware
 from contextlib import asynccontextmanager
 from datetime import datetime, timezone
@@ -23,6 +23,8 @@ from slowapi.middleware import SlowAPIMiddleware
 from models import Alert, AlertSummary
 from database import init_db, insert_alert, get_alerts, get_summary, get_stats, clear_alerts
 from websocket import manager
+from auth import verify_token
+from ai_analysis import analyze_alerts, get_ai_config
 
 
 # ── Logging ────────────────────────────────────────────────────────────────
@@ -71,7 +73,7 @@ app.add_middleware(
 # ── REST Endpoints ─────────────────────────────────────────────────────────
 @app.post("/alerts", response_model=Alert)
 @limiter.limit("60/minute")
-async def create_alert(request: Request, alert: Alert):
+async def create_alert(request: Request, alert: Alert, user=Depends(verify_token)):
     """
     Receives a new alert from the engine.
     Validates severity, saves to DB, and broadcasts to all dashboards.
@@ -80,6 +82,10 @@ async def create_alert(request: Request, alert: Alert):
         raise HTTPException(status_code=400, detail="severity must be LOW, MEDIUM, or HIGH")
 
     alert_dict = alert.model_dump()
+    # Supabase puts the authenticated user's UUID in the JWT subject claim.
+    # In local dev mode verify_token returns an empty dict, so SQLite accepts
+    # a NULL user_id without blocking engine smoke tests.
+    alert_dict["user_id"] = user.get("sub")
 
     if not alert_dict.get("timestamp"):
         alert_dict["timestamp"] = datetime.now(timezone.utc).isoformat()
@@ -134,6 +140,14 @@ def delete_alerts():
     """
     clear_alerts()
     return {"message": "All alerts cleared"}
+
+
+@app.post("/ai/analyze-alerts")
+def analyze_recent_alerts(user=Depends(verify_token)):
+    """Summarize recent alerts using the configured local or cloud AI provider."""
+    config = get_ai_config()
+    alerts = get_alerts(limit=config["alert_limit"], offset=0)
+    return analyze_alerts(alerts)
 
 
 @app.get("/health")

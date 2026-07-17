@@ -1,17 +1,12 @@
-"""
-database.py — SQLite database connection for ThreatScope
-Person 2 owns this file.
-
-Responsibilities:
-- Create and manage the SQLite database connection
-- Create the alerts table if it doesn't exist
-- Provide functions to insert and query alerts
-"""
+"""Data access layer with Supabase as primary storage and SQLite fallback."""
 
 import sqlite3
 import os
 import logging
+from collections import defaultdict
+from typing import Optional
 from dotenv import load_dotenv
+from supabase import Client, create_client
 
 load_dotenv()
 
@@ -19,6 +14,18 @@ logger = logging.getLogger(__name__)
 
 DATABASE_URL = os.getenv("DATABASE_URL", "sqlite:///./threatscope.db")
 DB_PATH = DATABASE_URL.replace("sqlite:///", "")
+SUPABASE_URL = os.getenv("SUPABASE_URL", "").strip()
+SUPABASE_SERVICE_ROLE_KEY = os.getenv("SUPABASE_SERVICE_ROLE_KEY", "").strip()
+SUPABASE_ALERTS_TABLE = os.getenv("SUPABASE_ALERTS_TABLE", "alerts").strip() or "alerts"
+SUPABASE_ACTIVE = False
+
+
+def _use_supabase() -> bool:
+    return SUPABASE_ACTIVE
+
+
+def _get_supabase() -> Client:
+    return create_client(SUPABASE_URL, SUPABASE_SERVICE_ROLE_KEY)
 
 
 def get_connection():
@@ -36,6 +43,17 @@ def init_db():
     Creates the alerts table if it doesn't already exist.
     Called once when the API starts up.
     """
+    global SUPABASE_ACTIVE
+    SUPABASE_ACTIVE = False
+    if SUPABASE_URL and SUPABASE_SERVICE_ROLE_KEY:
+        try:
+            _get_supabase().table(SUPABASE_ALERTS_TABLE).select("id", count="exact").limit(1).execute()
+            SUPABASE_ACTIVE = True
+            logger.info("Supabase connection verified successfully.")
+            return
+        except Exception as e:
+            logger.warning(f"Supabase init failed ({e}), falling back to SQLite.")
+
     try:
         conn = get_connection()
         cursor = conn.cursor()
@@ -47,9 +65,16 @@ def init_db():
                 dst_ip    TEXT NOT NULL,
                 severity  TEXT NOT NULL,
                 message   TEXT NOT NULL,
-                timestamp TEXT NOT NULL
+                timestamp TEXT NOT NULL,
+                user_id   TEXT
             )
         """)
+        # Existing local development databases predate user ownership. SQLite
+        # cannot add the column in CREATE TABLE IF NOT EXISTS, so migrate them
+        # in place as well.
+        columns = {row[1] for row in cursor.execute("PRAGMA table_info(alerts)")}
+        if "user_id" not in columns:
+            cursor.execute("ALTER TABLE alerts ADD COLUMN user_id TEXT")
         conn.commit()
         logger.info("Database initialized successfully.")
     except sqlite3.Error as e:
@@ -69,12 +94,25 @@ def insert_alert(alert: dict):
     Returns:
         int: The ID of the newly inserted alert
     """
+    if _use_supabase():
+        try:
+            # Keep user_id from the verified JWT; only the server-generated
+            # local id must be omitted before a Supabase insert.
+            supabase_alert = {key: value for key, value in alert.items() if key != "id"}
+            response = _get_supabase().table(SUPABASE_ALERTS_TABLE).insert(supabase_alert).execute()
+            alert_id = response.data[0]["id"]
+            logger.info(f"Supabase alert inserted with ID {alert_id}")
+            return alert_id
+        except Exception as e:
+            logger.error(f"Supabase insert_alert failed: {e}")
+            raise
+
     try:
         conn = get_connection()
         cursor = conn.cursor()
         cursor.execute("""
-            INSERT INTO alerts (type, src_ip, dst_ip, severity, message, timestamp)
-            VALUES (:type, :src_ip, :dst_ip, :severity, :message, :timestamp)
+            INSERT INTO alerts (type, src_ip, dst_ip, severity, message, timestamp, user_id)
+            VALUES (:type, :src_ip, :dst_ip, :severity, :message, :timestamp, :user_id)
         """, alert)
         alert_id = cursor.lastrowid
         conn.commit()
@@ -99,6 +137,16 @@ def get_alerts(severity: str = None, limit: int = 50, offset: int = 0):
     Returns:
         list: List of alert dicts
     """
+    if _use_supabase():
+        try:
+            query = _get_supabase().table(SUPABASE_ALERTS_TABLE).select("*").order("timestamp", desc=True)
+            if severity:
+                query = query.eq("severity", severity)
+            return query.range(offset, offset + limit - 1).execute().data
+        except Exception as e:
+            logger.error(f"Supabase get_alerts failed: {e}")
+            raise
+
     try:
         conn = get_connection()
         cursor = conn.cursor()
@@ -133,6 +181,15 @@ def get_summary():
     Returns:
         dict: { total, high, medium, low }
     """
+    if _use_supabase():
+        alerts = get_alerts(limit=10000, offset=0)
+        summary = {"total": len(alerts), "high": 0, "medium": 0, "low": 0}
+        for alert in alerts:
+            severity = alert["severity"].lower()
+            if severity in summary:
+                summary[severity] += 1
+        return summary
+
     try:
         conn = get_connection()
         cursor = conn.cursor()
@@ -157,7 +214,7 @@ def get_summary():
         conn.close()
 
 
-def get_stats():
+def get_stats(group_by: Optional[str] = None):
     """
     Returns alert counts grouped by attack type.
     Used for dashboard charts.
@@ -165,6 +222,16 @@ def get_stats():
     Returns:
         list: [{ type, count }]
     """
+    if _use_supabase():
+        alerts = get_alerts(limit=10000, offset=0)
+        grouped = defaultdict(int)
+        for alert in alerts:
+            grouped[alert["type"]] += 1
+        return [
+            {"type": alert_type, "count": count}
+            for alert_type, count in sorted(grouped.items(), key=lambda item: item[1], reverse=True)
+        ]
+
     try:
         conn = get_connection()
         cursor = conn.cursor()
@@ -188,6 +255,15 @@ def clear_alerts():
     Deletes all alerts from the database.
     Used for demo resets.
     """
+    if _use_supabase():
+        try:
+            _get_supabase().table(SUPABASE_ALERTS_TABLE).delete().neq("id", 0).execute()
+            logger.info("All alerts cleared from Supabase.")
+            return
+        except Exception as e:
+            logger.error(f"Supabase clear_alerts failed: {e}")
+            raise
+
     try:
         conn = get_connection()
         cursor = conn.cursor()
