@@ -17,7 +17,7 @@ export default function Login() {
     if (authError) {
       setError(authError.message)
     } else {
-      navigate('/')
+      navigate('/dashboard')
     }
   }
 

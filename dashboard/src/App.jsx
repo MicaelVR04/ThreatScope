@@ -4,6 +4,7 @@ import Navbar from './components/Navbar'
 import Dashboard from './pages/Dashboard'
 import AlertHistory from './pages/AlertHistory'
 import Login from './pages/Login'
+import Landing from './pages/Landing'
 import { supabase } from './supabaseClient'
 
 // ── Scroll to top on every route change ─────────────────────────────────────
@@ -50,7 +51,7 @@ function NotFound() {
     <div style={{ padding: '80px 32px', textAlign: 'center' }}>
       <h1 style={{ fontSize: 64, color: '#1e293b', margin: 0 }}>404</h1>
       <p style={{ color: '#94a3b8', margin: '12px 0 24px' }}>Page not found</p>
-      <a href="/" style={{ color: '#6366f1', fontSize: 14 }}>← Back to Dashboard</a>
+      <a href="/" style={{ color: '#6366f1', fontSize: 14 }}>← Back to home</a>
     </div>
   )
 }
@@ -70,15 +71,20 @@ function AppShell() {
   const navigate = useNavigate()
 
   useEffect(() => {
+    if (!supabase) {
+      setSession(null)
+      return undefined
+    }
+
     // Check for an existing session on mount
     supabase.auth.getSession().then(({ data: { session } }) => {
       setSession(session ?? null)
     })
 
     // Listen for sign-in / sign-out events
-    const { data: { subscription } } = supabase.auth.onAuthStateChange((_event, session) => {
+    const { data: { subscription } } = supabase.auth.onAuthStateChange((event, session) => {
       setSession(session ?? null)
-      if (!session) navigate('/login', { replace: true })
+      if (!session && event === 'SIGNED_OUT') navigate('/login', { replace: true })
     })
 
     return () => subscription.unsubscribe()
@@ -107,9 +113,10 @@ function AppShell() {
       <ErrorBoundary>
         <ScrollToTop />
         <Routes>
+          <Route path="/" element={<Landing />} />
           <Route path="/login" element={<Login />} />
           <Route
-            path="/"
+            path="/dashboard"
             element={
               <ProtectedRoute session={session}>
                 <Navbar
