@@ -4,6 +4,7 @@ import Navbar from './components/Navbar'
 import Dashboard from './pages/Dashboard'
 import AlertHistory from './pages/AlertHistory'
 import Login from './pages/Login'
+import Register from './pages/Register'
 import Landing from './pages/Landing'
 import { supabase } from './supabaseClient'
 
@@ -115,6 +116,7 @@ function AppShell() {
         <Routes>
           <Route path="/" element={<Landing />} />
           <Route path="/login" element={<Login />} />
+          <Route path="/register" element={<Register />} />
           <Route
             path="/dashboard"
             element={

@@ -4,27 +4,31 @@ import Button from '../components/theme/Button'
 import AuthLayout, { AUTH_INPUT_CLASS } from '../components/AuthLayout'
 import { supabase } from '../supabaseClient'
 
-export default function Login() {
+export default function Register() {
   const [email, setEmail] = useState('')
   const [password, setPassword] = useState('')
   const [error, setError] = useState(null)
+  const [success, setSuccess] = useState(null)
   const [loading, setLoading] = useState(false)
   const navigate = useNavigate()
 
-  const handleLogin = async () => {
+  const handleRegister = async () => {
     setError(null)
+    setSuccess(null)
     setLoading(true)
-    const { error: authError } = await supabase.auth.signInWithPassword({ email, password })
+    const { data, error: authError } = await supabase.auth.signUp({ email, password })
     setLoading(false)
     if (authError) {
       setError(authError.message)
+    } else if (data?.user && !data.session) {
+      setSuccess('Check your email to confirm your account before signing in.')
     } else {
       navigate('/dashboard')
     }
   }
 
   return (
-    <AuthLayout eyebrow="Secure Access" subtitle="Sign in to your account">
+    <AuthLayout eyebrow="Get Started" subtitle="Create your account">
       <div className="mb-4">
         <label className="mb-1.5 block text-[13px] text-ink-muted">Email</label>
         <input
@@ -53,14 +57,20 @@ export default function Login() {
         </div>
       )}
 
-      <Button variant="primary" onClick={handleLogin} disabled={loading} className="w-full">
-        {loading ? 'Signing in…' : 'Login'}
+      {success && (
+        <div className="mb-4 animate-fade-up rounded-md border border-severity-low/25 bg-severity-low/10 px-3 py-2.5 text-[13px] text-severity-low">
+          {success}
+        </div>
+      )}
+
+      <Button variant="primary" onClick={handleRegister} disabled={loading} className="w-full">
+        {loading ? 'Registering…' : 'Register'}
       </Button>
 
       <p className="mt-5 text-center text-sm text-ink-muted">
-        Don't have an account?{' '}
-        <Link to="/register" className="font-medium text-signal hover:underline">
-          Create an account
+        Already have an account?{' '}
+        <Link to="/login" className="font-medium text-signal hover:underline">
+          Login
         </Link>
       </p>
     </AuthLayout>
