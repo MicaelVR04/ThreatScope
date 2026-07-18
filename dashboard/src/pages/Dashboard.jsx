@@ -152,41 +152,45 @@ export default function Dashboard({ onConnectionChange }) {
     <main className="px-8 py-6">
 
       {/* Scan status */}
-      <section className={`mb-6 rounded-lg border p-5 ${scanToneClass(scanState)}`}>
-        <div className="flex flex-wrap items-start justify-between gap-[18px]">
-          <div>
-            <div className="mb-1.5 flex flex-wrap items-center gap-3">
-              <h1 className="font-display text-[22px] font-bold text-ink">{scanHeadline(scanStatus, summary)}</h1>
-              <StatusBadge status={scanState} />
+      <div className="relative mb-6 animate-fade-up" style={{ animationDelay: '0ms' }}>
+        <div aria-hidden="true" className={`absolute -inset-6 -z-10 rounded-[32px] blur-3xl ${scanGlowClass(scanState)}`} />
+        <section className={`rounded-lg border p-5 ${scanToneClass(scanState)}`}>
+          <div className="flex flex-wrap items-start justify-between gap-[18px]">
+            <div>
+              <p className="mb-1.5 font-mono text-[11px] uppercase tracking-[1px] text-ink-faint">Scan Status</p>
+              <div className="mb-1.5 flex flex-wrap items-center gap-3">
+                <h1 className="font-display text-[22px] font-bold text-ink">{scanHeadline(scanStatus, summary)}</h1>
+                <StatusBadge status={scanState} />
+              </div>
+              <p className="max-w-[760px] text-sm leading-[1.55] text-ink-muted">{scanMessage(scanStatus, summary)}</p>
             </div>
-            <p className="max-w-[760px] text-sm leading-[1.55] text-ink-muted">{scanMessage(scanStatus, summary)}</p>
-          </div>
-          <div className="flex flex-wrap items-center gap-2">
-            <Button variant="primary" size="sm" onClick={handleRunScan} disabled={scanLoading || scanStatus?.state === 'running'}>
-              {scanStatus?.state === 'running' ? 'Scan running...' : 'Run scan now'}
-            </Button>
-            <Button variant="secondary" size="sm" onClick={() => handleSchedule(true, 5)} disabled={scanLoading}>
-              Every 5 min
-            </Button>
-            <Button variant="secondary" size="sm" onClick={() => handleSchedule(true, 10)} disabled={scanLoading}>
-              Every 10 min
-            </Button>
-            {scanStatus?.enabled && (
-              <Button variant="danger" size="sm" onClick={() => handleSchedule(false, scanStatus.interval_minutes)} disabled={scanLoading}>
-                Stop schedule
+            <div className="flex flex-wrap items-center gap-2">
+              <Button variant="primary" size="sm" onClick={handleRunScan} disabled={scanLoading || scanStatus?.state === 'running'}>
+                {scanStatus?.state === 'running' ? 'Scan running...' : 'Run scan now'}
               </Button>
-            )}
+              <Button variant="secondary" size="sm" onClick={() => handleSchedule(true, 5)} disabled={scanLoading}>
+                Every 5 min
+              </Button>
+              <Button variant="secondary" size="sm" onClick={() => handleSchedule(true, 10)} disabled={scanLoading}>
+                Every 10 min
+              </Button>
+              {scanStatus?.enabled && (
+                <Button variant="danger" size="sm" onClick={() => handleSchedule(false, scanStatus.interval_minutes)} disabled={scanLoading}>
+                  Stop schedule
+                </Button>
+              )}
+            </div>
           </div>
-        </div>
-        <div className="mt-3 flex flex-wrap gap-3 text-xs text-ink-muted">
-          <span>Scheduled scans: {scanStatus?.enabled ? `on every ${scanStatus.interval_minutes} minutes` : 'off'}</span>
-          {scanStatus?.next_scan_at && <span>Next scan: {new Date(scanStatus.next_scan_at).toLocaleTimeString()}</span>}
-          {scanStatus?.last_finished_at && <span>Last finished: {new Date(scanStatus.last_finished_at).toLocaleTimeString()}</span>}
-        </div>
-      </section>
+          <div className="mt-3 flex flex-wrap gap-3 text-xs text-ink-muted">
+            <span>Scheduled scans: {scanStatus?.enabled ? `on every ${scanStatus.interval_minutes} minutes` : 'off'}</span>
+            {scanStatus?.next_scan_at && <span>Next scan: {new Date(scanStatus.next_scan_at).toLocaleTimeString()}</span>}
+            {scanStatus?.last_finished_at && <span>Last finished: {new Date(scanStatus.last_finished_at).toLocaleTimeString()}</span>}
+          </div>
+        </section>
+      </div>
 
       {/* Summary cards */}
-      <div className="mb-8 flex flex-wrap gap-4">
+      <div className="mb-8 flex flex-wrap animate-fade-up gap-4" style={{ animationDelay: '40ms' }}>
         {CARDS.map(({ label, value, Icon, tone }) => (
           <div key={label} className={`flex min-w-[140px] flex-1 flex-col gap-2 rounded-lg border-t-4 bg-surface px-5 py-4 ${tone}`}>
             <div className="flex items-center gap-2">
@@ -199,7 +203,7 @@ export default function Dashboard({ onConnectionChange }) {
       </div>
 
       {/* Charts row */}
-      <div className="mb-8 flex flex-wrap gap-4">
+      <div className="mb-8 flex flex-wrap animate-fade-up gap-4" style={{ animationDelay: '80ms' }}>
         <section className="min-w-[260px] flex-1 rounded-lg bg-surface px-6 py-5">
           <h2 className={SECTION_TITLE}>Severity Breakdown</h2>
           <SeverityChart data={summary} />
@@ -211,7 +215,7 @@ export default function Dashboard({ onConnectionChange }) {
       </div>
 
       {/* Time-series area chart */}
-      <section className="mb-8">
+      <section className="mb-8 animate-fade-up" style={{ animationDelay: '120ms' }}>
         <h2 className={SECTION_TITLE}>Alert Activity Over Time</h2>
         {chartData.length === 0 ? (
           <p className="italic text-ink-faint">No stats data available.</p>
@@ -247,7 +251,7 @@ export default function Dashboard({ onConnectionChange }) {
       </section>
 
       {/* AI developer diagnostics */}
-      <section className="mb-8 rounded-lg border border-white/[0.08] bg-surface px-6 py-5">
+      <section className="mb-8 animate-fade-up rounded-lg border border-white/[0.08] bg-surface px-6 py-5" style={{ animationDelay: '160ms' }}>
         <div className="mb-4 flex flex-wrap items-center justify-between gap-4">
           <div>
             <h2 className={SECTION_TITLE}>AI Analysis</h2>
@@ -296,7 +300,7 @@ export default function Dashboard({ onConnectionChange }) {
       </section>
 
       {/* Live alert feed */}
-      <section className="mb-8">
+      <section className="mb-8 animate-fade-up" style={{ animationDelay: '200ms' }}>
         <div className="mb-3 flex items-center gap-3">
           <h2 className={SECTION_TITLE}>Live Alert Feed</h2>
           <span className="flex-1 text-xs text-ink-faint">{wsAlerts.length} received</span>
@@ -356,4 +360,16 @@ function scanToneClass(state) {
   if (state === 'scanning') return 'border-signal/30 bg-signal-dim'
   if (state === 'secure') return 'border-severity-low/30 bg-severity-low/10'
   return 'border-white/[0.12] bg-surface'
+}
+
+// Ambient glow behind the scan panel — same state derivation as
+// scanToneClass so the halo can never drift out of sync with the panel's
+// own border/background tone. Active states (alert/scanning) pulse faster
+// and brighter than the calm idle states (secure/monitoring), so the
+// motion itself reads as "something is happening" vs. "all quiet."
+function scanGlowClass(state) {
+  if (state === 'alert') return 'bg-severity-high/25 animate-pulse'
+  if (state === 'scanning') return 'bg-signal/20 animate-pulse'
+  if (state === 'secure') return 'bg-severity-low/15 animate-pulse-slow'
+  return 'bg-white/[0.05] animate-pulse-slow'
 }

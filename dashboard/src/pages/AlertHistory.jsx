@@ -52,7 +52,7 @@ export default function AlertHistory() {
     <main className="px-8 py-6">
 
       {/* Header row */}
-      <div className="mb-5 flex items-center gap-2.5">
+      <div className="mb-5 flex animate-fade-up items-center gap-2.5" style={{ animationDelay: '0ms' }}>
         <h1 className="flex-1 font-display text-xl font-bold text-ink">Alert History</h1>
         <Button variant="secondary" size="sm" onClick={load} title="Refresh" disabled={loading}>
           <RefreshCw size={14} className={loading ? 'animate-[ts-spin_1s_linear_infinite]' : ''} />
@@ -64,7 +64,7 @@ export default function AlertHistory() {
       </div>
 
       {/* Filters */}
-      <div className="mb-5 flex flex-wrap items-center gap-3">
+      <div className="mb-5 flex flex-wrap animate-fade-up items-center gap-3" style={{ animationDelay: '40ms' }}>
         <input
           className="w-[260px] rounded-md border border-white/[0.12] bg-surface px-3 py-[7px] text-[13px] text-ink outline-none placeholder:text-ink-faint"
           type="text"
@@ -98,9 +98,11 @@ export default function AlertHistory() {
       </div>
 
       {/* Content */}
-      {loading && <p className="italic text-ink-faint">Loading alerts…</p>}
-      {error   && <p className="text-severity-high">Error: {error}</p>}
-      {!loading && !error && <AlertTable alerts={filtered} />}
+      <div className="animate-fade-up" style={{ animationDelay: '80ms' }}>
+        {loading && <p className="italic text-ink-faint">Loading alerts…</p>}
+        {error   && <p className="text-severity-high">Error: {error}</p>}
+        {!loading && !error && <AlertTable alerts={filtered} />}
+      </div>
 
       <style>{`
         @keyframes ts-spin { to { transform: rotate(360deg); } }

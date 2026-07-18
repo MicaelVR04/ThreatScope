@@ -73,6 +73,9 @@ export default {
         'radar-sweep': 'radar-sweep 6s linear infinite',
         'fade-up': 'fade-up 240ms cubic-bezier(0.16, 1, 0.3, 1) both',
         pulse: 'pulse 1.4s ease-in-out infinite',
+        // Same pulse keyframe, calmer cadence — for ambient state glows that
+        // shouldn't compete with the faster pulse used for active processes.
+        'pulse-slow': 'pulse 4s ease-in-out infinite',
         'pipeline-pulse': 'pipeline-pulse 4s ease-in-out infinite',
         float: 'float 7s ease-in-out infinite',
         'radar-ping': 'radar-ping 6s ease-out infinite',

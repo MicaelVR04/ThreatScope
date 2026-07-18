@@ -3,43 +3,33 @@ import { AlertTriangle, ShieldAlert, Info } from 'lucide-react'
 import { threatLabel, threatPlainEnglish } from '../utils/threatLabels'
 
 const SEVERITY_ICON = {
-  HIGH:   <ShieldAlert size={16} color="#ef4444" />,
-  MEDIUM: <AlertTriangle size={16} color="#f59e0b" />,
-  LOW:    <Info size={16} color="#22c55e" />,
+  HIGH:   <ShieldAlert size={16} className="text-severity-high" />,
+  MEDIUM: <AlertTriangle size={16} className="text-severity-medium" />,
+  LOW:    <Info size={16} className="text-severity-low" />,
 }
 
-const BORDER_COLOR = { HIGH: '#ef4444', MEDIUM: '#f59e0b', LOW: '#22c55e' }
+const BORDER_COLOR = { HIGH: 'border-l-severity-high', MEDIUM: 'border-l-severity-medium', LOW: 'border-l-severity-low' }
 
 export default function AlertCard({ alert }) {
-  const border = BORDER_COLOR[alert.severity] || '#334155'
+  const border = BORDER_COLOR[alert.severity] || 'border-l-white/20'
   return (
-    <div style={{ ...styles.card, borderLeft: `4px solid ${border}` }}>
-      <div style={styles.header}>
-        {SEVERITY_ICON[alert.severity] ?? <Info size={16} color="#94a3b8" />}
+    <div
+      className={`mb-2 animate-fade-up rounded-lg border-l-4 bg-surface px-4 py-3 transition-colors duration-150 ease-swift hover:bg-surface-2 ${border}`}
+    >
+      <div className="mb-2 flex items-center gap-2.5">
+        {SEVERITY_ICON[alert.severity] ?? <Info size={16} className="text-ink-muted" />}
         <Tag severity={alert.severity}>{alert.severity}</Tag>
-        <span style={styles.type}>{threatLabel(alert.type)}</span>
-        <span style={styles.time}>{new Date(alert.timestamp).toLocaleTimeString()}</span>
+        <span className="flex-1 text-sm font-semibold text-ink">{threatLabel(alert.type)}</span>
+        <span className="ml-auto text-xs text-ink-faint">{new Date(alert.timestamp).toLocaleTimeString()}</span>
       </div>
-      <p style={styles.description}>{threatPlainEnglish(alert.type)}</p>
-      <div style={styles.meta}>
-        <span style={styles.ip}>{alert.src_ip}</span>
-        <span style={styles.arrow}>→</span>
-        <span style={styles.ip}>{alert.dst_ip}</span>
-        {alert.protocol && <span style={styles.tag}>{alert.protocol}</span>}
-        {alert.dst_port && <span style={styles.tag}>:{alert.dst_port}</span>}
+      <p className="mb-2 text-xs leading-[1.45] text-ink-muted">{threatPlainEnglish(alert.type)}</p>
+      <div className="flex items-center gap-2 text-[13px] text-ink-muted">
+        <span className="font-mono text-ink-muted">{alert.src_ip}</span>
+        <span className="text-ink-faint">→</span>
+        <span className="font-mono text-ink-muted">{alert.dst_ip}</span>
+        {alert.protocol && <span className="rounded border border-white/[0.1] bg-base px-1.5 py-0.5 font-mono text-[11px] text-ink-faint">{alert.protocol}</span>}
+        {alert.dst_port && <span className="rounded border border-white/[0.1] bg-base px-1.5 py-0.5 font-mono text-[11px] text-ink-faint">:{alert.dst_port}</span>}
       </div>
     </div>
   )
-}
-
-const styles = {
-  card:   { background: '#1e293b', borderRadius: 8, padding: '12px 16px', marginBottom: 8 },
-  header: { display: 'flex', alignItems: 'center', gap: 10, marginBottom: 8 },
-  type:   { flex: 1, fontSize: 14, fontWeight: 600, color: '#f1f5f9' },
-  description: { color: '#94a3b8', fontSize: 12, lineHeight: 1.45, margin: '0 0 8px' },
-  meta:   { display: 'flex', alignItems: 'center', gap: 8, fontSize: 13, color: '#94a3b8' },
-  ip:     { fontFamily: 'monospace', color: '#cbd5e1' },
-  arrow:  { color: '#475569' },
-  tag:    { background: '#0f172a', border: '1px solid #334155', borderRadius: 4, padding: '1px 6px', fontSize: 11, color: '#64748b' },
-  time:   { color: '#475569', fontSize: 12, marginLeft: 'auto' },
 }
