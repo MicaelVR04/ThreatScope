@@ -110,7 +110,7 @@ function AppShell() {
   }, [navigate])
 
   return (
-    <div style={styles.shell}>
+    <div className="flex min-h-screen flex-col bg-base font-sans text-ink">
       <ErrorBoundary>
         <ScrollToTop />
         <Routes>
@@ -162,13 +162,3 @@ export default function App() {
   )
 }
 
-const styles = {
-  shell: {
-    background:  '#0f172a',
-    minHeight:   '100vh',
-    color:       '#f1f5f9',
-    fontFamily:  "'Inter', 'Segoe UI', monospace",
-    display:     'flex',
-    flexDirection: 'column',
-  },
-}
