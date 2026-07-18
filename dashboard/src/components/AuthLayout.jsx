@@ -11,8 +11,14 @@ const NOISE_SVG = `<svg xmlns="http://www.w3.org/2000/svg" width="200" height="2
 </svg>`
 const NOISE_DATA_URI = `data:image/svg+xml,${encodeURIComponent(NOISE_SVG)}`
 
+// No horizontal padding here — Login/Register add pl-9 (icon) and pr-3 or
+// pr-10 (plain vs. password-toggle) themselves, since the two inputs need
+// different right-side spacing.
 export const AUTH_INPUT_CLASS =
-  'w-full rounded-md border border-white/[0.12] bg-surface-2 px-3 py-2.5 text-sm text-ink outline-none placeholder:text-ink-faint transition-colors duration-150 ease-swift focus-visible:border-signal/40 focus-visible:ring-2 focus-visible:ring-signal/60'
+  'w-full rounded-md border border-white/[0.12] bg-surface-2 py-2.5 text-sm text-ink outline-none placeholder:text-ink-faint transition-colors duration-150 ease-swift hover:border-white/20 focus-visible:border-signal/40 focus-visible:ring-2 focus-visible:ring-signal/60'
+
+export const AUTH_LINK_CLASS =
+  'rounded-sm font-medium text-signal hover:underline focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-signal focus-visible:ring-offset-2 focus-visible:ring-offset-surface'
 
 // Ambient blob field — position (top/left %, spread across upper/middle/
 // lower thirds and left/right so they don't cluster in one band), size,
@@ -59,7 +65,12 @@ export default function AuthLayout({ eyebrow, subtitle, children }) {
         />
       ))}
 
-      <div className="relative z-10 w-full max-w-[380px] animate-fade-up rounded-xl border border-white/[0.08] bg-surface p-9 shadow-[0_0_60px_-20px_rgba(46,235,209,0.2)]">
+      {/* Border only, no accompanying blur-shadow — pairing a 1px border with
+          a wide soft shadow on the same element is the "ghost-card" pattern
+          (flagged by the impeccable skill's polish audit); Hero's own panel
+          uses shadow-only with no border for the same reason. A defined edge
+          reads better here anyway, against the moving blob background. */}
+      <div className="relative z-10 w-full max-w-[380px] animate-fade-up rounded-xl border border-white/[0.08] bg-surface p-9">
         <div className="mb-8 flex flex-col items-center text-center">
           <div className="mb-4 grid h-11 w-11 place-items-center rounded-lg bg-signal shadow-[0_0_0_1px_rgba(255,255,255,0.08),0_8px_22px_-4px_rgba(46,235,209,0.35)]">
             <Shield size={22} className="text-base" strokeWidth={2.4} />
