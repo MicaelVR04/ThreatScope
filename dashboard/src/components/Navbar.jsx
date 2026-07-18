@@ -1,8 +1,10 @@
-import { NavLink } from 'react-router-dom'
-import { Shield, LayoutDashboard, Clock, Wifi, WifiOff, LogOut } from 'lucide-react'
+import { NavLink, useNavigate } from 'react-router-dom'
+import { Shield, LayoutDashboard, Clock, Wifi, WifiOff, LogOut, Home } from 'lucide-react'
 import Button from './theme/Button'
 
 export default function Navbar({ connected, userEmail, signingOut, onLogout }) {
+  const navigate = useNavigate()
+
   return (
     <header className="flex items-center gap-6 border-b border-white/[0.08] bg-surface px-8 py-3.5">
       <div className="flex min-w-[180px] items-center gap-2.5">
@@ -69,6 +71,18 @@ export default function Navbar({ connected, userEmail, signingOut, onLogout }) {
             {userEmail}
           </span>
         )}
+
+        <Button
+          type="button"
+          variant="ghost"
+          size="sm"
+          onClick={() => navigate('/')}
+          title="Back to landing page"
+          aria-label="Back to landing page"
+        >
+          <Home size={15} />
+          <span className="ts-logout-text leading-none">Home</span>
+        </Button>
 
         <Button
           type="button"
