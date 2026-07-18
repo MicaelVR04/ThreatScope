@@ -29,6 +29,15 @@ export default {
         },
         float: { '0%, 100%': { transform: 'translateY(0px)' }, '50%': { transform: 'translateY(-14px)' } },
         'radar-ping': { '0%': { opacity: '0' }, '3%': { opacity: '1' }, '9%, 100%': { opacity: '0' } },
+        // One-shot error feedback — not infinite, replays via a `key` change
+        // on the element (React remounts it, which restarts the animation).
+        shake: {
+          '0%, 100%': { transform: 'translateX(0)' },
+          '20%': { transform: 'translateX(-6px)' },
+          '40%': { transform: 'translateX(5px)' },
+          '60%': { transform: 'translateX(-4px)' },
+          '80%': { transform: 'translateX(3px)' },
+        },
         // Three distinct irregular loop paths for ambient background blobs.
         // Each keyframe stop sets BOTH x and y together (not one axis at a
         // time) so every leg of the path is inherently diagonal — combining
@@ -70,6 +79,7 @@ export default {
         'drift-a': 'drift-a 22s ease-in-out infinite',
         'drift-b': 'drift-b 27s ease-in-out infinite',
         'drift-c': 'drift-c 19s ease-in-out infinite',
+        shake: 'shake 400ms ease-in-out',
       },
     },
   },

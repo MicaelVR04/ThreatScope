@@ -1,6 +1,6 @@
 import { useState } from 'react'
 import { Link, useNavigate } from 'react-router-dom'
-import { Mail, Lock, Eye, EyeOff } from 'lucide-react'
+import { Mail, Lock, Eye, EyeOff, Loader2 } from 'lucide-react'
 import Button from '../components/theme/Button'
 import AuthLayout, { AUTH_INPUT_CLASS, AUTH_LINK_CLASS } from '../components/AuthLayout'
 import { supabase } from '../supabaseClient'
@@ -77,12 +77,16 @@ export default function Login() {
         </div>
 
         {error && (
-          <div className="mb-4 animate-fade-up rounded-md border border-severity-high/25 bg-severity-high/10 px-3 py-2.5 text-[13px] text-severity-high">
+          <div
+            key={error}
+            className="mb-4 animate-shake rounded-md border border-severity-high/25 bg-severity-high/10 px-3 py-2.5 text-[13px] text-severity-high"
+          >
             {error}
           </div>
         )}
 
         <Button type="submit" variant="primary" disabled={loading} className="w-full">
+          {loading && <Loader2 size={16} className="animate-spin" />}
           {loading ? 'Signing in…' : 'Login'}
         </Button>
       </form>

@@ -1,9 +1,25 @@
 import { useState } from 'react'
 import { Link, useNavigate } from 'react-router-dom'
-import { Mail, Lock, Eye, EyeOff } from 'lucide-react'
+import { Mail, Lock, Eye, EyeOff, Loader2 } from 'lucide-react'
 import Button from '../components/theme/Button'
 import AuthLayout, { AUTH_INPUT_CLASS, AUTH_LINK_CLASS } from '../components/AuthLayout'
 import { supabase } from '../supabaseClient'
+
+// Score-based tiers reusing the existing severity tokens (high/medium/low)
+// as weak/medium/strong — the same 3-color semantic already established for
+// alerts, just applied to a different judgment. `bar`/`text` are full
+// literal classes, not built from a variable, for Tailwind's static scanner.
+function getPasswordStrength(password) {
+  let score = 0
+  if (password.length >= 8) score++
+  if (/[A-Z]/.test(password)) score++
+  if (/[0-9]/.test(password)) score++
+  if (/[^A-Za-z0-9]/.test(password)) score++
+
+  if (score <= 1) return { label: 'Weak', width: '33%', bar: 'bg-severity-high', text: 'text-severity-high' }
+  if (score <= 2) return { label: 'Medium', width: '66%', bar: 'bg-severity-medium', text: 'text-severity-medium' }
+  return { label: 'Strong', width: '100%', bar: 'bg-severity-low', text: 'text-severity-low' }
+}
 
 export default function Register() {
   const [email, setEmail] = useState('')
@@ -13,6 +29,7 @@ export default function Register() {
   const [success, setSuccess] = useState(null)
   const [loading, setLoading] = useState(false)
   const navigate = useNavigate()
+  const strength = password ? getPasswordStrength(password) : null
 
   const handleRegister = async () => {
     setError(null)
@@ -78,10 +95,25 @@ export default function Register() {
               {showPassword ? <EyeOff size={16} /> : <Eye size={16} />}
             </button>
           </div>
+
+          {strength && (
+            <div className="mt-2 flex items-center gap-2">
+              <div className="h-1 flex-1 overflow-hidden rounded-full bg-white/[0.08]">
+                <div
+                  className={`h-full transition-all duration-300 ease-swift ${strength.bar}`}
+                  style={{ width: strength.width }}
+                />
+              </div>
+              <span className={`font-mono text-[11px] ${strength.text}`}>{strength.label}</span>
+            </div>
+          )}
         </div>
 
         {error && (
-          <div className="mb-4 animate-fade-up rounded-md border border-severity-high/25 bg-severity-high/10 px-3 py-2.5 text-[13px] text-severity-high">
+          <div
+            key={error}
+            className="mb-4 animate-shake rounded-md border border-severity-high/25 bg-severity-high/10 px-3 py-2.5 text-[13px] text-severity-high"
+          >
             {error}
           </div>
         )}
@@ -93,6 +125,7 @@ export default function Register() {
         )}
 
         <Button type="submit" variant="primary" disabled={loading} className="w-full">
+          {loading && <Loader2 size={16} className="animate-spin" />}
           {loading ? 'Registering…' : 'Register'}
         </Button>
       </form>
