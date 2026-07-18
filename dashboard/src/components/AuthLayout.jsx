@@ -14,10 +14,26 @@ const NOISE_DATA_URI = `data:image/svg+xml,${encodeURIComponent(NOISE_SVG)}`
 export const AUTH_INPUT_CLASS =
   'w-full rounded-md border border-white/[0.12] bg-surface-2 px-3 py-2.5 text-sm text-ink outline-none placeholder:text-ink-faint transition-colors duration-150 ease-swift focus-visible:border-signal/40 focus-visible:ring-2 focus-visible:ring-signal/60'
 
-// Shared shell for auth pages (Login, Register) — noise texture, centered
-// radar-sweep accent, ambient float glow, and the card header (logo/eyebrow/
-// wordmark/subtitle). Each page supplies its own form fields and actions
-// as children.
+// Ambient blob field — position (top/left %, spread across upper/middle/
+// lower thirds and left/right so they don't cluster in one band), size,
+// opacity, and which of the three drift-a/b/c loop paths each one plays.
+// Matches the "2-3 ambient blobs, opacity 0.08-0.12, slow drift" guidance the
+// ui-ux-pro-max skill's style match returned for this dark/glow aesthetic —
+// replaced the single static radar accent, which read as dead/motionless
+// once the rest of the page had its own animated glow.
+//
+// `wash` and `move` are full literal classes (not built from a variable) —
+// Tailwind's scanner needs the exact string present in source, same reason
+// the CARDS tones and Tag's severity colors are written out in full elsewhere.
+const BLOBS = [
+  { top: '15%', left: '15%', size: 260, wash: 'bg-signal/[0.1]', move: 'animate-drift-a' },
+  { top: '50%', left: '82%', size: 300, wash: 'bg-signal/[0.08]', move: 'animate-drift-b' },
+  { top: '78%', left: '38%', size: 220, wash: 'bg-signal/[0.09]', move: 'animate-drift-c' },
+]
+
+// Shared shell for auth pages (Login, Register) — noise texture, drifting
+// ambient blobs, and the card header (logo/eyebrow/wordmark/subtitle). Each
+// page supplies its own form fields and actions as children.
 export default function AuthLayout({ eyebrow, subtitle, children }) {
   return (
     <div className="relative flex min-h-screen items-center justify-center overflow-hidden bg-base px-6">
@@ -31,28 +47,17 @@ export default function AuthLayout({ eyebrow, subtitle, children }) {
         }}
       />
 
-      {/* Radar accent — the exact animate-radar-sweep utility the Hero uses,
-          just centered and scaled down rather than corner-positioned, so it
-          reads as ambient brand texture behind the card, not a focal point. */}
-      <div
-        aria-hidden="true"
-        className="pointer-events-none absolute left-1/2 top-1/2 h-[480px] w-[480px] -translate-x-1/2 -translate-y-1/2 opacity-[0.15]"
-      >
-        <div className="h-full w-full animate-radar-sweep rounded-full [background:conic-gradient(from_0deg,transparent_0deg,theme(colors.signal.DEFAULT)_18deg,transparent_60deg)]" />
-        <div className="absolute inset-0 rounded-full border border-signal/20" />
-        <div className="absolute inset-10 rounded-full border border-signal/10" />
-      </div>
-
-      {/* Ambient glow — same two-div float technique as the CTA section's
-          glow (a CSS `animation` replaces an element's whole transform per
-          frame, so centering and the float animation are split across two
-          elements to avoid fighting each other). */}
-      <div
-        aria-hidden="true"
-        className="pointer-events-none absolute left-1/2 top-1/2 h-72 w-72 -translate-x-1/2 -translate-y-1/2"
-      >
-        <div className="h-full w-full animate-float rounded-full bg-signal/10 blur-3xl" />
-      </div>
+      {/* Ambient blob field — each plays its own irregular loop path
+          (drift-a/b/c), one animation per element, no nested wrapper
+          needed since each keyframe stop already sets a full x+y position. */}
+      {BLOBS.map((blob, i) => (
+        <div
+          key={i}
+          aria-hidden="true"
+          className={`pointer-events-none absolute rounded-full blur-3xl ${blob.move} ${blob.wash}`}
+          style={{ top: blob.top, left: blob.left, width: blob.size, height: blob.size }}
+        />
+      ))}
 
       <div className="relative z-10 w-full max-w-[380px] animate-fade-up rounded-xl border border-white/[0.08] bg-surface p-9 shadow-[0_0_60px_-20px_rgba(46,235,209,0.2)]">
         <div className="mb-8 flex flex-col items-center text-center">
