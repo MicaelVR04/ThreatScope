@@ -4,6 +4,18 @@ import AlertTable from '../components/AlertTable'
 import { getAlerts } from '../services/api'
 import { RefreshCw, Download } from 'lucide-react'
 
+// Same fine film-grain noise as Landing.jsx/AuthLayout.jsx/Dashboard.jsx,
+// generated once at module load — not rebuilt, just reused so every page
+// shares the exact same texture.
+const NOISE_SVG = `<svg xmlns="http://www.w3.org/2000/svg" width="200" height="200">
+  <filter id="n">
+    <feTurbulence type="fractalNoise" baseFrequency="0.85" numOctaves="2" stitchTiles="stitch" />
+    <feColorMatrix type="saturate" values="0" />
+  </filter>
+  <rect width="100%" height="100%" filter="url(#n)" />
+</svg>`
+const NOISE_DATA_URI = `data:image/svg+xml,${encodeURIComponent(NOISE_SVG)}`
+
 export default function AlertHistory() {
   const [alerts,    setAlerts]   = useState([])
   const [loading,   setLoading]  = useState(true)
@@ -49,10 +61,14 @@ export default function AlertHistory() {
   }
 
   return (
-    <main className="px-8 py-6">
+    <main className="relative px-8 py-6">
+
+      {/* Noise texture behind everything on this page, same treatment as
+          Landing/AuthLayout/Dashboard. */}
+      <div aria-hidden="true" className="pointer-events-none absolute inset-0 z-0 opacity-[0.02]" style={{ backgroundImage: `url("${NOISE_DATA_URI}")`, backgroundRepeat: 'repeat', backgroundSize: '200px 200px' }} />
 
       {/* Toolbar: title, filters, and actions in one row */}
-      <div className="mb-5 flex flex-wrap animate-fade-up items-center gap-3" style={{ animationDelay: '0ms' }}>
+      <div className="relative z-10 mb-5 flex flex-wrap animate-fade-up items-center gap-3" style={{ animationDelay: '0ms' }}>
         <h1 className="font-display text-xl font-bold text-ink">Alert History</h1>
 
         <input
@@ -87,18 +103,18 @@ export default function AlertHistory() {
         )}
 
         <div className="ml-auto flex items-center gap-2">
-          <Button variant="secondary" size="sm" onClick={load} title="Refresh" disabled={loading}>
-            <RefreshCw size={14} className={loading ? 'animate-[ts-spin_1s_linear_infinite]' : ''} />
+          <Button variant="secondary" size="sm" className="group" onClick={load} title="Refresh" disabled={loading}>
+            <RefreshCw size={14} className={loading ? 'animate-[ts-spin_1s_linear_infinite]' : 'transition-transform duration-200 ease-swift group-hover:rotate-45'} />
             Refresh
           </Button>
-          <Button variant="secondary" size="sm" onClick={exportCSV} title="Export CSV" disabled={!filtered.length}>
-            <Download size={14} /> Export CSV
+          <Button variant="secondary" size="sm" className="group" onClick={exportCSV} title="Export CSV" disabled={!filtered.length}>
+            <Download size={14} className="transition-transform duration-200 ease-swift group-hover:translate-y-0.5" /> Export CSV
           </Button>
         </div>
       </div>
 
       {/* Content */}
-      <div className="animate-fade-up" style={{ animationDelay: '40ms' }}>
+      <div className="relative z-10 animate-fade-up" style={{ animationDelay: '40ms' }}>
         {loading && <p className="italic text-ink-faint">Loading alerts…</p>}
         {error   && <p className="text-severity-high">Error: {error}</p>}
         {!loading && !error && <AlertTable alerts={filtered} />}

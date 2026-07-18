@@ -3,7 +3,7 @@ import {
   AreaChart, Area, XAxis, YAxis, Tooltip,
   ResponsiveContainer, CartesianGrid, Legend,
 } from 'recharts'
-import { Activity, AlertTriangle, PauseCircle, PlayCircle } from 'lucide-react'
+import { Activity, AlertTriangle, Loader2, PauseCircle, PlayCircle } from 'lucide-react'
 import Button from '../components/theme/Button'
 import StatusBadge from '../components/theme/StatusBadge'
 import AlertCard from '../components/AlertCard'
@@ -24,6 +24,18 @@ import {
 // literal color values (Recharts renders its own SVG, it doesn't consume
 // Tailwind classes). Values match the severity design-system tokens exactly.
 const SEV_COLOR = { HIGH: '#ef4444', MEDIUM: '#f59e0b', LOW: '#22c55e' }
+
+// Same fine film-grain noise as Landing.jsx/AuthLayout.jsx, generated once at
+// module load — not rebuilt, just reused so every page shares the exact same
+// texture.
+const NOISE_SVG = `<svg xmlns="http://www.w3.org/2000/svg" width="200" height="200">
+  <filter id="n">
+    <feTurbulence type="fractalNoise" baseFrequency="0.85" numOctaves="2" stitchTiles="stitch" />
+    <feColorMatrix type="saturate" values="0" />
+  </filter>
+  <rect width="100%" height="100%" filter="url(#n)" />
+</svg>`
+const NOISE_DATA_URI = `data:image/svg+xml,${encodeURIComponent(NOISE_SVG)}`
 
 // Section-label eyebrow style, reused identically across every section below
 // — matches the design system's documented eyebrow pattern (font-mono,
@@ -57,7 +69,13 @@ export default function Dashboard({ onConnectionChange }) {
   const [aiLoading,  setAiLoading]  = useState(false)
   const [scanStatus, setScanStatus] = useState(null)
   const [scanLoading, setScanLoading] = useState(false)
+  const [revealed, setRevealed] = useState(false)
   const frozenRef = useRef([])
+
+  // Same technique as Hero's headlineIn: a boolean flipped post-mount drives
+  // a sequence of per-element transitionDelays below, so the scan panel
+  // reveals piece by piece instead of fading in as one flat block.
+  useEffect(() => { setRevealed(true) }, [])
 
   const refreshDashboardData = useCallback(async () => {
     try {
@@ -149,30 +167,57 @@ export default function Dashboard({ onConnectionChange }) {
   const scanState = mapScanState(scanStatus, summary)
 
   return (
-    <main className="px-8 py-6">
+    <main className="relative px-8 py-6">
 
-      {/* Scan status */}
-      <div className="relative mb-6 animate-fade-up" style={{ animationDelay: '0ms' }}>
-        <div aria-hidden="true" className={`absolute -inset-6 -z-10 rounded-[32px] blur-3xl ${scanGlowClass(scanState)}`} />
-        <section className={`rounded-lg border p-5 ${scanToneClass(scanState)}`}>
+      {/* Noise texture behind everything on this page, same treatment as
+          Landing/AuthLayout — scoped to main so it doesn't bleed under the
+          (unpositioned, solid-bg) Navbar above it. */}
+      <div aria-hidden="true" className="pointer-events-none absolute inset-0 z-0 opacity-[0.02]" style={{ backgroundImage: `url("${NOISE_DATA_URI}")`, backgroundRepeat: 'repeat', backgroundSize: '200px 200px' }} />
+      <div className="relative z-10 mb-6">
+        <div aria-hidden="true" className={`absolute -inset-6 -z-10 rounded-[32px] blur-3xl transition-colors duration-300 ${scanGlowClass(scanState)}`} />
+        <section className={`rounded-lg border p-5 transition-colors duration-300 ease-swift ${scanToneClass(scanState)}`}>
           <div className="flex flex-wrap items-start justify-between gap-[18px]">
             <div>
-              <p className="mb-1.5 font-mono text-[11px] uppercase tracking-[1px] text-ink-faint">Scan Status</p>
-              <div className="mb-1.5 flex flex-wrap items-center gap-3">
+              <p
+                className={`mb-1.5 font-mono text-[11px] uppercase tracking-[1px] text-ink-faint transition-all duration-300 ease-swift ${revealed ? 'opacity-100 translate-y-0' : 'opacity-0 translate-y-2'}`}
+              >
+                Scan Status
+              </p>
+              <div
+                className={`mb-1.5 flex flex-wrap items-center gap-3 transition-all duration-300 ease-swift ${revealed ? 'opacity-100 translate-y-0' : 'opacity-0 translate-y-2'}`}
+                style={{ transitionDelay: '60ms' }}
+              >
                 <h1 className="font-display text-[22px] font-bold text-ink">{scanHeadline(scanStatus, summary)}</h1>
                 <StatusBadge status={scanState} />
+                {scanState === 'scanning' && (
+                  <div aria-hidden="true" className="relative h-6 w-6 shrink-0 overflow-hidden rounded-full border border-signal/25">
+                    <div className="h-full w-full animate-radar-sweep rounded-full [background:conic-gradient(from_0deg,transparent_0deg,theme(colors.signal.DEFAULT)_18deg,transparent_60deg)]" />
+                  </div>
+                )}
               </div>
-              <p className="max-w-[760px] text-sm leading-[1.55] text-ink-muted">{scanMessage(scanStatus, summary)}</p>
-              <div className="mt-3 flex flex-wrap gap-2">
+              <p
+                className={`max-w-[760px] text-sm leading-[1.55] text-ink-muted transition-all duration-300 ease-swift ${revealed ? 'opacity-100 translate-y-0' : 'opacity-0 translate-y-2'}`}
+                style={{ transitionDelay: '120ms' }}
+              >
+                {scanMessage(scanStatus, summary)}
+              </p>
+              <div
+                className={`mt-3 flex flex-wrap gap-2 transition-all duration-300 ease-swift ${revealed ? 'opacity-100 translate-y-0' : 'opacity-0 translate-y-2'}`}
+                style={{ transitionDelay: '180ms' }}
+              >
                 {CHIPS.map(({ label, value, tone }) => (
                   <span key={label} className="inline-flex items-baseline gap-1.5 rounded-md border border-white/[0.08] bg-white/[0.04] px-2.5 py-1 text-xs text-ink-muted">
-                    {label} <b className={`font-mono text-sm ${tone}`}>{value}</b>
+                    {label} <b key={value} className={`inline-block animate-chip-flash font-mono text-sm ${tone}`}>{value}</b>
                   </span>
                 ))}
               </div>
             </div>
-            <div className="flex flex-wrap items-center gap-2">
+            <div
+              className={`flex flex-wrap items-center gap-2 transition-all duration-300 ease-swift ${revealed ? 'opacity-100 translate-y-0' : 'opacity-0 translate-y-2'}`}
+              style={{ transitionDelay: '220ms' }}
+            >
               <Button variant="primary" size="sm" onClick={handleRunScan} disabled={scanLoading || scanStatus?.state === 'running'}>
+                {(scanLoading || scanStatus?.state === 'running') && <Loader2 size={14} className="animate-spin" />}
                 {scanStatus?.state === 'running' ? 'Scan running...' : 'Run scan now'}
               </Button>
               <Button variant="secondary" size="sm" onClick={() => handleSchedule(true, 5)} disabled={scanLoading}>
@@ -197,7 +242,7 @@ export default function Dashboard({ onConnectionChange }) {
       </div>
 
       {/* Charts + AI analysis (left) / live feed (right, sticky) */}
-      <div className="flex flex-col gap-6 lg:flex-row">
+      <div className="relative z-10 flex flex-col gap-6 lg:flex-row">
         <div className="min-w-0 flex-1">
 
           {/* Charts row */}
@@ -256,7 +301,7 @@ export default function Dashboard({ onConnectionChange }) {
                 <p className="-mt-1 text-[13px] text-ink-faint">Developer diagnostics from local Ollama. Rule detections stay authoritative.</p>
               </div>
               <Button variant="secondary" size="sm" onClick={handleAnalyzeAlerts} disabled={aiLoading}>
-                <Activity size={14} />
+                {aiLoading ? <Loader2 size={14} className="animate-spin" /> : <Activity size={14} />}
                 {aiLoading ? 'Analyzing...' : 'Analyze recent alerts'}
               </Button>
             </div>
@@ -306,10 +351,10 @@ export default function Dashboard({ onConnectionChange }) {
             <div className="mb-3 flex items-center gap-3">
               <h2 className={SECTION_TITLE}>Live Alert Feed</h2>
               <span className="flex-1 text-xs text-ink-faint">{wsAlerts.length} received</span>
-              <Button variant="ghost" size="sm" onClick={() => setPaused(p => !p)}>
+              <Button variant="ghost" size="sm" className="group" onClick={() => setPaused(p => !p)}>
                 {paused
-                  ? <><PlayCircle  size={14} /> Resume</>
-                  : <><PauseCircle size={14} /> Pause</>}
+                  ? <><PlayCircle  size={14} className="transition-transform duration-200 ease-swift group-hover:scale-110" /> Resume</>
+                  : <><PauseCircle size={14} className="transition-transform duration-200 ease-swift group-hover:scale-110" /> Pause</>}
               </Button>
             </div>
             {displayAlerts.length === 0

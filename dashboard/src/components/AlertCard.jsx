@@ -10,11 +10,17 @@ const SEVERITY_ICON = {
 
 const BORDER_COLOR = { HIGH: 'border-l-severity-high', MEDIUM: 'border-l-severity-medium', LOW: 'border-l-severity-low' }
 
+// One-shot decaying glow, keyed to the same severity as the left border —
+// plays once on mount (i.e. the moment a genuinely new alert arrives, since
+// existing cards never remount when the feed refreshes).
+const GLOW = { HIGH: 'animate-alert-glow-high', MEDIUM: 'animate-alert-glow-medium', LOW: 'animate-alert-glow-low' }
+
 export default function AlertCard({ alert }) {
   const border = BORDER_COLOR[alert.severity] || 'border-l-white/20'
+  const glow = GLOW[alert.severity] || ''
   return (
     <div
-      className={`mb-2 animate-fade-up rounded-lg border-l-4 bg-surface px-4 py-3 transition-colors duration-150 ease-swift hover:bg-surface-2 ${border}`}
+      className={`mb-2 animate-fade-up rounded-lg border-l-4 bg-surface px-4 py-3 transition-colors duration-150 ease-swift hover:bg-surface-2 ${border} ${glow}`}
     >
       <div className="mb-2 flex items-center gap-2.5">
         {SEVERITY_ICON[alert.severity] ?? <Info size={16} className="text-ink-muted" />}

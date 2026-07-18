@@ -68,6 +68,15 @@ export default {
           '72%': { transform: 'translate(6vw, 2vh)' },
           '90%': { transform: 'translate(-4vw, -10vh)' },
         },
+        // Decaying arrival glow for newly-received alerts — one shot per
+        // severity color, blur/spread stay fixed and only the shadow's alpha
+        // fades, so it reads as "this just happened" rather than a loop.
+        'alert-glow-high':   { '0%': { boxShadow: '0 0 22px 2px rgba(239,68,68,0.5)' },  '100%': { boxShadow: '0 0 22px 2px rgba(239,68,68,0)' } },
+        'alert-glow-medium': { '0%': { boxShadow: '0 0 22px 2px rgba(245,158,11,0.5)' }, '100%': { boxShadow: '0 0 22px 2px rgba(245,158,11,0)' } },
+        'alert-glow-low':    { '0%': { boxShadow: '0 0 22px 2px rgba(34,197,94,0.5)' },  '100%': { boxShadow: '0 0 22px 2px rgba(34,197,94,0)' } },
+        // Quick scale+fade blip for stat values ticking up — keyed by value
+        // in the component so it replays on every change, not just mount.
+        'chip-flash': { '0%': { opacity: '0.35', transform: 'scale(1.18)' }, '100%': { opacity: '1', transform: 'scale(1)' } },
       },
       animation: {
         'radar-sweep': 'radar-sweep 6s linear infinite',
@@ -83,6 +92,10 @@ export default {
         'drift-b': 'drift-b 27s ease-in-out infinite',
         'drift-c': 'drift-c 19s ease-in-out infinite',
         shake: 'shake 400ms ease-in-out',
+        'alert-glow-high': 'alert-glow-high 1400ms ease-out',
+        'alert-glow-medium': 'alert-glow-medium 1400ms ease-out',
+        'alert-glow-low': 'alert-glow-low 1400ms ease-out',
+        'chip-flash': 'chip-flash 260ms ease-out',
       },
     },
   },

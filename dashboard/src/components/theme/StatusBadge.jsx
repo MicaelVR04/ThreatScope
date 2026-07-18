@@ -33,7 +33,7 @@ export default function StatusBadge({ status, label }) {
 
   return (
     <span
-      className={`inline-flex items-center gap-2 rounded-full border px-3 py-1 font-mono text-[11px] font-medium uppercase tracking-wide ${color}`}
+      className={`inline-flex items-center gap-2 rounded-full border px-3 py-1 font-mono text-[11px] font-medium uppercase tracking-wide transition-colors duration-300 ease-swift ${color}`}
     >
       {/* Ongoing-process cue — reuses the existing pulse keyframe (already
           covered by the global prefers-reduced-motion rule in index.css),
