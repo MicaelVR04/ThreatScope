@@ -3,7 +3,7 @@ import {
   AreaChart, Area, XAxis, YAxis, Tooltip,
   ResponsiveContainer, CartesianGrid, Legend,
 } from 'recharts'
-import { Activity, ShieldAlert, AlertTriangle, Info, PauseCircle, PlayCircle } from 'lucide-react'
+import { Activity, AlertTriangle, PauseCircle, PlayCircle } from 'lucide-react'
 import Button from '../components/theme/Button'
 import StatusBadge from '../components/theme/StatusBadge'
 import AlertCard from '../components/AlertCard'
@@ -139,11 +139,11 @@ export default function Dashboard({ onConnectionChange }) {
   const displayAlerts = paused ? frozenRef.current : wsAlerts.slice(0, FEED_LIMIT)
   if (!paused) frozenRef.current = displayAlerts
 
-  const CARDS = [
-    { label: 'Total',  value: summary.total,  Icon: Activity,     tone: 'border-t-signal text-signal' },
-    { label: 'High',   value: summary.high,   Icon: ShieldAlert,  tone: 'border-t-severity-high text-severity-high' },
-    { label: 'Medium', value: summary.medium, Icon: AlertTriangle, tone: 'border-t-severity-medium text-severity-medium' },
-    { label: 'Low',    value: summary.low,    Icon: Info,         tone: 'border-t-severity-low text-severity-low' },
+  const CHIPS = [
+    { label: 'Total',  value: summary.total,  tone: 'text-signal' },
+    { label: 'High',   value: summary.high,   tone: 'text-severity-high' },
+    { label: 'Medium', value: summary.medium, tone: 'text-severity-medium' },
+    { label: 'Low',    value: summary.low,    tone: 'text-severity-low' },
   ]
 
   const scanState = mapScanState(scanStatus, summary)
@@ -163,6 +163,13 @@ export default function Dashboard({ onConnectionChange }) {
                 <StatusBadge status={scanState} />
               </div>
               <p className="max-w-[760px] text-sm leading-[1.55] text-ink-muted">{scanMessage(scanStatus, summary)}</p>
+              <div className="mt-3 flex flex-wrap gap-2">
+                {CHIPS.map(({ label, value, tone }) => (
+                  <span key={label} className="inline-flex items-baseline gap-1.5 rounded-md border border-white/[0.08] bg-white/[0.04] px-2.5 py-1 text-xs text-ink-muted">
+                    {label} <b className={`font-mono text-sm ${tone}`}>{value}</b>
+                  </span>
+                ))}
+              </div>
             </div>
             <div className="flex flex-wrap items-center gap-2">
               <Button variant="primary" size="sm" onClick={handleRunScan} disabled={scanLoading || scanStatus?.state === 'running'}>
@@ -189,132 +196,129 @@ export default function Dashboard({ onConnectionChange }) {
         </section>
       </div>
 
-      {/* Summary cards */}
-      <div className="mb-8 flex flex-wrap animate-fade-up gap-4" style={{ animationDelay: '40ms' }}>
-        {CARDS.map(({ label, value, Icon, tone }) => (
-          <div key={label} className={`flex min-w-[140px] flex-1 flex-col gap-2 rounded-lg border-t-4 bg-surface px-5 py-4 ${tone}`}>
-            <div className="flex items-center gap-2">
-              <Icon size={18} />
-              <span className="text-[13px] text-ink-muted">{label}</span>
-            </div>
-            <span className="text-[34px] font-bold">{value}</span>
+      {/* Charts + AI analysis (left) / live feed (right, sticky) */}
+      <div className="flex flex-col gap-6 lg:flex-row">
+        <div className="min-w-0 flex-1">
+
+          {/* Charts row */}
+          <div className="mb-8 flex flex-wrap animate-fade-up gap-4" style={{ animationDelay: '40ms' }}>
+            <section className="min-w-[260px] flex-1 rounded-lg bg-surface px-6 py-5">
+              <h2 className={SECTION_TITLE}>Severity Breakdown</h2>
+              <SeverityChart data={summary} />
+            </section>
+            <section className="min-w-[260px] flex-[2] rounded-lg bg-surface px-6 py-5">
+              <h2 className={SECTION_TITLE}>Attack Types</h2>
+              <AttackTypeChart data={typeStats} />
+            </section>
           </div>
-        ))}
-      </div>
 
-      {/* Charts row */}
-      <div className="mb-8 flex flex-wrap animate-fade-up gap-4" style={{ animationDelay: '80ms' }}>
-        <section className="min-w-[260px] flex-1 rounded-lg bg-surface px-6 py-5">
-          <h2 className={SECTION_TITLE}>Severity Breakdown</h2>
-          <SeverityChart data={summary} />
-        </section>
-        <section className="min-w-[260px] flex-[2] rounded-lg bg-surface px-6 py-5">
-          <h2 className={SECTION_TITLE}>Attack Types</h2>
-          <AttackTypeChart data={typeStats} />
-        </section>
-      </div>
-
-      {/* Time-series area chart */}
-      <section className="mb-8 animate-fade-up" style={{ animationDelay: '120ms' }}>
-        <h2 className={SECTION_TITLE}>Alert Activity Over Time</h2>
-        {chartData.length === 0 ? (
-          <p className="italic text-ink-faint">No stats data available.</p>
-        ) : (
-          <ResponsiveContainer width="100%" height={220}>
-            <AreaChart data={chartData} margin={{ top: 5, right: 10, left: -20, bottom: 0 }}>
-              <defs>
-                {Object.entries(SEV_COLOR).map(([k, color]) => (
-                  <linearGradient key={k} id={`grad-${k}`} x1="0" y1="0" x2="0" y2="1">
-                    <stop offset="5%"  stopColor={color} stopOpacity={0.25} />
-                    <stop offset="95%" stopColor={color} stopOpacity={0.02} />
-                  </linearGradient>
-                ))}
-              </defs>
-              <CartesianGrid strokeDasharray="3 3" stroke="rgba(255,255,255,0.08)" />
-              <XAxis dataKey="timestamp" stroke="#8B96A5" tick={{ fontSize: 11 }} />
-              <YAxis stroke="#8B96A5" allowDecimals={false} tick={{ fontSize: 11 }} />
-              <Tooltip
-                contentStyle={{ background: '#0D131B', border: '1px solid rgba(255,255,255,0.12)', borderRadius: 6 }}
-                labelStyle={{ color: '#8B96A5', fontSize: 11 }}
-              />
-              <Legend wrapperStyle={{ fontSize: 12, color: '#8B96A5' }} />
-              {Object.entries(SEV_COLOR).map(([k, color]) => (
-                <Area
-                  key={k} type="monotone" dataKey={k}
-                  stroke={color} strokeWidth={2}
-                  fill={`url(#grad-${k})`}
-                />
-              ))}
-            </AreaChart>
-          </ResponsiveContainer>
-        )}
-      </section>
-
-      {/* AI developer diagnostics */}
-      <section className="mb-8 animate-fade-up rounded-lg border border-white/[0.08] bg-surface px-6 py-5" style={{ animationDelay: '160ms' }}>
-        <div className="mb-4 flex flex-wrap items-center justify-between gap-4">
-          <div>
-            <h2 className={SECTION_TITLE}>AI Analysis</h2>
-            <p className="-mt-1 text-[13px] text-ink-faint">Developer diagnostics from local Ollama. Rule detections stay authoritative.</p>
-          </div>
-          <Button variant="secondary" size="sm" onClick={handleAnalyzeAlerts} disabled={aiLoading}>
-            <Activity size={14} />
-            {aiLoading ? 'Analyzing...' : 'Analyze recent alerts'}
-          </Button>
-        </div>
-
-        {aiError && (
-          <div className="flex items-center gap-2 rounded-md border border-severity-high/25 bg-severity-high/10 px-3 py-2.5 text-[13px] text-severity-high">
-            <AlertTriangle size={16} />
-            <span>{aiError}</span>
-          </div>
-        )}
-
-        {!aiError && !aiResult && (
-          <p className="italic text-sm text-ink-faint">Run analysis after alerts appear in the dashboard.</p>
-        )}
-
-        {aiResult && (
-          <div className="flex flex-col gap-2.5">
-            <div className="mb-0.5 flex flex-wrap items-center gap-2.5">
-              <span className="rounded-full border border-white/[0.12] px-[9px] py-1 text-xs text-ink-muted">Model: {aiResult.model}</span>
-              <span className="rounded-full border border-white/[0.12] px-[9px] py-1 text-xs text-ink-muted">{aiResult.alert_count} alerts analyzed</span>
-              <span className={`rounded-full border px-[9px] py-1 text-xs font-extrabold ${riskClass(aiResult.risk_level)}`}>{aiResult.risk_level}</span>
-            </div>
-            <p className="text-sm leading-[1.55] text-ink-muted"><strong>Summary:</strong> {aiResult.summary}</p>
-            <p className="text-sm leading-[1.55] text-ink-muted"><strong>Pattern:</strong> {aiResult.pattern}</p>
-            <p className="text-sm leading-[1.55] text-ink-muted"><strong>Demo note:</strong> {aiResult.demo_note}</p>
-            {aiResult.rule_tuning_suggestions?.length > 0 && (
-              <div>
-                <p className="mb-1.5 mt-1 font-mono text-xs uppercase tracking-[0.8px] text-ink-muted">Rule tuning suggestions</p>
-                <ul className="list-inside list-disc pl-5 text-sm leading-[1.55] text-ink-muted">
-                  {aiResult.rule_tuning_suggestions.map((item, index) => (
-                    <li key={`${item}-${index}`}>{item}</li>
+          {/* Time-series area chart */}
+          <section className="mb-8 animate-fade-up" style={{ animationDelay: '80ms' }}>
+            <h2 className={SECTION_TITLE}>Alert Activity Over Time</h2>
+            {chartData.length === 0 ? (
+              <p className="italic text-ink-faint">No stats data available.</p>
+            ) : (
+              <ResponsiveContainer width="100%" height={220}>
+                <AreaChart data={chartData} margin={{ top: 5, right: 10, left: -20, bottom: 0 }}>
+                  <defs>
+                    {Object.entries(SEV_COLOR).map(([k, color]) => (
+                      <linearGradient key={k} id={`grad-${k}`} x1="0" y1="0" x2="0" y2="1">
+                        <stop offset="5%"  stopColor={color} stopOpacity={0.25} />
+                        <stop offset="95%" stopColor={color} stopOpacity={0.02} />
+                      </linearGradient>
+                    ))}
+                  </defs>
+                  <CartesianGrid strokeDasharray="3 3" stroke="rgba(255,255,255,0.08)" />
+                  <XAxis dataKey="timestamp" stroke="#8B96A5" tick={{ fontSize: 11 }} />
+                  <YAxis stroke="#8B96A5" allowDecimals={false} tick={{ fontSize: 11 }} />
+                  <Tooltip
+                    contentStyle={{ background: '#0D131B', border: '1px solid rgba(255,255,255,0.12)', borderRadius: 6 }}
+                    labelStyle={{ color: '#8B96A5', fontSize: 11 }}
+                  />
+                  <Legend wrapperStyle={{ fontSize: 12, color: '#8B96A5' }} />
+                  {Object.entries(SEV_COLOR).map(([k, color]) => (
+                    <Area
+                      key={k} type="monotone" dataKey={k}
+                      stroke={color} strokeWidth={2}
+                      fill={`url(#grad-${k})`}
+                    />
                   ))}
-                </ul>
+                </AreaChart>
+              </ResponsiveContainer>
+            )}
+          </section>
+
+          {/* AI developer diagnostics */}
+          <section className="mb-8 animate-fade-up rounded-lg border border-white/[0.08] bg-surface px-6 py-5 lg:mb-0" style={{ animationDelay: '120ms' }}>
+            <div className="mb-4 flex flex-wrap items-center justify-between gap-4">
+              <div>
+                <h2 className={SECTION_TITLE}>AI Analysis</h2>
+                <p className="-mt-1 text-[13px] text-ink-faint">Developer diagnostics from local Ollama. Rule detections stay authoritative.</p>
+              </div>
+              <Button variant="secondary" size="sm" onClick={handleAnalyzeAlerts} disabled={aiLoading}>
+                <Activity size={14} />
+                {aiLoading ? 'Analyzing...' : 'Analyze recent alerts'}
+              </Button>
+            </div>
+
+            {aiError && (
+              <div className="flex items-center gap-2 rounded-md border border-severity-high/25 bg-severity-high/10 px-3 py-2.5 text-[13px] text-severity-high">
+                <AlertTriangle size={16} />
+                <span>{aiError}</span>
               </div>
             )}
-            <p className="mt-0.5 text-xs text-ink-faint">{aiResult.disclaimer}</p>
-          </div>
-        )}
-      </section>
 
-      {/* Live alert feed */}
-      <section className="mb-8 animate-fade-up" style={{ animationDelay: '200ms' }}>
-        <div className="mb-3 flex items-center gap-3">
-          <h2 className={SECTION_TITLE}>Live Alert Feed</h2>
-          <span className="flex-1 text-xs text-ink-faint">{wsAlerts.length} received</span>
-          <Button variant="ghost" size="sm" onClick={() => setPaused(p => !p)}>
-            {paused
-              ? <><PlayCircle  size={14} /> Resume</>
-              : <><PauseCircle size={14} /> Pause</>}
-          </Button>
+            {!aiError && !aiResult && (
+              <p className="italic text-sm text-ink-faint">Run analysis after alerts appear in the dashboard.</p>
+            )}
+
+            {aiResult && (
+              <div className="flex flex-col gap-2.5">
+                <div className="mb-0.5 flex flex-wrap items-center gap-2.5">
+                  <span className="rounded-full border border-white/[0.12] px-[9px] py-1 text-xs text-ink-muted">Model: {aiResult.model}</span>
+                  <span className="rounded-full border border-white/[0.12] px-[9px] py-1 text-xs text-ink-muted">{aiResult.alert_count} alerts analyzed</span>
+                  <span className={`rounded-full border px-[9px] py-1 text-xs font-extrabold ${riskClass(aiResult.risk_level)}`}>{aiResult.risk_level}</span>
+                </div>
+                <p className="text-sm leading-[1.55] text-ink-muted"><strong>Summary:</strong> {aiResult.summary}</p>
+                <p className="text-sm leading-[1.55] text-ink-muted"><strong>Pattern:</strong> {aiResult.pattern}</p>
+                <p className="text-sm leading-[1.55] text-ink-muted"><strong>Demo note:</strong> {aiResult.demo_note}</p>
+                {aiResult.rule_tuning_suggestions?.length > 0 && (
+                  <div>
+                    <p className="mb-1.5 mt-1 font-mono text-xs uppercase tracking-[0.8px] text-ink-muted">Rule tuning suggestions</p>
+                    <ul className="list-inside list-disc pl-5 text-sm leading-[1.55] text-ink-muted">
+                      {aiResult.rule_tuning_suggestions.map((item, index) => (
+                        <li key={`${item}-${index}`}>{item}</li>
+                      ))}
+                    </ul>
+                  </div>
+                )}
+                <p className="mt-0.5 text-xs text-ink-faint">{aiResult.disclaimer}</p>
+              </div>
+            )}
+          </section>
         </div>
-        {displayAlerts.length === 0
-          ? <p className="italic text-ink-faint">No alerts detected yet. Listening...</p>
-          : displayAlerts.map((alert, i) => <AlertCard key={alert.id ?? i} alert={alert} />)
-        }
-      </section>
+
+        {/* Live alert feed — sticky on desktop so it stays visible while the
+            left column (charts/AI analysis) scrolls; stacks normally below
+            on narrow viewports, where a fixed sidebar wouldn't fit. */}
+        <aside className="w-full shrink-0 animate-fade-up lg:sticky lg:top-6 lg:w-[320px]" style={{ animationDelay: '160ms' }}>
+          <section className="rounded-lg border border-white/[0.08] bg-surface px-5 py-5 lg:max-h-[calc(100vh-72px)] lg:overflow-y-auto">
+            <div className="mb-3 flex items-center gap-3">
+              <h2 className={SECTION_TITLE}>Live Alert Feed</h2>
+              <span className="flex-1 text-xs text-ink-faint">{wsAlerts.length} received</span>
+              <Button variant="ghost" size="sm" onClick={() => setPaused(p => !p)}>
+                {paused
+                  ? <><PlayCircle  size={14} /> Resume</>
+                  : <><PauseCircle size={14} /> Pause</>}
+              </Button>
+            </div>
+            {displayAlerts.length === 0
+              ? <p className="italic text-ink-faint">No alerts detected yet. Listening...</p>
+              : displayAlerts.map((alert, i) => <AlertCard key={alert.id ?? i} alert={alert} />)
+            }
+          </section>
+        </aside>
+      </div>
 
     </main>
   )
