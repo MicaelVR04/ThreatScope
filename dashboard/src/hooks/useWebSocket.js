@@ -11,7 +11,7 @@ export default function useWebSocket() {
   useEffect(() => {
     if (supabase) {
       // --- Supabase path ---
-      async function fetchInitialAlerts() {
+      const fetchInitialAlerts = async () => {
         const { data, error } = await supabase
           .from('alerts')
           .select('*')
@@ -53,7 +53,9 @@ export default function useWebSocket() {
       try {
         const alert = JSON.parse(e.data)
         setAlerts(prev => [alert, ...prev])
-      } catch {}
+      } catch (err) {
+        console.warn('Failed to parse WebSocket alert message:', err)
+      }
     }
 
     return () => { ws.close() }

@@ -24,7 +24,7 @@ async function apiFetch(path, options = {}) {
     try {
       const data = await res.json()
       if (data?.detail) message = data.detail
-    } catch {}
+    } catch { /* response body wasn't JSON — fall back to the generic message above */ }
     throw new Error(message)
   }
   return res.json()
