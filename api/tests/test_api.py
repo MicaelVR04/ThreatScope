@@ -88,9 +88,9 @@ class TestCreateAlert:
     def test_reject_invalid_severity(self):
         """Should reject alerts with invalid severity values."""
         bad_alert = make_alert()
-        bad_alert["severity"] = "CRITICAL"  # not a valid value
+        bad_alert["severity"] = "CRITICAL"
         response = client.post("/alerts", json=bad_alert)
-        assert response.status_code == 422  # Pydantic validation error
+        assert response.status_code == 422
 
     def test_reject_missing_fields(self):
         """Should reject alerts missing required fields."""
@@ -106,38 +106,35 @@ class TestCreateAlert:
 
     def test_alert_is_stored_with_authenticated_user_id(self):
         """The JWT subject is persisted for Supabase ownership and RLS."""
-        app.dependency_overrides[verify_token] = lambda: {"sub": "user-123"}
+        real_user_uuid = "98a345c1-6b65-4d93-96d6-59bec63fb4cf"
+        app.dependency_overrides[verify_token] = lambda: {"sub": real_user_uuid}
         try:
             response = client.post("/alerts", json=make_alert())
             assert response.status_code == 200
-            assert get_alerts()[0]["user_id"] == "user-123"
+            assert get_alerts()[0]["user_id"] == real_user_uuid
         finally:
             app.dependency_overrides.pop(verify_token, None)
 
     def test_supabase_insert_keeps_user_id(self, monkeypatch):
         """Supabase receives the owner column alongside the alert payload."""
+        fake_uuid = "00000000-0000-0000-0000-000000000001"
         inserted = {}
-
         class Query:
             def insert(self, payload):
                 inserted.update(payload)
                 return self
-
             def execute(self):
                 return type("Result", (), {"data": [{"id": "alert-1"}]})()
-
         class Client:
             def table(self, name):
                 assert name == database.SUPABASE_ALERTS_TABLE
                 return Query()
-
         monkeypatch.setattr(database, "SUPABASE_ACTIVE", True)
         monkeypatch.setattr(database, "_get_supabase", lambda: Client())
         alert = make_alert()
-        alert.update({"id": None, "user_id": "user-123"})
-
+        alert.update({"id": None, "user_id": fake_uuid})
         assert insert_alert(alert) == "alert-1"
-        assert inserted["user_id"] == "user-123"
+        assert inserted["user_id"] == fake_uuid
         assert "id" not in inserted
 
 
