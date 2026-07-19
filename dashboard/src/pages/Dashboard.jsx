@@ -64,6 +64,28 @@ function heatPct(count, total) {
   return total > 0 ? Math.round((count / total) * 100) : 0
 }
 
+// Occasional detection blips inside the hero rings — same `radar-ping`
+// keyframe and polar-coordinate placement as the landing page's Hero radar,
+// but untimed here (there's no rotating sweep on this calmer ring motif to
+// sync to), so each dot just gets its own offset into the 6s cycle for a
+// staggered, non-uniform blink pattern rather than all firing at once.
+const RADAR_DOTS = [
+  { angle: 15, radius: 0.32, delay: 0 },
+  { angle: 100, radius: 0.48, delay: -2.1 },
+  { angle: 190, radius: 0.28, delay: -4.4 },
+  { angle: 260, radius: 0.42, delay: -1.2 },
+  { angle: 330, radius: 0.2, delay: -3.6 },
+]
+
+function radarDotStyle({ angle, radius, delay }) {
+  const rad = (angle * Math.PI) / 180
+  return {
+    left: `${50 + radius * 50 * Math.sin(rad)}%`,
+    top: `${50 - radius * 50 * Math.cos(rad)}%`,
+    animationDelay: `${delay}s`,
+  }
+}
+
 // Smoothly counts from the previous value to the next over `duration`ms,
 // instead of snapping — same idea as the mock's count-up stat strip. Called
 // a fixed number of times per render (once per stat), never inside a loop,
@@ -272,6 +294,13 @@ export default function Dashboard({ onConnectionChange }) {
           <div className={`absolute inset-[34px] rounded-full border animate-ring-pulse opacity-[0.16] ${scanRingBorderClass(scanState)}`} />
           <div className={`absolute inset-[68px] rounded-full border animate-ring-pulse opacity-[0.16] ${scanRingBorderClass(scanState)}`} style={{ animationDelay: '0.8s' }} />
           <div className={`absolute inset-[102px] rounded-full border animate-ring-pulse opacity-[0.16] ${scanRingBorderClass(scanState)}`} style={{ animationDelay: '1.6s' }} />
+          {RADAR_DOTS.map((dot, i) => (
+            <span
+              key={i}
+              className={`absolute h-1.5 w-1.5 -translate-x-1/2 -translate-y-1/2 animate-radar-ping rounded-full ${scanDotClass(scanState)}`}
+              style={radarDotStyle(dot)}
+            />
+          ))}
         </div>
 
         <div className="relative">
@@ -541,4 +570,8 @@ function scanHeroColorClass(state) {
 
 function scanRingBorderClass(state) {
   return state === 'alert' ? 'border-severity-high' : 'border-signal'
+}
+
+function scanDotClass(state) {
+  return state === 'alert' ? 'bg-severity-high' : 'bg-signal'
 }
