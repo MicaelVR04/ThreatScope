@@ -1,6 +1,7 @@
 """Provider-neutral advisory analysis of recent ThreatScope alerts."""
 
 import json
+import logging
 import os
 from typing import Any, Dict, List
 
@@ -12,6 +13,7 @@ load_dotenv()
 
 DISCLAIMER = "AI analysis is advisory. Rule-based detections remain the source of truth."
 VALID_PROVIDERS = {"ollama", "openai"}
+logger = logging.getLogger(__name__)
 
 
 def get_ai_config() -> Dict[str, Any]:
@@ -89,6 +91,23 @@ def analyze_alerts(alerts: List[dict]) -> Dict[str, Any]:
         return {"provider": config["provider"], "model": model, "alert_count": 0, "summary": "No recent alerts are available to analyze.", "pattern": "No alert pattern available.", "risk_level": "LOW", "demo_note": "Trigger demo traffic or capture live traffic before running AI analysis.", "rule_tuning_suggestions": [], "disclaimer": DISCLAIMER}
     try:
         raw = _analyze_with_ollama(config, build_prompt(alerts)) if config["provider"] == "ollama" else _analyze_with_openai(config, build_prompt(alerts))
+    except requests.exceptions.HTTPError as exc:
+        response = exc.response
+        status_code = response.status_code if response is not None else 502
+        try:
+            upstream_detail = response.json() if response is not None else {}
+        except ValueError:
+            upstream_detail = response.text if response is not None else "No response body"
+        logger.warning("%s AI request failed (HTTP %s): %s", config["provider"], status_code, upstream_detail)
+        raise HTTPException(
+            status_code=502,
+            detail={
+                "provider": config["provider"],
+                "upstream_status": status_code,
+                "upstream_error": upstream_detail,
+            },
+        ) from exc
     except requests.exceptions.RequestException as exc:
+        logger.warning("%s AI request failed: %s", config["provider"], exc)
         raise HTTPException(status_code=503, detail=f"{config['provider']} AI provider is unavailable.") from exc
     return {"provider": config["provider"], "model": model, "alert_count": len(alerts), **normalize_analysis(raw), "disclaimer": DISCLAIMER}
