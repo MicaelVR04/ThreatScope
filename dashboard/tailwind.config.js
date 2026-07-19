@@ -9,7 +9,10 @@ export default {
         'surface-2': '#121A24',
         signal: { DEFAULT: '#2EEBD1', dim: 'rgba(46, 235, 209, 0.12)' },
         severity: { high: '#EF4444', medium: '#F59E0B', low: '#22C55E' },
-        ink: { DEFAULT: '#F5F7FA', muted: '#8B96A5', faint: '#707C8C' },
+        // faint nudged from #707C8C — that measured 4.40:1 against the
+        // surface background, just under the 4.5:1 AA minimum for normal
+        // text; +2 per channel clears it (4.52:1) with no visible change.
+        ink: { DEFAULT: '#F5F7FA', muted: '#8B96A5', faint: '#727E8E' },
       },
       fontFamily: {
         display: ['"Space Grotesk"', 'sans-serif'],

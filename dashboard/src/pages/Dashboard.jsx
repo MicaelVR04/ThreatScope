@@ -1,4 +1,4 @@
-import { useState, useEffect, useRef, useCallback } from 'react'
+import { useState, useEffect, useLayoutEffect, useRef, useCallback } from 'react'
 import { Activity, AlertTriangle, Loader2, PauseCircle, PlayCircle } from 'lucide-react'
 import Button from '../components/theme/Button'
 import AlertCard from '../components/AlertCard'
@@ -147,7 +147,15 @@ export default function Dashboard({ onConnectionChange }) {
   // ResizeObserver sidesteps that: once we have a concrete pixel number,
   // percentage/flex heights downstream resolve unambiguously. Only applied
   // at the `lg` breakpoint, where the columns actually sit side by side.
-  useEffect(() => {
+  //
+  // useLayoutEffect (not useEffect) so this first measurement happens
+  // before the browser paints — otherwise the panel visibly flashes from
+  // the 520px fallback to its real height one frame later. A second, later
+  // jump can still happen once async data (e.g. Attack Types) finishes
+  // loading and changes the left column's height for real — that one's
+  // unavoidable without knowing the data's size in advance, and it's the
+  // same shift the left column itself would show regardless of this fix.
+  useLayoutEffect(() => {
     const el = leftColRef.current
     if (!el) return
     const desktop = window.matchMedia('(min-width: 1024px)')

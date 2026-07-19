@@ -1,7 +1,13 @@
 import { useEffect, useRef, useState } from 'react'
 import { threatLabel, threatPlainEnglish } from '../utils/threatLabels'
 
-const SEV_DOT_CLASS = { HIGH: 'bg-severity-high', MEDIUM: 'bg-severity-medium', LOW: 'bg-severity-low' }
+// Same glyph set as AlertCard's severity indicator — shape-differentiated,
+// not just color, so this reads correctly for colorblind users too (a plain
+// same-shaped dot recolored per severity was color-only, which fails the
+// "don't convey meaning through color alone" rule the ui-ux-pro-max audit
+// flagged here).
+const SEV_GLYPH = { HIGH: '▲', MEDIUM: '▶', LOW: '•' }
+const SEV_TEXT_CLASS = { HIGH: 'text-severity-high', MEDIUM: 'text-severity-medium', LOW: 'text-severity-low' }
 
 // Tuned to the "Standard" stagger-list tier (400-600ms, ~60ms/item) rather
 // than the slower 900ms/70ms this used before — long entrance timing on a
@@ -92,7 +98,9 @@ function TypeRow({ rank, type, high, medium, low, total, maxTotal, delayMs, isTo
       <div className="min-w-0 flex-1">
         <div className="mb-1.5 flex items-center justify-between gap-2">
           <span className="flex min-w-0 items-center gap-1.5">
-            <span className={`h-1.5 w-1.5 shrink-0 rounded-full ${SEV_DOT_CLASS[dominant]}`} />
+            <span className={`w-2.5 shrink-0 text-[10px] leading-none ${SEV_TEXT_CLASS[dominant]}`} title={`Dominant severity: ${dominant}`}>
+              {SEV_GLYPH[dominant]}
+            </span>
             <span className="truncate text-[12.5px] font-medium text-ink" title={threatPlainEnglish(type)}>
               {threatLabel(type)}
             </span>

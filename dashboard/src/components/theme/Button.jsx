@@ -14,7 +14,9 @@ const VARIANTS = {
 }
 
 const SIZES = {
-  sm: 'px-4 py-2 text-xs',
+  // py-3.5 (14px) + text-xs's 16px line-height = 44px total, meeting the
+  // 44x44 minimum touch target — py-2 measured 32px tall.
+  sm: 'px-4 py-3.5 text-xs',
   md: 'px-6 py-3 text-sm',
 }
 

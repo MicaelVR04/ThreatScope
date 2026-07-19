@@ -6,21 +6,21 @@ export default function Navbar({ connected, userEmail, signingOut, onLogout }) {
   const navigate = useNavigate()
 
   return (
-    <header className="flex items-center gap-6 border-b border-white/[0.08] bg-surface px-8 py-3.5">
-      <div className="flex min-w-[180px] items-center gap-2.5">
+    <header className="flex flex-wrap items-center gap-3 border-b border-white/[0.08] bg-surface px-4 py-3.5 sm:gap-6 sm:px-8">
+      <div className="flex items-center gap-2.5">
         <div
           aria-hidden="true"
-          className="grid h-[34px] w-[34px] place-items-center rounded-lg bg-signal shadow-[0_0_0_1px_rgba(255,255,255,0.08),0_8px_22px_-4px_rgba(46,235,209,0.35)]"
+          className="grid h-[34px] w-[34px] shrink-0 place-items-center rounded-lg bg-signal shadow-[0_0_0_1px_rgba(255,255,255,0.08),0_8px_22px_-4px_rgba(46,235,209,0.35)]"
         >
           <Shield size={18} className="text-base" strokeWidth={2.4} />
         </div>
         <div>
           <span className="block font-display text-lg font-bold tracking-tight text-ink">ThreatScope</span>
-          <span className="mt-px block font-mono text-[10px] font-bold uppercase tracking-[0.8px] text-ink-faint">NIDS Console</span>
+          <span className="ts-console-label mt-px block font-mono text-[10px] font-bold uppercase tracking-[0.8px] text-ink-faint">NIDS Console</span>
         </div>
       </div>
 
-      <nav className="ml-3 flex flex-1 gap-5">
+      <nav className="flex flex-1 gap-3 sm:ml-3 sm:gap-5">
         <NavLink
           to="/dashboard"
           end
@@ -46,7 +46,7 @@ export default function Navbar({ connected, userEmail, signingOut, onLogout }) {
         </NavLink>
       </nav>
 
-      <div className="flex items-center gap-3">
+      <div className="flex items-center gap-2 sm:gap-3">
         <div
           className={`flex items-center gap-1.5 rounded-full border px-3 py-1 ${
             connected ? 'border-severity-low/25' : 'border-severity-high/25'
@@ -107,6 +107,12 @@ export default function Navbar({ connected, userEmail, signingOut, onLogout }) {
         @media (max-width: 760px) {
           .ts-logout-text,
           .ts-user-email {
+            display: none;
+          }
+        }
+
+        @media (max-width: 480px) {
+          .ts-console-label {
             display: none;
           }
         }
