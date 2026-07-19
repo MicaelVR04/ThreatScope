@@ -108,11 +108,37 @@ export default function Dashboard({ onConnectionChange }) {
   const [scanLoading, setScanLoading] = useState(false)
   const [revealed, setRevealed] = useState(false)
   const frozenRef = useRef([])
+  const leftColRef = useRef(null)
+  const [feedHeight, setFeedHeight] = useState(null)
 
   // Same technique as Hero's headlineIn: a boolean flipped post-mount drives
   // a sequence of per-element transitionDelays below, so the scan panel
   // reveals piece by piece instead of fading in as one flat block.
   useEffect(() => { setRevealed(true) }, [])
+
+  // Measures the left column's real rendered height in JS rather than
+  // relying on flex `stretch` alone — with no fixed height anywhere in the
+  // feed panel, `stretch` and the feed's own `h-full`/`flex-1` become
+  // mutually circular (the feed's own alert-list content decides its
+  // "natural" size, which can end up taller than the cards and pulls the
+  // whole row up to match it, instead of the other way around). A
+  // ResizeObserver sidesteps that: once we have a concrete pixel number,
+  // percentage/flex heights downstream resolve unambiguously. Only applied
+  // at the `lg` breakpoint, where the columns actually sit side by side.
+  useEffect(() => {
+    const el = leftColRef.current
+    if (!el) return
+    const desktop = window.matchMedia('(min-width: 1024px)')
+    const measure = () => setFeedHeight(desktop.matches ? el.getBoundingClientRect().height : null)
+    const ro = new ResizeObserver(measure)
+    ro.observe(el)
+    desktop.addEventListener('change', measure)
+    measure()
+    return () => {
+      ro.disconnect()
+      desktop.removeEventListener('change', measure)
+    }
+  }, [])
 
   const refreshDashboardData = useCallback(async () => {
     try {
@@ -317,10 +343,11 @@ export default function Dashboard({ onConnectionChange }) {
         </div>
       </section>
 
-      {/* Two-column body: charts + AI (left) / live feed (right, sticky) —
-          340px sidebar, 18px gaps, matching the mock's .grid exactly. */}
+      {/* Two-column body: charts + AI (left) / live feed (right) — 340px
+          sidebar, 18px gaps. Default flex cross-axis is `stretch`, so the
+          feed column naturally matches the left column's full height. */}
       <div className="flex flex-col gap-[18px] lg:flex-row">
-        <div className="min-w-0 flex-1">
+        <div className="min-w-0 flex-1" ref={leftColRef}>
 
           {/* Attack Surface — full-width standalone panel (not squeezed into
               a row with Attack Types), so the heat strip reads as one long
@@ -427,11 +454,20 @@ export default function Dashboard({ onConnectionChange }) {
           </section>
         </div>
 
-        {/* Live alert feed — sticky on desktop so it stays visible while the
-            left column scrolls; header stays fixed at the top of the panel,
-            only the line list itself scrolls (520px, matching the mock). */}
-        <aside className="w-full shrink-0 animate-fade-up lg:sticky lg:top-4 lg:w-[340px]" style={{ animationDelay: '200ms' }}>
-          <section className="overflow-hidden rounded-xl border border-white/[0.08] bg-surface">
+        {/* Live alert feed — stretches to match the left column's full
+            height (flex `stretch` is the default cross-axis behavior on the
+            outer row, so this just needs to opt in down through the tree)
+            instead of stopping at a fixed 520px. Header stays a fixed
+            height at the top; only the line list flexes to fill whatever
+            space is left, so its bottom edge lands exactly level with
+            Attack Types. `min-h-0` is required here — flex children default
+            to a content-based min-height, which would otherwise stop this
+            from shrinking to fit and break its internal scroll. */}
+        <aside className="w-full shrink-0 animate-fade-up lg:w-[340px]" style={{ animationDelay: '200ms' }}>
+          <section
+            className="flex flex-col overflow-hidden rounded-xl border border-white/[0.08] bg-surface"
+            style={{ height: feedHeight ? `${feedHeight}px` : '520px' }}
+          >
             <div className="flex items-center gap-2 border-b border-white/[0.08] px-4 py-[11px] font-mono text-[11px] text-ink-faint">
               <span>live_feed.stream</span>
               <span className="ml-auto flex items-center gap-1.5 text-[10px] text-severity-low">
@@ -444,7 +480,7 @@ export default function Dashboard({ onConnectionChange }) {
                   : <><PauseCircle size={14} className="transition-transform duration-200 ease-swift group-hover:scale-110" /> Pause</>}
               </Button>
             </div>
-            <div className="feed-scroll h-[520px] overflow-y-auto px-4 py-3.5 text-xs leading-[1.9]" style={{ scrollbarWidth: 'thin' }}>
+            <div className="feed-scroll min-h-0 flex-1 overflow-y-auto px-4 py-3.5 text-xs leading-[1.9]" style={{ scrollbarWidth: 'thin' }}>
               {displayAlerts.length === 0
                 ? <p className="italic text-ink-faint">No alerts detected yet. Listening...</p>
                 : displayAlerts.map((alert, i) => <AlertCard key={alert.id ?? i} alert={alert} />)

@@ -87,6 +87,10 @@ export default {
         // Feed-line entrance — distinct from `fade-up` (12px/240ms): the
         // mock's terminal lines travel a shorter 4px over 300ms.
         'fl-in': { '0%': { opacity: '0', transform: 'translateY(4px)' }, '100%': { opacity: '1', transform: 'translateY(0)' } },
+        // Ambient signal on the #1 ranked attack type only — ties motion to
+        // a real state ("this is currently the most frequent threat") rather
+        // than decorating every row equally.
+        'bar-glow': { '0%, 100%': { boxShadow: '0 0 0px rgba(46,235,209,0)' }, '50%': { boxShadow: '0 0 8px rgba(46,235,209,0.45)' } },
       },
       animation: {
         'radar-sweep': 'radar-sweep 6s linear infinite',
@@ -114,6 +118,7 @@ export default {
         'ring-pulse': 'ring-pulse 3.2s ease-out infinite',
         breathe: 'breathe 6s ease-in-out infinite',
         'fl-in': 'fl-in 300ms cubic-bezier(0.16,1,0.3,1) forwards',
+        'bar-glow': 'bar-glow 2.8s ease-in-out infinite',
       },
     },
   },
