@@ -68,15 +68,25 @@ export default {
           '72%': { transform: 'translate(6vw, 2vh)' },
           '90%': { transform: 'translate(-4vw, -10vh)' },
         },
-        // Decaying arrival glow for newly-received alerts — one shot per
-        // severity color, blur/spread stay fixed and only the shadow's alpha
-        // fades, so it reads as "this just happened" rather than a loop.
-        'alert-glow-high':   { '0%': { boxShadow: '0 0 22px 2px rgba(239,68,68,0.5)' },  '100%': { boxShadow: '0 0 22px 2px rgba(239,68,68,0)' } },
-        'alert-glow-medium': { '0%': { boxShadow: '0 0 22px 2px rgba(245,158,11,0.5)' }, '100%': { boxShadow: '0 0 22px 2px rgba(245,158,11,0)' } },
-        'alert-glow-low':    { '0%': { boxShadow: '0 0 22px 2px rgba(34,197,94,0.5)' },  '100%': { boxShadow: '0 0 22px 2px rgba(34,197,94,0)' } },
-        // Quick scale+fade blip for stat values ticking up — keyed by value
-        // in the component so it replays on every change, not just mount.
-        'chip-flash': { '0%': { opacity: '0.35', transform: 'scale(1.18)' }, '100%': { opacity: '1', transform: 'scale(1)' } },
+        // Decaying arrival flash for newly-received alerts, now a background
+        // tint (not a box-shadow) since the terminal-line feed has no card
+        // edge for a glow to bloom around — one shot per severity color.
+        'line-flash-high':   { '0%': { backgroundColor: 'rgba(239,68,68,0.18)' },  '100%': { backgroundColor: 'rgba(239,68,68,0)' } },
+        'line-flash-medium': { '0%': { backgroundColor: 'rgba(245,158,11,0.18)' }, '100%': { backgroundColor: 'rgba(245,158,11,0)' } },
+        'line-flash-low':    { '0%': { backgroundColor: 'rgba(34,197,94,0.18)' },  '100%': { backgroundColor: 'rgba(34,197,94,0)' } },
+        // Slow opacity blink for the "live" eyebrow dot — same idea as a
+        // terminal cursor, not tied to any state, purely "this is live."
+        blink: { '0%, 100%': { opacity: '1' }, '50%': { opacity: '0.25' } },
+        // Concentric rings expanding + fading behind the hero status —
+        // staggered via animation-delay on each ring (inline style, same
+        // technique as the radar detection pings), not separate keyframes.
+        'ring-pulse': { '0%': { transform: 'scale(0.9)', opacity: '0.5' }, '100%': { transform: 'scale(1.5)', opacity: '0' } },
+        // Page-level ambient wash — exact values from the mock: opacity
+        // 0.06-0.12, scale 1-1.08, nothing more dramatic.
+        breathe: { '0%, 100%': { opacity: '0.06', transform: 'scale(1)' }, '50%': { opacity: '0.12', transform: 'scale(1.08)' } },
+        // Feed-line entrance — distinct from `fade-up` (12px/240ms): the
+        // mock's terminal lines travel a shorter 4px over 300ms.
+        'fl-in': { '0%': { opacity: '0', transform: 'translateY(4px)' }, '100%': { opacity: '1', transform: 'translateY(0)' } },
       },
       animation: {
         'radar-sweep': 'radar-sweep 6s linear infinite',
@@ -92,10 +102,18 @@ export default {
         'drift-b': 'drift-b 27s ease-in-out infinite',
         'drift-c': 'drift-c 19s ease-in-out infinite',
         shake: 'shake 400ms ease-in-out',
-        'alert-glow-high': 'alert-glow-high 1400ms ease-out',
-        'alert-glow-medium': 'alert-glow-medium 1400ms ease-out',
-        'alert-glow-low': 'alert-glow-low 1400ms ease-out',
-        'chip-flash': 'chip-flash 260ms ease-out',
+        'line-flash-high': 'line-flash-high 1400ms ease-out',
+        'line-flash-medium': 'line-flash-medium 1400ms ease-out',
+        'line-flash-low': 'line-flash-low 1400ms ease-out',
+        blink: 'blink 1.6s ease-in-out infinite',
+        // Same blink keyframe, two more cadences the mock uses for different
+        // elements — a terminal cursor (hard steps, no easing) and the
+        // feed's "connected" dot (slightly faster than the hero eyebrow).
+        'cursor-blink': 'blink 1s steps(1) infinite',
+        'live-blink': 'blink 1.4s ease-in-out infinite',
+        'ring-pulse': 'ring-pulse 3.2s ease-out infinite',
+        breathe: 'breathe 6s ease-in-out infinite',
+        'fl-in': 'fl-in 300ms cubic-bezier(0.16,1,0.3,1) forwards',
       },
     },
   },

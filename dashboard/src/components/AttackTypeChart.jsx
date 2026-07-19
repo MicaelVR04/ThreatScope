@@ -1,21 +1,22 @@
 import {
   BarChart, Bar, XAxis, YAxis, Tooltip,
-  ResponsiveContainer, CartesianGrid, Legend, Cell,
+  ResponsiveContainer, CartesianGrid, Legend,
 } from 'recharts'
 import { threatLabel, threatPlainEnglish } from '../utils/threatLabels'
 
-const SEV_COLORS = { HIGH: '#ef4444', MEDIUM: '#f59e0b', LOW: '#22c55e' }
+// Hex-only — Recharts renders its own SVG and needs literal color values,
+// same reason Dashboard.jsx's severity colors do. Matches the design-system
+// severity tokens exactly.
+const SEV_COLORS = { HIGH: '#EF4444', MEDIUM: '#F59E0B', LOW: '#22C55E' }
 
 function CustomTooltip({ active, payload, label }) {
   if (!active || !payload?.length) return null
   return (
-    <div style={styles.tooltip}>
-      <p style={styles.tooltipLabel}>{label}</p>
-      <p style={styles.tooltipHelp}>{threatPlainEnglish(label)}</p>
+    <div className="rounded-md border border-white/[0.12] bg-surface px-3 py-2.5">
+      <p className="mb-0.5 text-[13px] font-semibold text-ink">{threatLabel(label)}</p>
+      <p className="mb-1.5 max-w-[240px] text-xs leading-[1.4] text-ink-faint">{threatPlainEnglish(label)}</p>
       {payload.map(({ name, value, color }) => (
-        <p key={name} style={{ margin: '2px 0', color, fontSize: 12 }}>
-          {name}: <strong>{value}</strong>
-        </p>
+        <p key={name} className="text-xs" style={{ color }}>{name}: <strong>{value}</strong></p>
       ))}
     </div>
   )
@@ -23,7 +24,7 @@ function CustomTooltip({ active, payload, label }) {
 
 export default function AttackTypeChart({ data = [] }) {
   if (!data.length) {
-    return <div style={styles.empty}>No attack type data yet.</div>
+    return <div className="py-[60px] text-center italic text-ink-faint">No attack type data yet.</div>
   }
 
   // Sort descending by total count
@@ -36,24 +37,24 @@ export default function AttackTypeChart({ data = [] }) {
         layout="vertical"
         margin={{ top: 0, right: 16, left: 8, bottom: 0 }}
       >
-        <CartesianGrid strokeDasharray="3 3" stroke="#1e293b" horizontal={false} />
+        <CartesianGrid strokeDasharray="3 3" stroke="rgba(255,255,255,0.08)" horizontal={false} />
         <XAxis
           type="number"
-          stroke="#475569"
-          tick={{ fontSize: 11 }}
+          stroke="#707C8C"
+          tick={{ fontSize: 11, fill: '#707C8C' }}
           allowDecimals={false}
         />
         <YAxis
           type="category"
           dataKey="type"
-          stroke="#475569"
-          tick={{ fontSize: 11, fill: '#94a3b8' }}
+          stroke="#707C8C"
+          tick={{ fontSize: 11, fill: '#8B96A5' }}
           tickFormatter={threatLabel}
           width={110}
         />
-        <Tooltip content={<CustomTooltip />} cursor={{ fill: '#1e293b' }} />
+        <Tooltip content={<CustomTooltip />} cursor={{ fill: 'rgba(255,255,255,0.04)' }} />
         <Legend
-          wrapperStyle={{ fontSize: 12, color: '#94a3b8', paddingTop: 8 }}
+          wrapperStyle={{ fontSize: 12, color: '#8B96A5', paddingTop: 8 }}
           formatter={v => <span style={{ color: SEV_COLORS[v] }}>{v}</span>}
         />
         <Bar dataKey="HIGH"   stackId="a" fill={SEV_COLORS.HIGH}   radius={0} />
@@ -62,11 +63,4 @@ export default function AttackTypeChart({ data = [] }) {
       </BarChart>
     </ResponsiveContainer>
   )
-}
-
-const styles = {
-  tooltip:      { background: '#1e293b', border: '1px solid #334155', borderRadius: 6, padding: '8px 12px' },
-  tooltipLabel: { fontSize: 13, fontWeight: 600, color: '#f1f5f9', margin: '0 0 4px' },
-  tooltipHelp:  { fontSize: 12, color: '#94a3b8', margin: '0 0 6px', maxWidth: 240, lineHeight: 1.4 },
-  empty:        { textAlign: 'center', color: '#475569', fontStyle: 'italic', padding: '60px 0' },
 }
