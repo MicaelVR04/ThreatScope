@@ -73,6 +73,9 @@ VITE_SUPABASE_URL=your_supabase_url
 VITE_SUPABASE_ANON_KEY=your_anon_or_publishable_key
 
 API_URL=http://localhost:8000/alerts
+SUPABASE_JWT_SECRET=your_supabase_jwt_secret
+ENGINE_API_KEY=generate_a_long_random_value
+ALLOW_INSECURE_LOCAL_DEV=false
 DEMO_MODE=true
 ALERT_COOLDOWN_SECONDS=60
 ARP_ENTRY_TTL_SECONDS=300

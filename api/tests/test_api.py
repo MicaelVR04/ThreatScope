@@ -15,6 +15,10 @@ from datetime import datetime, timezone
 import sys
 import os
 
+# Endpoint behavior tests use an explicit local-only bypass. Production and
+# shared-demo environments must leave this disabled and supply real secrets.
+os.environ.setdefault("ALLOW_INSECURE_LOCAL_DEV", "true")
+
 # Add parent directory to path so we can import from api/
 sys.path.insert(0, os.path.abspath(os.path.join(os.path.dirname(__file__), "..")))
 

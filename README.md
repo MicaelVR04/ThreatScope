@@ -261,6 +261,16 @@ The dashboard includes scan controls for running a scan now or scheduling scan w
 
 The scan control is dashboard-friendly orchestration around the existing engine/API pipeline. The Python engine still owns packet analysis and alert generation.
 
+## Security Configuration
+
+For a shared demo or deployment, keep `ALLOW_INSECURE_LOCAL_DEV=false` and configure both server-side secrets in `.env`:
+
+```bash
+ENGINE_API_KEY=a_long_random_value
+```
+
+Dashboard API requests require a valid Supabase access token. For legacy HS256 Supabase projects, also set `SUPABASE_JWT_SECRET`; newer asymmetric-key projects are verified against the public JWKS endpoint using the existing `SUPABASE_URL`. The packet engine and `api/simulate.py` submit alerts with `X-Engine-Key`; this key must never be exposed to the browser. The demo reset endpoint uses the same internal key.
+
 ## Tests
 
 Engine tests:

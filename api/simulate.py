@@ -4,11 +4,16 @@ Run with: python simulate.py
 """
 
 import requests
+import os
 import time
 import random
 from datetime import datetime, timezone
+from dotenv import load_dotenv
+
+load_dotenv()
 
 API_URL = "http://localhost:8000/alerts"
+ENGINE_API_KEY = os.getenv("ENGINE_API_KEY", "").strip()
 
 ATTACKS = [
     {
@@ -43,7 +48,8 @@ def send_alert(attack):
         "timestamp": datetime.now(timezone.utc).isoformat()
     }
     try:
-        response = requests.post(API_URL, json=payload)
+        headers = {"X-Engine-Key": ENGINE_API_KEY} if ENGINE_API_KEY else {}
+        response = requests.post(API_URL, json=payload, headers=headers, timeout=10)
         print(f"[{payload['severity']}] {payload['type']} from {payload['src_ip']} — status {response.status_code}")
     except Exception as e:
         print(f"[ERROR] Could not reach API: {e}")

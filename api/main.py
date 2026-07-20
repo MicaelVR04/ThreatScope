@@ -23,7 +23,7 @@ from slowapi.middleware import SlowAPIMiddleware
 from models import Alert, AlertSummary, ScanScheduleRequest
 from database import init_db, insert_alert, get_alerts, get_summary, get_stats, clear_alerts
 from websocket import manager
-from auth import verify_token
+from auth import decode_dashboard_token, verify_engine_key, verify_token
 from ai_analysis import analyze_alerts, get_ai_config
 from scan_manager import get_scan_status, set_schedule, start_scan
 
@@ -74,7 +74,7 @@ app.add_middleware(
 # ── REST Endpoints ─────────────────────────────────────────────────────────
 @app.post("/alerts", response_model=Alert)
 @limiter.limit("60/minute")
-async def create_alert(request: Request, alert: Alert, user=Depends(verify_token)):
+async def create_alert(request: Request, alert: Alert, _engine=Depends(verify_engine_key)):
     """
     Receives a new alert from the engine.
     Validates severity, saves to DB, and broadcasts to all dashboards.
@@ -138,7 +138,7 @@ def read_stats(
 
 
 @app.delete("/alerts")
-def delete_alerts(user=Depends(verify_token)):
+def delete_alerts(_engine=Depends(verify_engine_key)):
     """
     Clears all alerts from the database.
     Useful for resetting between demos.
@@ -195,6 +195,13 @@ async def websocket_endpoint(websocket: WebSocket):
     Dashboard connects here to receive real-time alerts.
     Stays open until the client disconnects.
     """
+    token = websocket.query_params.get("access_token", "")
+    try:
+        decode_dashboard_token(token)
+    except HTTPException:
+        await websocket.close(code=1008)
+        return
+
     await manager.connect(websocket)
     try:
         while True:
