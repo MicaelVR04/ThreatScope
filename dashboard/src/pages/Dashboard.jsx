@@ -221,7 +221,7 @@ export default function Dashboard({ onConnectionChange }) {
       setAiResult(result)
     } catch (error) {
       console.error(error)
-      setAiError(error.message || 'Ollama is not available. Start Ollama and pull the configured model.')
+      setAiError(error.message || 'AI analysis failed. Check the configured provider and try again.')
     } finally {
       setAiLoading(false)
     }
@@ -461,14 +461,19 @@ export default function Dashboard({ onConnectionChange }) {
             </div>
           </section>
 
-          {/* Live network pulse — real event-volume curve from chartData,
-              continuously animated (traveling highlight), not a static
-              chart that only updates when data changes. */}
+          {/* Live network pulse — real packet-count deltas from the sensor.
+              The traveling highlight moves continuously, while the curve
+              itself changes only when captured packet totals change. */}
           <section className="mb-[18px] animate-fade-up rounded-xl border border-white/[0.08] bg-surface px-[22px] py-5" style={{ animationDelay: '80ms' }}>
             <h2 className={PANEL_H2}>Live Network Pulse</h2>
-            <p className={PANEL_HINT}>Real-time traffic waveform — always moving, not just on data change.</p>
+            <p className={PANEL_HINT}>
+              Captured packet activity from the connected sensor · sampled every 5 seconds.
+            </p>
             <div className="h-[120px] overflow-hidden rounded-lg bg-gradient-to-b from-signal/[0.05] to-transparent">
-              <NetworkPulse data={chartData} />
+              <NetworkPulse
+                packetCount={scanStatus?.sensor?.packet_count}
+                active={Boolean(scanStatus?.sensor?.online && scanStatus?.sensor?.monitoring)}
+              />
             </div>
           </section>
 

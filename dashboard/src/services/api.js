@@ -12,13 +12,18 @@ async function getHeaders() {
 
 async function apiFetch(path, options = {}) {
   const headers = await getHeaders()
-  const res = await fetch(`${API_URL}${path}`, {
-    ...options,
-    headers: {
-      ...headers,
-      ...(options.headers || {}),
-    },
-  })
+  let res
+  try {
+    res = await fetch(`${API_URL}${path}`, {
+      ...options,
+      headers: {
+        ...headers,
+        ...(options.headers || {}),
+      },
+    })
+  } catch {
+    throw new Error('ThreatScope API is offline. Start the API service and try again.')
+  }
   if (!res.ok) {
     let message = `API error: ${res.status}`
     try {
