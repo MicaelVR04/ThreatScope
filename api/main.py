@@ -25,7 +25,13 @@ from database import init_db, insert_alert, get_alerts, get_summary, get_stats, 
 from websocket import manager
 from auth import decode_dashboard_token, verify_engine_key, verify_token
 from ai_analysis import analyze_alerts, get_ai_config
-from scan_manager import SensorUnavailableError, get_scan_status, set_schedule, start_scan
+from scan_manager import (
+    SensorUnavailableError,
+    get_scan_status,
+    record_detected_alert,
+    set_schedule,
+    start_scan,
+)
 from sensor_manager import record_heartbeat, set_monitoring
 
 
@@ -91,6 +97,7 @@ async def create_alert(request: Request, alert: Alert, _engine=Depends(verify_en
     alert_id = insert_alert(alert_dict)
     alert_dict["id"] = alert_id
 
+    record_detected_alert()
     await manager.broadcast(alert_dict)
 
     return alert_dict

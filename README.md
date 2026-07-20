@@ -194,10 +194,24 @@ at boot, reconnects automatically, and is controlled from the dashboard.
 Useful service commands:
 
 ```bash
-sudo launchctl print system/com.threatscope.sensor
+sudo ./scripts/control_sensor_macos.sh status
+sudo ./scripts/control_sensor_macos.sh stop
+sudo ./scripts/control_sensor_macos.sh disable
+sudo ./scripts/control_sensor_macos.sh enable
 sudo tail -f /var/log/threatscope-sensor.log
 sudo ./scripts/uninstall_sensor_macos.sh
 ```
+
+The dashboard's **Stop monitoring** control pauses packet capture while leaving
+the service online. The `disable` command stops the entire service and prevents
+it from starting after a reboot. The sensor can be inspected in Activity
+Monitor as a Python background process; its command line points to
+`engine/sensor.py`.
+
+The service inspects packets in memory and sends compact alerts plus heartbeat
+status to the API. It does not store or upload raw packet captures. If the API
+temporarily becomes unavailable, the sensor keeps its last monitoring setting
+and reconnects automatically.
 
 Set `NETWORK_INTERFACE` in `.env` if the active interface is not `en0`.
 
@@ -283,9 +297,10 @@ pause packet capture without stopping the background service, and it can run an
 assessment immediately or every 5 or 10 minutes.
 
 An assessment records both alert and packet-count deltas. The dashboard only
-reports **Network Secure** when the sensor stayed online and inspected at least
-one packet during the assessment. An offline sensor or an empty capture window
-produces an explicit unable-to-assess state instead of a false safety claim.
+reports **No Known Threats Detected** when the sensor stayed online, inspected
+at least one packet, and no packet matched the four enabled detection rules. An
+offline sensor or an empty capture window never produces that result, and the
+result is not a guarantee against attack types ThreatScope does not detect.
 
 ## Security Configuration
 

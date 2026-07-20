@@ -68,6 +68,18 @@ def get_scan_status():
         return _status_locked()
 
 
+def record_detected_alert():
+    """Makes a new alert supersede any earlier clear assessment result."""
+    with _lock:
+        if _state["state"] != "running":
+            _state["state"] = "threats_found"
+            _state["alerts_detected"] = max(1, _state["alerts_detected"] + 1)
+            _state["message"] = (
+                "A new threat alert was detected after the latest assessment."
+            )
+        return _status_locked()
+
+
 def start_scan():
     global _scan_timer
 
@@ -127,8 +139,9 @@ def finish_scan():
         else:
             _state["state"] = "secure"
             _state["message"] = (
-                f"Network is secure. {packets_analyzed} packet"
-                f"{'s' if packets_analyzed != 1 else ''} inspected with no threats detected."
+                f"Assessment complete. {packets_analyzed} packet"
+                f"{'s' if packets_analyzed != 1 else ''} inspected; none matched "
+                "ThreatScope's enabled detection rules."
             )
 
 

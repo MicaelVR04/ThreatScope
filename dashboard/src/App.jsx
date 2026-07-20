@@ -6,6 +6,7 @@ import AlertHistory from './pages/AlertHistory'
 import Login from './pages/Login'
 import Register from './pages/Register'
 import Landing from './pages/Landing'
+import SensorSetupGuide from './pages/SensorSetupGuide'
 import { supabase } from './supabaseClient'
 
 // ── Scroll to top on every route change ─────────────────────────────────────
@@ -120,6 +121,7 @@ function AppShell() {
         <ScrollToTop />
         <Routes>
           <Route path="/" element={<Landing />} />
+          <Route path="/sensor-setup" element={<SensorSetupGuide />} />
           <Route path="/login" element={<PublicOnlyRoute session={session}><Login /></PublicOnlyRoute>} />
           <Route path="/register" element={<PublicOnlyRoute session={session}><Register /></PublicOnlyRoute>} />
           <Route

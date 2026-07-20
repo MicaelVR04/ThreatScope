@@ -6,6 +6,7 @@ import {
   Router,
   ShieldCheck,
 } from 'lucide-react'
+import { Link } from 'react-router-dom'
 import useReveal from '../../hooks/landing/useReveal'
 
 const SETUP_STEPS = [
@@ -102,15 +103,13 @@ export default function SensorSetup() {
               </p>
             </div>
           </div>
-          <a
-            href="https://github.com/MicaelVR04/ThreatScope#one-time-sensor-setup-macos"
-            target="_blank"
-            rel="noreferrer"
+          <Link
+            to="/sensor-setup"
             className="inline-flex shrink-0 items-center justify-center gap-2 rounded-md border border-signal/35 px-5 py-2.5 font-display text-sm font-semibold text-signal transition-colors duration-150 ease-swift hover:bg-signal-dim focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-signal focus-visible:ring-offset-2 focus-visible:ring-offset-base"
           >
             <Router size={16} />
             View setup guide
-          </a>
+          </Link>
         </div>
       </div>
     </section>

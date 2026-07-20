@@ -38,7 +38,7 @@ Cloud AI framing:
 "The AI layer can also be switched to a cloud provider with an API key. That makes the analysis feature work without relying on one teammate's local machine, while the detection rules still remain the source of truth."
 
 Scheduled scan framing:
-"The local sensor monitors packets continuously as a background service. The dashboard can pause or resume monitoring and schedule verified assessment windows every 5 or 10 minutes. ThreatScope only reports Network Secure when the sensor was online and actually inspected packets."
+"The local sensor monitors packets continuously as a background service. The dashboard can pause or resume monitoring and schedule verified assessment windows every 5 or 10 minutes. ThreatScope only reports No Known Threats Detected when the sensor was online, inspected packets, and none matched the four rules included in this version."
 
 Best setup:
 Use one machine as the demo machine if possible.
@@ -195,7 +195,7 @@ What to show on screen:
 1. Open the dashboard at http://localhost:5173
 2. Show Sensor online and Continuous Monitoring Active.
 3. Click Assess now and point out the verified packet window.
-4. Explain that Network Secure only appears after packets were inspected.
+4. Explain that No Known Threats Detected only appears after packets were inspected and is limited to the four enabled detection rules.
 5. Run: python demo_traffic.py port-scan
 6. Show the Port scan alert appearing live with the plain-English explanation.
 7. Show the summary cards and charts updating.

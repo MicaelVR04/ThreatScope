@@ -83,6 +83,28 @@ def test_assessment_reports_secure_only_after_packets(monkeypatch):
 
     assert status["state"] == "secure"
     assert status["packets_analyzed"] == 15
+    assert status["message"] == (
+        "Assessment complete. 15 packets inspected; none matched "
+        "ThreatScope's enabled detection rules."
+    )
+
+
+def test_new_alert_supersedes_clear_assessment(monkeypatch):
+    alert_count = 4
+    sensor_manager.record_heartbeat(heartbeat(packet_count=10))
+    monkeypatch.setattr(scan_manager, "_total_alerts", lambda: alert_count)
+
+    scan_manager.start_scan()
+    sensor_manager.record_heartbeat(heartbeat(packet_count=25))
+    scan_manager.finish_scan()
+    scan_manager.record_detected_alert()
+    status = scan_manager.get_scan_status()
+
+    assert status["state"] == "threats_found"
+    assert status["alerts_detected"] == 1
+    assert status["message"] == (
+        "A new threat alert was detected after the latest assessment."
+    )
 
 
 def test_heartbeat_endpoint_requires_engine_key(monkeypatch):

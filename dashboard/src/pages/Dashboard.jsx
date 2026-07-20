@@ -605,7 +605,7 @@ function scanHeadline(scanStatus) {
   if (scanStatus?.state === 'threats_found') return 'Threats detected'
   if (scanStatus?.state === 'no_data') return 'No Traffic Observed'
   if (scanStatus?.state === 'sensor_offline') return 'Sensor Offline'
-  if (scanStatus?.state === 'secure') return 'Network Secure'
+  if (scanStatus?.state === 'secure') return 'No Known Threats Detected'
   return 'Continuous Monitoring Active'
 }
 
