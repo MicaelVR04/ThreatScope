@@ -9,6 +9,7 @@ dist/
 build/
 venv/
 .venv/
+.venv
 env/
 
 # Environment variables - NEVER commit this
