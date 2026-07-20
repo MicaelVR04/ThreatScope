@@ -21,6 +21,12 @@ export default function Footer() {
             Capabilities
           </a>
           <a
+            href="#sensor-setup"
+            className="cursor-pointer rounded-sm font-mono text-xs text-ink-muted transition-colors duration-150 ease-swift hover:text-signal focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-signal focus-visible:ring-offset-2 focus-visible:ring-offset-base"
+          >
+            Sensor Setup
+          </a>
+          <a
             href="https://github.com/MicaelVR04/ThreatScope"
             target="_blank"
             rel="noreferrer"

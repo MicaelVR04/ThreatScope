@@ -175,7 +175,13 @@ npm install
 npm run dev
 ```
 
-One-time macOS sensor installation:
+### One-Time Sensor Setup (macOS)
+
+Only the person responsible for the monitored network installs the sensor.
+Regular dashboard users do not need it. Administrator access is requested once
+because macOS protects packet-capture access.
+
+From the configured ThreatScope project directory, run:
 
 ```bash
 sudo ./scripts/install_sensor_macos.sh
