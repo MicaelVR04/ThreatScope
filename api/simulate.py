@@ -8,9 +8,10 @@ import os
 import time
 import random
 from datetime import datetime, timezone
+from pathlib import Path
 from dotenv import load_dotenv
 
-load_dotenv()
+load_dotenv(Path(__file__).resolve().parents[1] / ".env")
 
 API_URL = "http://localhost:8000/alerts"
 ENGINE_API_KEY = os.getenv("ENGINE_API_KEY", "").strip()

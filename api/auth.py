@@ -11,6 +11,7 @@ import os
 import logging
 import hmac
 import jwt
+from pathlib import Path
 from typing import Optional
 from dotenv import load_dotenv
 from fastapi import HTTPException, Request, Security
@@ -22,7 +23,7 @@ logger = logging.getLogger(__name__)
 
 security = HTTPBearer(auto_error=False)
 
-load_dotenv()
+load_dotenv(Path(__file__).resolve().parents[1] / ".env")
 
 
 def _allow_insecure_local_dev() -> bool:

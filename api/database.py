@@ -12,11 +12,12 @@ import logging
 import os
 import sqlite3
 from collections import defaultdict
+from pathlib import Path
 from typing import Optional
 from dotenv import load_dotenv
 from supabase import Client, create_client
 
-load_dotenv()
+load_dotenv(Path(__file__).resolve().parents[1] / ".env")
 
 logger = logging.getLogger(__name__)
 

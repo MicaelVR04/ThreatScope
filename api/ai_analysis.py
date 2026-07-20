@@ -7,13 +7,14 @@ or cloud model to summarize recent alerts and suggest rule-tuning ideas.
 
 import json
 import os
+from pathlib import Path
 from typing import Any, Dict, List
 
 import requests
 from fastapi import HTTPException
 from dotenv import load_dotenv
 
-load_dotenv()
+load_dotenv(Path(__file__).resolve().parents[1] / ".env")
 
 DISCLAIMER = "AI analysis is advisory. Rule-based detections remain the source of truth."
 
