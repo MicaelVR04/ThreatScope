@@ -155,21 +155,33 @@ def analyze_alerts_with_openai(alerts: List[dict]) -> Dict[str, Any]:
             detail="Cloud AI is not configured. Set OPENAI_API_KEY or switch AI_PROVIDER back to ollama.",
         )
 
+    is_groq_qwen = (
+        "api.groq.com" in config["openai_base_url"]
+        and config["openai_model"] == "qwen/qwen3.6-27b"
+    )
+    messages = [
+        {
+            "role": "user",
+            "content": build_prompt(alerts),
+        }
+    ]
+    if not is_groq_qwen:
+        messages.insert(0, {
+            "role": "system",
+            "content": "You return strict JSON for a cybersecurity dashboard. No markdown.",
+        })
+
     payload = {
         "model": config["openai_model"],
-        "messages": [
-            {
-                "role": "system",
-                "content": "You return strict JSON for a cybersecurity dashboard. No markdown.",
-            },
-            {
-                "role": "user",
-                "content": build_prompt(alerts),
-            },
-        ],
+        "messages": messages,
         "response_format": {"type": "json_object"},
-        "temperature": 0.2,
+        "temperature": 0.7 if is_groq_qwen else 0.2,
     }
+    if is_groq_qwen:
+        payload.update({
+            "reasoning_effort": "none",
+            "reasoning_format": "hidden",
+        })
 
     response = None
     for attempt in range(2):

@@ -156,6 +156,39 @@ def test_analyze_alerts_with_mocked_cloud_provider(monkeypatch):
     assert "demo scan" in result["summary"]
 
 
+def test_groq_qwen_uses_non_reasoning_json_mode(monkeypatch):
+    monkeypatch.setenv("AI_PROVIDER", "openai")
+    monkeypatch.setenv("OPENAI_BASE_URL", "https://api.groq.com/openai/v1")
+    monkeypatch.setenv("OPENAI_API_KEY", "test-key")
+    monkeypatch.setenv("OPENAI_MODEL", "qwen/qwen3.6-27b")
+
+    def fake_post(url, headers, json, timeout):
+        assert json["messages"][0]["role"] == "user"
+        assert json["reasoning_effort"] == "none"
+        assert json["reasoning_format"] == "hidden"
+        assert json["response_format"] == {"type": "json_object"}
+        return FakeResponse({
+            "choices": [{
+                "message": {
+                    "content": (
+                        '{"summary":"Port scan activity observed.",'
+                        '"pattern":"Reconnaissance from one source.",'
+                        '"risk_level":"MEDIUM",'
+                        '"demo_note":"Controlled demo traffic.",'
+                        '"rule_tuning_suggestions":["Keep the current threshold."]}'
+                    )
+                }
+            }]
+        })
+
+    monkeypatch.setattr(requests, "post", fake_post)
+
+    result = analyze_alerts([make_alert()])
+
+    assert result["model"] == "qwen/qwen3.6-27b"
+    assert result["risk_level"] == "MEDIUM"
+
+
 def test_secure_assessment_does_not_send_historical_alerts_to_ai(monkeypatch):
     captured = {}
     main.app.dependency_overrides[main.verify_sensor_owner] = lambda: {
