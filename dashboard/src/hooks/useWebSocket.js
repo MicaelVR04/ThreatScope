@@ -1,8 +1,6 @@
 import { useState, useEffect } from 'react'
 import { supabase } from '../supabaseClient'
-
-const API_URL = import.meta.env.VITE_API_URL || 'http://localhost:8000'
-const WS_URL  = import.meta.env.VITE_WS_URL  || 'ws://localhost:8000/ws'
+import { API_URL, WS_URL } from '../services/config'
 
 export default function useWebSocket() {
   const [alerts, setAlerts] = useState([])

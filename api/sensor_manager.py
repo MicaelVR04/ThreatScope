@@ -10,11 +10,14 @@ import os
 import threading
 from datetime import datetime, timezone
 
+from database import get_runtime_state, set_runtime_state
 
 HEARTBEAT_TIMEOUT_SECONDS = int(os.getenv("SENSOR_HEARTBEAT_TIMEOUT_SECONDS", "20"))
+HEARTBEAT_COMMAND_SECONDS = int(os.getenv("SENSOR_HEARTBEAT_COMMAND_SECONDS", "5"))
 DEFAULT_MONITORING_ENABLED = (
     os.getenv("MONITORING_DEFAULT_ENABLED", "true").strip().lower() == "true"
 )
+RUNTIME_STATE_KEY = "sensor_config"
 
 _lock = threading.Lock()
 _state = {
@@ -77,13 +80,29 @@ def record_heartbeat(payload):
         })
         return {
             "monitoring_enabled": _state["desired_monitoring"],
-            "heartbeat_interval_seconds": 5,
+            "heartbeat_interval_seconds": HEARTBEAT_COMMAND_SECONDS,
         }
 
 
 def set_monitoring(enabled):
     with _lock:
         _state["desired_monitoring"] = enabled
+        status = _status_locked()
+    set_runtime_state(
+        RUNTIME_STATE_KEY,
+        {"desired_monitoring": bool(enabled)},
+    )
+    return status
+
+
+def restore_sensor_state():
+    """Restores the operator's monitoring preference after an API restart."""
+    persisted = get_runtime_state(RUNTIME_STATE_KEY)
+    if not persisted or not isinstance(persisted.get("desired_monitoring"), bool):
+        return get_sensor_status()
+
+    with _lock:
+        _state["desired_monitoring"] = persisted["desired_monitoring"]
         return _status_locked()
 
 

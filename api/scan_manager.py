@@ -5,12 +5,13 @@ import threading
 from datetime import datetime, timedelta, timezone
 from typing import Optional
 
-from database import get_summary
+from database import get_runtime_state, get_summary, set_runtime_state
 from sensor_manager import get_sensor_status
 
 SCAN_WINDOW_SECONDS = int(os.getenv("SCAN_WINDOW_SECONDS", "8"))
 DEFAULT_INTERVAL_MINUTES = int(os.getenv("SCAN_INTERVAL_MINUTES", "5"))
 ALLOWED_INTERVALS = {5, 10}
+RUNTIME_STATE_KEY = "scan_config"
 
 _lock = threading.Lock()
 _scan_timer: Optional[threading.Timer] = None
@@ -43,8 +44,18 @@ def _iso(value):
     return value.isoformat() if value else None
 
 
+def _parse_datetime(value):
+    if not value:
+        return None
+    try:
+        return datetime.fromisoformat(value.replace("Z", "+00:00"))
+    except (TypeError, ValueError):
+        return None
+
+
 def _total_alerts():
-    return get_summary()["total"]
+    owner_id = os.getenv("SENSOR_OWNER_USER_ID", "").strip() or None
+    return get_summary(user_id=owner_id)["total"]
 
 
 def _status_locked():
@@ -63,6 +74,23 @@ def _status_locked():
     }
 
 
+def _persistent_state_locked():
+    return {
+        "enabled": _state["enabled"],
+        "interval_minutes": _state["interval_minutes"],
+        "state": _state["state"],
+        "message": _state["message"],
+        "last_started_at": _iso(_state["last_started_at"]),
+        "last_finished_at": _iso(_state["last_finished_at"]),
+        "packets_analyzed": _state["packets_analyzed"],
+        "alerts_detected": _state["alerts_detected"],
+    }
+
+
+def _save_state(payload):
+    set_runtime_state(RUNTIME_STATE_KEY, payload)
+
+
 def get_scan_status():
     with _lock:
         return _status_locked()
@@ -77,7 +105,26 @@ def record_detected_alert():
             _state["message"] = (
                 "A new threat alert was detected after the latest assessment."
             )
-        return _status_locked()
+        status = _status_locked()
+        persisted = _persistent_state_locked()
+    _save_state(persisted)
+    return status
+
+
+def record_alert_history_cleared():
+    """Removes stale alert results after a user clears their history."""
+    with _lock:
+        if _state["state"] != "running":
+            _state["state"] = "idle"
+            _state["message"] = (
+                "Alert history cleared. Run an assessment to confirm current network status."
+            )
+            _state["alerts_detected"] = 0
+            _state["packets_analyzed"] = 0
+        status = _status_locked()
+        persisted = _persistent_state_locked()
+    _save_state(persisted)
+    return status
 
 
 def start_scan():
@@ -114,7 +161,10 @@ def start_scan():
         _scan_timer = threading.Timer(SCAN_WINDOW_SECONDS, finish_scan)
         _scan_timer.daemon = True
         _scan_timer.start()
-        return _status_locked()
+        status = _status_locked()
+        persisted = _persistent_state_locked()
+    _save_state(persisted)
+    return status
 
 
 def finish_scan():
@@ -143,6 +193,8 @@ def finish_scan():
                 f"{'s' if packets_analyzed != 1 else ''} inspected; none matched "
                 "ThreatScope's enabled detection rules."
             )
+        persisted = _persistent_state_locked()
+    _save_state(persisted)
 
 
 def _schedule_next_locked():
@@ -171,11 +223,24 @@ def _scheduled_tick():
             _state["message"] = str(exc)
     with _lock:
         _schedule_next_locked()
+        persisted = _persistent_state_locked()
+    _save_state(persisted)
 
 
 def set_schedule(enabled: bool, interval_minutes: int):
     if interval_minutes not in ALLOWED_INTERVALS:
         raise ValueError("interval_minutes must be 5 or 10")
+
+    if enabled:
+        sensor = get_sensor_status()
+        if not sensor["online"]:
+            raise SensorUnavailableError(
+                "The network sensor is offline. Install or start the ThreatScope sensor before scheduling assessments."
+            )
+        if not sensor["monitoring"]:
+            raise SensorUnavailableError(
+                "Continuous monitoring is paused. Start monitoring before scheduling assessments."
+            )
 
     with _lock:
         _state["enabled"] = enabled
@@ -186,12 +251,66 @@ def set_schedule(enabled: bool, interval_minutes: int):
             "Scheduled assessments are off."
         )
         _schedule_next_locked()
+        persisted = _persistent_state_locked()
+    _save_state(persisted)
 
     if enabled:
         return start_scan()
 
     with _lock:
         return _status_locked()
+
+
+def restore_scan_state():
+    """Restores the schedule and last completed assessment after restart."""
+    persisted = get_runtime_state(RUNTIME_STATE_KEY)
+    if not persisted:
+        return get_scan_status()
+
+    interval = persisted.get("interval_minutes", DEFAULT_INTERVAL_MINUTES)
+    if interval not in ALLOWED_INTERVALS:
+        interval = 5
+
+    restored_state = persisted.get("state", "idle")
+    restored_message = persisted.get("message", "Scheduled assessments are off.")
+    if restored_state == "running":
+        restored_state = "idle"
+        restored_message = (
+            "The previous assessment was interrupted when the API restarted. "
+            "Run another assessment to confirm network status."
+        )
+
+    with _lock:
+        _state.update({
+            "enabled": bool(persisted.get("enabled", False)),
+            "interval_minutes": interval,
+            "state": restored_state,
+            "message": restored_message,
+            "last_started_at": _parse_datetime(persisted.get("last_started_at")),
+            "last_finished_at": _parse_datetime(persisted.get("last_finished_at")),
+            "packets_analyzed": max(0, int(persisted.get("packets_analyzed", 0))),
+            "alerts_detected": max(0, int(persisted.get("alerts_detected", 0))),
+            "baseline_alert_count": 0,
+            "baseline_packet_count": 0,
+        })
+        _schedule_next_locked()
+        status = _status_locked()
+        corrected = _persistent_state_locked()
+    _save_state(corrected)
+    return status
+
+
+def shutdown_scan_manager():
+    """Stops local timers during a graceful API shutdown."""
+    global _scan_timer, _schedule_timer
+
+    with _lock:
+        if _scan_timer:
+            _scan_timer.cancel()
+        if _schedule_timer:
+            _schedule_timer.cancel()
+        _scan_timer = None
+        _schedule_timer = None
 
 
 def reset_scan_state():

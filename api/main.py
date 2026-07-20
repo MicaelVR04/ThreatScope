@@ -13,6 +13,7 @@ Endpoints:
 """
 
 import logging
+import os
 from fastapi import FastAPI, WebSocket, WebSocketDisconnect, Query, HTTPException, Request, Depends
 from fastapi.middleware.cors import CORSMiddleware
 from contextlib import asynccontextmanager
@@ -23,16 +24,19 @@ from slowapi.middleware import SlowAPIMiddleware
 from models import Alert, AlertSummary, MonitoringRequest, ScanScheduleRequest, SensorHeartbeat
 from database import init_db, insert_alert, get_alerts, get_summary, get_stats, clear_alerts
 from websocket import manager
-from auth import decode_dashboard_token, verify_engine_key, verify_token
+from auth import decode_dashboard_token, verify_engine_key, verify_sensor_owner, verify_token
 from ai_analysis import analyze_alerts, get_ai_config
 from scan_manager import (
     SensorUnavailableError,
     get_scan_status,
+    record_alert_history_cleared,
     record_detected_alert,
+    restore_scan_state,
     set_schedule,
+    shutdown_scan_manager,
     start_scan,
 )
-from sensor_manager import record_heartbeat, set_monitoring
+from sensor_manager import record_heartbeat, restore_sensor_state, set_monitoring
 
 
 # ── Logging ────────────────────────────────────────────────────────────────
@@ -47,6 +51,28 @@ logging.basicConfig(
 logger = logging.getLogger(__name__)
 
 
+def _dashboard_origins():
+    configured = os.getenv(
+        "DASHBOARD_ORIGINS",
+        "http://localhost:5173,http://127.0.0.1:5173",
+    )
+    origins = [
+        origin.strip().rstrip("/")
+        for origin in configured.split(",")
+        if origin.strip()
+    ]
+    render_dashboard_host = (
+        os.getenv("DASHBOARD_HOST", "")
+        .strip()
+        .removeprefix("https://")
+        .removeprefix("http://")
+        .rstrip("/")
+    )
+    if render_dashboard_host:
+        origins.append(f"https://{render_dashboard_host}")
+    return list(dict.fromkeys(origins))
+
+
 # ── Rate Limiter ───────────────────────────────────────────────────────────
 limiter = Limiter(key_func=get_remote_address)
 
@@ -56,7 +82,12 @@ limiter = Limiter(key_func=get_remote_address)
 async def lifespan(app: FastAPI):
     """Runs once when the API starts — initializes the database."""
     init_db()
-    yield
+    restore_sensor_state()
+    restore_scan_state()
+    try:
+        yield
+    finally:
+        shutdown_scan_manager()
 
 
 app = FastAPI(
@@ -72,7 +103,7 @@ app.add_middleware(SlowAPIMiddleware)
 # ── CORS ───────────────────────────────────────────────────────────────────
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=["http://localhost:5173", "http://127.0.0.1:5173"],
+    allow_origins=_dashboard_origins(),
     allow_methods=["*"],
     allow_headers=["*"],
 )
@@ -90,6 +121,13 @@ async def create_alert(request: Request, alert: Alert, _engine=Depends(verify_en
         raise HTTPException(status_code=400, detail="severity must be LOW, MEDIUM, or HIGH")
 
     alert_dict = alert.model_dump()
+    owner_id = os.getenv("SENSOR_OWNER_USER_ID", "").strip()
+    if not owner_id and os.getenv("ALLOW_INSECURE_LOCAL_DEV", "false").lower() != "true":
+        raise HTTPException(
+            status_code=503,
+            detail="SENSOR_OWNER_USER_ID is required for secure alert ingestion",
+        )
+    alert_dict["user_id"] = owner_id or None
 
     if not alert_dict.get("timestamp"):
         alert_dict["timestamp"] = datetime.now(timezone.utc).isoformat()
@@ -117,7 +155,12 @@ def read_alerts(
     if severity and severity not in ["LOW", "MEDIUM", "HIGH"]:
         raise HTTPException(status_code=400, detail="severity must be LOW, MEDIUM, or HIGH")
 
-    return get_alerts(severity=severity, limit=limit, offset=offset)
+    return get_alerts(
+        severity=severity,
+        limit=limit,
+        offset=offset,
+        user_id=user.get("sub"),
+    )
 
 
 @app.get("/alerts/summary", response_model=AlertSummary)
@@ -126,7 +169,7 @@ def read_summary(user=Depends(verify_token)):
     Returns alert counts grouped by severity.
     Used for the dashboard summary cards.
     """
-    return get_summary()
+    return get_summary(user_id=user.get("sub"))
 
 
 @app.get("/alerts/stats")
@@ -142,7 +185,7 @@ def read_stats(
     if group_by and group_by != "type":
         raise HTTPException(status_code=400, detail='group_by must be "type"')
 
-    return get_stats(group_by=group_by)
+    return get_stats(group_by=group_by, user_id=user.get("sub"))
 
 
 @app.delete("/alerts")
@@ -155,14 +198,49 @@ def delete_alerts(_engine=Depends(verify_engine_key)):
     return {"message": "All alerts cleared"}
 
 
+@app.delete("/alerts/mine")
+def delete_my_alerts(user=Depends(verify_token)):
+    """Clears only the signed-in user's alert history."""
+    user_id = user.get("sub")
+    clear_alerts(user_id=user_id)
+    owner_id = os.getenv("SENSOR_OWNER_USER_ID", "").strip()
+    if user_id == owner_id:
+        record_alert_history_cleared()
+    return {"message": "Your alert history was cleared"}
+
+
 @app.post("/ai/analyze-alerts")
-def analyze_recent_alerts(user=Depends(verify_token)):
+def analyze_recent_alerts(user=Depends(verify_sensor_owner)):
     """
     Runs advisory diagnostics with the configured local or cloud AI provider.
     AI output is advisory; rule-based detections remain the source of truth.
     """
     config = get_ai_config()
-    alerts = get_alerts(limit=config["alert_limit"], offset=0)
+    alerts = get_alerts(
+        limit=config["alert_limit"],
+        offset=0,
+        user_id=user.get("sub"),
+    )
+    scan_status = get_scan_status()
+    assessment_started_at = scan_status.get("last_started_at")
+    if scan_status.get("state") == "secure":
+        alerts = []
+    elif assessment_started_at:
+        try:
+            started_at = datetime.fromisoformat(
+                assessment_started_at.replace("Z", "+00:00")
+            )
+            alerts = [
+                alert
+                for alert in alerts
+                if datetime.fromisoformat(
+                    str(alert.get("timestamp", "")).replace("Z", "+00:00")
+                ) >= started_at
+            ]
+        except (TypeError, ValueError):
+            logger.warning(
+                "Could not apply the latest assessment window to AI analysis."
+            )
     return analyze_alerts(alerts)
 
 
@@ -173,20 +251,20 @@ def sensor_heartbeat(heartbeat: SensorHeartbeat, _engine=Depends(verify_engine_k
 
 
 @app.post("/sensor/monitoring")
-def update_sensor_monitoring(request: MonitoringRequest, user=Depends(verify_token)):
+def update_sensor_monitoring(request: MonitoringRequest, user=Depends(verify_sensor_owner)):
     """Starts or pauses packet capture on the connected sensor."""
     set_monitoring(request.enabled)
     return get_scan_status()
 
 
 @app.get("/scan/status")
-def scan_status(user=Depends(verify_token)):
+def scan_status(user=Depends(verify_sensor_owner)):
     """Returns current scan and scheduled scan state."""
     return get_scan_status()
 
 
 @app.post("/scan/run")
-def run_scan_now(user=Depends(verify_token)):
+def run_scan_now(user=Depends(verify_sensor_owner)):
     """
     Starts a verified assessment window on a connected monitoring sensor.
     """
@@ -197,7 +275,7 @@ def run_scan_now(user=Depends(verify_token)):
 
 
 @app.post("/scan/schedule")
-def update_scan_schedule(request: ScanScheduleRequest, user=Depends(verify_token)):
+def update_scan_schedule(request: ScanScheduleRequest, user=Depends(verify_sensor_owner)):
     """Turns scheduled scan windows on or off at a 5 or 10 minute interval."""
     try:
         return set_schedule(request.enabled, request.interval_minutes)
@@ -220,7 +298,10 @@ async def websocket_endpoint(websocket: WebSocket):
     """
     token = websocket.query_params.get("access_token", "")
     try:
-        decode_dashboard_token(token)
+        user = decode_dashboard_token(token)
+        owner_id = os.getenv("SENSOR_OWNER_USER_ID", "").strip()
+        if owner_id and user.get("sub") != owner_id:
+            raise HTTPException(status_code=403, detail="Sensor owner access required")
     except HTTPException:
         await websocket.close(code=1008)
         return

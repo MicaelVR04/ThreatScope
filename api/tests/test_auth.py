@@ -108,3 +108,49 @@ def test_demo_reset_rejects_missing_engine_key(monkeypatch):
     response = client.delete("/alerts")
 
     assert response.status_code == 401
+
+
+def test_sensor_owner_rejects_another_authenticated_user(monkeypatch):
+    monkeypatch.setenv("SENSOR_OWNER_USER_ID", "owner-user")
+
+    with pytest.raises(HTTPException) as exc:
+        auth.verify_sensor_owner({"sub": "different-user"})
+
+    assert exc.value.status_code == 403
+
+
+def test_secure_ingestion_requires_configured_owner(monkeypatch):
+    monkeypatch.setenv("ENGINE_API_KEY", "expected-key")
+    monkeypatch.delenv("SENSOR_OWNER_USER_ID", raising=False)
+    monkeypatch.setenv("ALLOW_INSECURE_LOCAL_DEV", "false")
+    payload = {
+        "type": "PORT_SCAN",
+        "src_ip": "192.168.1.10",
+        "dst_ip": "192.168.1.1",
+        "severity": "MEDIUM",
+        "message": "Test port scan",
+        "timestamp": "2026-07-19T00:00:00+00:00",
+    }
+
+    response = client.post(
+        "/alerts",
+        json=payload,
+        headers={"X-Engine-Key": "expected-key"},
+    )
+
+    assert response.status_code == 503
+    assert response.json()["detail"] == (
+        "SENSOR_OWNER_USER_ID is required for secure alert ingestion"
+    )
+
+
+def test_render_dashboard_origin_is_added(monkeypatch):
+    monkeypatch.setenv("DASHBOARD_ORIGINS", "http://localhost:5173")
+    monkeypatch.setenv("DASHBOARD_HOST", "threatscope-dashboard.onrender.com")
+
+    from main import _dashboard_origins
+
+    assert _dashboard_origins() == [
+        "http://localhost:5173",
+        "https://threatscope-dashboard.onrender.com",
+    ]

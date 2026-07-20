@@ -56,12 +56,12 @@ export default function Navbar({ connected, userEmail, signingOut, onLogout }) {
             <>
               <span className="h-[7px] w-[7px] rounded-full bg-severity-low animate-[ts-pulse_1.4s_ease-in-out_infinite]" />
               <Wifi size={13} className="text-severity-low" />
-              <span className="font-mono text-[11px] font-bold tracking-[0.8px] text-severity-low">LIVE</span>
+              <span className="font-mono text-[11px] font-bold tracking-[0.8px] text-severity-low">FEED LIVE</span>
             </>
           ) : (
             <>
               <WifiOff size={13} className="text-severity-high" />
-              <span className="font-mono text-[11px] font-bold tracking-[0.8px] text-severity-high">DISCONNECTED</span>
+              <span className="font-mono text-[11px] font-bold tracking-[0.8px] text-severity-high">FEED OFFLINE</span>
             </>
           )}
         </div>

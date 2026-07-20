@@ -54,6 +54,7 @@ class NetworkSensor:
         self._capture_stop = threading.Event()
         self._shutdown = threading.Event()
         self._capture_retry_at = 0
+        self._heartbeat_interval_seconds = HEARTBEAT_INTERVAL_SECONDS
         self._lock = threading.Lock()
         self._session = requests.Session()
 
@@ -140,8 +141,14 @@ class NetworkSensor:
             response.raise_for_status()
             command = response.json()
             self.desired_monitoring = bool(command["monitoring_enabled"])
+            requested_interval = int(
+                command.get("heartbeat_interval_seconds", HEARTBEAT_INTERVAL_SECONDS)
+            )
+            self._heartbeat_interval_seconds = max(2, min(requested_interval, 300))
         except requests.RequestException as exc:
             log.warning("Heartbeat failed; monitoring continues with the last command: %s", exc)
+        except (TypeError, ValueError):
+            log.warning("API returned an invalid heartbeat command; using the previous interval")
 
     def run(self):
         log.info("ThreatScope sensor service starting as %s", SENSOR_ID)
@@ -154,7 +161,7 @@ class NetworkSensor:
                 self.stop_monitoring()
 
             self.send_heartbeat()
-            self._shutdown.wait(HEARTBEAT_INTERVAL_SECONDS)
+            self._shutdown.wait(self._heartbeat_interval_seconds)
 
         self.stop_monitoring()
         log.info("ThreatScope sensor service stopped")

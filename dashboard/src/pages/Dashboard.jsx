@@ -7,6 +7,7 @@ import NetworkPulse from '../components/NetworkPulse'
 import useWebSocket from '../hooks/useWebSocket'
 import {
   analyzeRecentAlerts,
+  getApiHealth,
   getAlertStats,
   getAlertsSummary,
   getAttackTypeStats,
@@ -130,6 +131,8 @@ export default function Dashboard({ onConnectionChange }) {
   const [scanStatus, setScanStatus] = useState(null)
   const [scanLoading, setScanLoading] = useState(false)
   const [scanError, setScanError] = useState(null)
+  const [apiOnline, setApiOnline] = useState(null)
+  const [apiError, setApiError] = useState(null)
   const [revealed, setRevealed] = useState(false)
   const frozenRef = useRef([])
   const leftColRef = useRef(null)
@@ -196,8 +199,12 @@ export default function Dashboard({ onConnectionChange }) {
   const refreshScanStatus = useCallback(async () => {
     try {
       setScanStatus(await getScanStatus())
+      setApiOnline(true)
+      setApiError(null)
     } catch (error) {
       console.error(error)
+      setApiOnline(false)
+      setApiError(error.message || 'ThreatScope API is unavailable.')
     }
   }, [])
 
@@ -206,6 +213,22 @@ export default function Dashboard({ onConnectionChange }) {
     const id = setInterval(refreshScanStatus, 5000)
     return () => clearInterval(id)
   }, [refreshScanStatus])
+
+  useEffect(() => {
+    const refreshApiHealth = async () => {
+      try {
+        await getApiHealth()
+        setApiOnline(true)
+        setApiError(null)
+      } catch (error) {
+        setApiOnline(false)
+        setApiError(error.message || 'ThreatScope API is unavailable.')
+      }
+    }
+    refreshApiHealth()
+    const id = setInterval(refreshApiHealth, 30000)
+    return () => clearInterval(id)
+  }, [])
 
   useEffect(() => {
     if (wsAlerts.length > 0) {
@@ -357,6 +380,11 @@ export default function Dashboard({ onConnectionChange }) {
               <AlertTriangle size={15} /> {scanError}
             </p>
           )}
+          {apiError && (
+            <p className="mb-4 flex max-w-[70ch] items-center gap-2 text-sm text-severity-high">
+              <AlertTriangle size={15} /> {apiError}
+            </p>
+          )}
 
           {chartData.length > 0 && (
             <div
@@ -383,6 +411,11 @@ export default function Dashboard({ onConnectionChange }) {
           </div>
 
           <div className="mb-5 flex flex-wrap gap-x-6 gap-y-2 font-mono text-[11px] text-ink-faint">
+            <span>
+              Cloud API: <b className={apiOnline ? 'text-severity-low' : 'text-severity-high'}>
+                {apiOnline === null ? 'checking' : apiOnline ? 'online' : 'offline'}
+              </b>
+            </span>
             <span>
               Sensor: <b className={scanStatus?.sensor?.online ? 'text-severity-low' : 'text-severity-high'}>
                 {scanStatus?.sensor?.online ? 'online' : 'offline'}
@@ -417,15 +450,15 @@ export default function Dashboard({ onConnectionChange }) {
               variant="secondary"
               size="sm"
               onClick={handleRunScan}
-              disabled={scanLoading || scanStatus?.state === 'running' || !scanStatus?.sensor?.online || !scanStatus?.sensor?.monitoring}
+              disabled={scanLoading || apiOnline === false || scanStatus?.state === 'running' || !scanStatus?.sensor?.online || !scanStatus?.sensor?.monitoring}
             >
               {(scanLoading || scanStatus?.state === 'running') && <Loader2 size={14} className="animate-spin" />}
               {scanStatus?.state === 'running' ? 'Assessment running...' : 'Assess now'}
             </Button>
-            <Button variant="secondary" size="sm" onClick={() => handleSchedule(true, 5)} disabled={scanLoading || !scanStatus?.sensor?.monitoring}>
+            <Button variant="secondary" size="sm" onClick={() => handleSchedule(true, 5)} disabled={scanLoading || apiOnline === false || !scanStatus?.sensor?.monitoring}>
               Every 5 min
             </Button>
-            <Button variant="secondary" size="sm" onClick={() => handleSchedule(true, 10)} disabled={scanLoading || !scanStatus?.sensor?.monitoring}>
+            <Button variant="secondary" size="sm" onClick={() => handleSchedule(true, 10)} disabled={scanLoading || apiOnline === false || !scanStatus?.sensor?.monitoring}>
               Every 10 min
             </Button>
             {scanStatus?.enabled && (
@@ -486,7 +519,7 @@ export default function Dashboard({ onConnectionChange }) {
                 <h2 className={PANEL_H2}>AI Analysis</h2>
                 <p className="text-[11px] leading-[normal] text-ink-faint">Advisory diagnostics from the configured AI provider, rendered as a live readout.</p>
               </div>
-              <Button variant="secondary" size="sm" onClick={handleAnalyzeAlerts} disabled={aiLoading}>
+              <Button variant="secondary" size="sm" onClick={handleAnalyzeAlerts} disabled={aiLoading || apiOnline === false}>
                 {aiLoading ? <Loader2 size={14} className="animate-spin" /> : <Activity size={14} />}
                 {aiLoading ? 'Analyzing...' : 'Analyze recent alerts'}
               </Button>
@@ -569,9 +602,9 @@ export default function Dashboard({ onConnectionChange }) {
           >
             <div className="flex items-center gap-2 border-b border-white/[0.08] px-4 py-[11px] font-mono text-[11px] text-ink-faint">
               <span>live_feed.stream</span>
-              <span className="ml-auto flex items-center gap-1.5 text-[10px] text-severity-low">
-                <span className="h-1.5 w-1.5 rounded-full bg-severity-low animate-live-blink" />
-                connected
+              <span className={`ml-auto flex items-center gap-1.5 text-[10px] ${connected ? 'text-severity-low' : 'text-severity-high'}`}>
+                <span className={`h-1.5 w-1.5 rounded-full ${connected ? 'bg-severity-low animate-live-blink' : 'bg-severity-high'}`} />
+                {connected ? 'feed connected' : 'feed offline'}
               </span>
               <Button variant="ghost" size="sm" className="group ml-1" onClick={() => setPaused(p => !p)}>
                 {paused

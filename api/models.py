@@ -23,6 +23,7 @@ class Alert(BaseModel):
     severity:  str
     message:   str
     timestamp: str
+    user_id:   Optional[str] = None
 
     @field_validator("severity")
     @classmethod

@@ -107,3 +107,16 @@ def verify_engine_key(request: Request):
     provided_key = request.headers.get("X-Engine-Key", "")
     if not hmac.compare_digest(provided_key, expected_key):
         raise HTTPException(status_code=401, detail="Invalid engine key")
+
+
+def verify_sensor_owner(user=Security(verify_token)):
+    """Restricts sensor controls and diagnostics to the configured demo owner."""
+    owner_id = os.getenv("SENSOR_OWNER_USER_ID", "").strip()
+    if _allow_insecure_local_dev() and not user.get("sub"):
+        return user
+    if owner_id and user.get("sub") != owner_id:
+        raise HTTPException(
+            status_code=403,
+            detail="This account is not authorized to control the configured network sensor.",
+        )
+    return user

@@ -1,8 +1,8 @@
 import { useState, useEffect, useMemo } from 'react'
 import Button from '../components/theme/Button'
 import AlertTable from '../components/AlertTable'
-import { getAlerts } from '../services/api'
-import { RefreshCw, Download } from 'lucide-react'
+import { clearMyAlerts, getAlerts } from '../services/api'
+import { RefreshCw, Download, Trash2 } from 'lucide-react'
 
 // Same fine film-grain noise as Landing.jsx/AuthLayout.jsx/Dashboard.jsx,
 // generated once at module load — not rebuilt, just reused so every page
@@ -23,6 +23,7 @@ export default function AlertHistory() {
   const [search,    setSearch]   = useState('')
   const [dateFrom,  setDateFrom] = useState('')
   const [dateTo,    setDateTo]   = useState('')
+  const [clearing,  setClearing] = useState(false)
 
   function load() {
     setLoading(true)
@@ -58,6 +59,23 @@ export default function AlertHistory() {
     const a    = document.createElement('a')
     a.href = url; a.download = 'threatscope-alerts.csv'; a.click()
     URL.revokeObjectURL(url)
+  }
+
+  async function clearHistory() {
+    if (!window.confirm('Clear your entire alert history? This cannot be undone.')) return
+    setClearing(true)
+    setError(null)
+    try {
+      await clearMyAlerts()
+      setAlerts([])
+      setSearch('')
+      setDateFrom('')
+      setDateTo('')
+    } catch (err) {
+      setError(err.message)
+    } finally {
+      setClearing(false)
+    }
   }
 
   return (
@@ -109,6 +127,9 @@ export default function AlertHistory() {
           </Button>
           <Button variant="secondary" size="sm" className="group" onClick={exportCSV} title="Export CSV" disabled={!filtered.length}>
             <Download size={14} className="transition-transform duration-200 ease-swift group-hover:translate-y-0.5" /> Export CSV
+          </Button>
+          <Button variant="danger" size="sm" onClick={clearHistory} disabled={!alerts.length || clearing}>
+            <Trash2 size={14} /> {clearing ? 'Clearing...' : 'Clear alert history'}
           </Button>
         </div>
       </div>

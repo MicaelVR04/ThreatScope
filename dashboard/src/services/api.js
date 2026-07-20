@@ -1,6 +1,5 @@
 import { supabase } from '../supabaseClient'
-
-const API_URL = import.meta.env.VITE_API_URL || 'http://localhost:8000'
+import { API_URL } from './config'
 
 async function getHeaders() {
   const { data: { session } } = await supabase.auth.getSession()
@@ -100,6 +99,14 @@ export async function getAttackTypeStats() {
 
 export async function analyzeRecentAlerts() {
   return apiFetch('/ai/analyze-alerts', { method: 'POST' })
+}
+
+export async function clearMyAlerts() {
+  return apiFetch('/alerts/mine', { method: 'DELETE' })
+}
+
+export async function getApiHealth() {
+  return apiFetch('/health')
 }
 
 export async function getScanStatus() {

@@ -96,15 +96,18 @@ export default function SensorSetupGuide() {
             <h2 className="font-display text-2xl font-semibold">Install once</h2>
           </div>
           <p className="mt-4 max-w-3xl leading-relaxed text-ink-muted">
-            After the project and its environment settings are configured, open
-            Terminal in the ThreatScope project directory and run:
+            Download the project, create its <code className="font-mono text-signal">.env</code> file,
+            and add the dashboard&apos;s API URL and sensor key. Then open Terminal
+            in the ThreatScope project directory and run:
           </p>
-          <CommandBlock command="sudo ./scripts/install_sensor_macos.sh" />
+          <CommandBlock command="./scripts/setup_sensor_macos.sh" />
           <div className="mt-6 flex items-start gap-3 border-l-2 border-signal/50 pl-4">
             <CheckCircle2 size={18} className="mt-0.5 shrink-0 text-signal" />
             <p className="text-sm leading-relaxed text-ink-muted">
               macOS requests an administrator password because packet capture is
-              protected system access. After installation, close Terminal and
+              protected system access. The setup command creates the required
+              Python environment, installs dependencies, and registers the service.
+              After installation, close Terminal and
               confirm that the dashboard shows <strong className="text-ink">Sensor: online</strong>.
             </p>
           </div>

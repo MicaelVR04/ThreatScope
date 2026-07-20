@@ -6,7 +6,10 @@ or cloud model to summarize recent alerts and suggest rule-tuning ideas.
 """
 
 import json
+import logging
 import os
+import time
+from datetime import datetime, timezone
 from pathlib import Path
 from typing import Any, Dict, List
 
@@ -17,6 +20,7 @@ from dotenv import load_dotenv
 load_dotenv(Path(__file__).resolve().parents[1] / ".env")
 
 DISCLAIMER = "AI analysis is advisory. Rule-based detections remain the source of truth."
+logger = logging.getLogger(__name__)
 
 
 def get_ai_config() -> Dict[str, Any]:
@@ -50,11 +54,15 @@ def compact_alerts(alerts: List[dict]) -> List[dict]:
     ]
 
 
-def build_prompt(alerts: List[dict]) -> str:
+def build_prompt(alerts: List[dict], current_time: datetime = None) -> str:
+    now = current_time or datetime.now(timezone.utc)
     return (
         "You are helping developers evaluate a rule-based network intrusion "
         "detection demo called ThreatScope. The rule engine already generated "
-        "these alerts, so do not claim you detected attacks yourself.\n\n"
+        "these alerts, so do not claim you detected attacks yourself.\n"
+        f"The current API time is {now.isoformat()}. Use it when interpreting "
+        "alert timestamps. Do not call an alert timestamp future-dated unless "
+        "it is later than this value.\n\n"
         "Analyze the recent alerts and respond only as JSON with these keys:\n"
         "- summary: plain-English summary of what happened\n"
         "- pattern: likely pattern or sequence across the alerts\n"
@@ -163,22 +171,40 @@ def analyze_alerts_with_openai(alerts: List[dict]) -> Dict[str, Any]:
         "temperature": 0.2,
     }
 
-    try:
-        response = requests.post(
-            f"{config['openai_base_url']}/chat/completions",
-            headers={
-                "Authorization": f"Bearer {config['openai_api_key']}",
-                "Content-Type": "application/json",
-            },
-            json=payload,
-            timeout=config["timeout"],
-        )
-        response.raise_for_status()
-    except requests.exceptions.RequestException as exc:
-        raise HTTPException(
-            status_code=503,
-            detail="Cloud AI is not available. Check OPENAI_API_KEY, OPENAI_MODEL, and network access.",
-        ) from exc
+    response = None
+    for attempt in range(2):
+        try:
+            response = requests.post(
+                f"{config['openai_base_url']}/chat/completions",
+                headers={
+                    "Authorization": f"Bearer {config['openai_api_key']}",
+                    "Content-Type": "application/json",
+                },
+                json=payload,
+                timeout=config["timeout"],
+            )
+            response.raise_for_status()
+            break
+        except requests.exceptions.RequestException as exc:
+            status = getattr(getattr(exc, "response", None), "status_code", None)
+            retryable = status is None or status == 429 or status >= 500
+            logger.warning(
+                "Cloud AI request failed (status=%s, attempt=%s).",
+                status or "network",
+                attempt + 1,
+            )
+            if attempt == 0 and retryable:
+                time.sleep(0.5)
+                continue
+            if status in {401, 403}:
+                detail = "Cloud AI rejected the configured API key."
+            elif status == 404:
+                detail = "The configured cloud AI model is not available."
+            elif status == 429:
+                detail = "Cloud AI is temporarily rate limited. Try again shortly."
+            else:
+                detail = "Cloud AI is temporarily unavailable. Try again shortly."
+            raise HTTPException(status_code=503, detail=detail) from exc
 
     data = response.json()
     content = data.get("choices", [{}])[0].get("message", {}).get("content", "{}")

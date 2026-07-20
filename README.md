@@ -82,6 +82,7 @@ Fill in the Supabase values in `.env`:
 SUPABASE_URL=https://your-project.supabase.co
 SUPABASE_SERVICE_ROLE_KEY=your-service-role-key
 SUPABASE_ALERTS_TABLE=alerts
+SUPABASE_RUNTIME_STATE_TABLE=runtime_state
 
 VITE_SUPABASE_URL=https://your-project.supabase.co
 VITE_SUPABASE_ANON_KEY=your-anon-or-publishable-key
@@ -130,9 +131,16 @@ SCAN_INTERVAL_MINUTES=5
 supabase/alerts_schema.sql
 ```
 
-This creates the `alerts` table, indexes, read policy, and adds the table to the Supabase Realtime publication.
+4. Run the private runtime-state migration:
 
-The dashboard needs read access through the anon or publishable key. The API uses the service-role key to insert alerts.
+```text
+supabase/runtime_state_schema.sql
+```
+
+The alerts policy permits reads only for signed-in users. Anonymous visitors
+cannot read alert rows. The private runtime table has no browser policy; only
+the backend service role uses it to restore monitoring and assessment state
+after an API restart.
 
 ## Running Locally
 
@@ -184,12 +192,13 @@ because macOS protects packet-capture access.
 From the configured ThreatScope project directory, run:
 
 ```bash
-sudo ./scripts/install_sensor_macos.sh
+./scripts/setup_sensor_macos.sh
 ```
 
-The installer registers a root-owned `launchd` service. Administrator access is
-required once because packet capture is privileged; afterward the sensor starts
-at boot, reconnects automatically, and is controlled from the dashboard.
+The guided command creates the Python environment, installs the sensor
+dependencies, and then requests administrator access to register the root-owned
+`launchd` service. Afterward the sensor starts at boot, reconnects
+automatically, and is controlled from the dashboard.
 
 Useful service commands:
 
@@ -214,6 +223,25 @@ temporarily becomes unavailable, the sensor keeps its last monitoring setting
 and reconnects automatically.
 
 Set `NETWORK_INTERFACE` in `.env` if the active interface is not `en0`.
+
+## Free Holberton Staging Deployment
+
+The repository includes `render.yaml` for a no-cost staging deployment:
+
+- Render static site for the React dashboard
+- Render free Python web service for FastAPI
+- Existing Supabase project for authentication, alerts, realtime, and runtime state
+- Existing Groq key for cloud AI analysis
+
+The generated Render hostnames are connected automatically. Follow
+`docs/free-staging-deployment.md` for the exact secret-entry, Supabase, sensor,
+and demo verification steps.
+
+This is a presentation environment, not a commercial production tier. Render
+free web services sleep after inactivity and can take about a minute to wake.
+Pre-warm the API before a meeting. A public release also needs per-sensor
+enrollment credentials, tenant isolation, signed installers, monitoring, and
+paid always-on infrastructure.
 
 ## Demo Traffic
 
@@ -277,9 +305,12 @@ ollama run qwen2.5:7b
 
 When the API and dashboard are running, log in to the dashboard and use the **AI Analysis** panel to analyze recent alerts. If Ollama is not running or the configured model is missing, the dashboard will show a friendly setup error.
 
-For a clean presentation, clear older test alerts or set `OLLAMA_ALERT_LIMIT=4` so the AI only summarizes the latest four demo alerts. Historical simulated rows can make the AI describe older sources or severities that are not part of the current demo run.
+AI Analysis follows the latest assessment window, so a secure assessment does
+not summarize unrelated historical alerts. Signed-in users can remove their
+own stored test data from **Alert History > Clear alert history** without
+deleting another user's rows.
 
-To use a cloud AI provider instead of local Ollama, set:
+The shared demo uses Groq cloud AI:
 
 ```bash
 AI_PROVIDER=openai
@@ -308,9 +339,15 @@ For a shared demo or deployment, keep `ALLOW_INSECURE_LOCAL_DEV=false` and confi
 
 ```bash
 ENGINE_API_KEY=a_long_random_value
+SENSOR_OWNER_USER_ID=the_demo_users_supabase_uuid
 ```
 
 Dashboard API requests require a valid Supabase access token. For legacy HS256 Supabase projects, also set `SUPABASE_JWT_SECRET`; newer asymmetric-key projects are verified against the public JWKS endpoint using the existing `SUPABASE_URL`. The packet engine and `api/simulate.py` submit alerts with `X-Engine-Key`; this key must never be exposed to the browser. The demo reset endpoint uses the same internal key.
+
+The API assigns sensor alerts to `SENSOR_OWNER_USER_ID`. Supabase RLS limits
+browser reads to that UUID, and the API limits AI and sensor controls to the
+same owner. This supports one securely scoped staging sensor; public multi-user
+deployment will require per-sensor enrollment credentials.
 
 ## Tests
 

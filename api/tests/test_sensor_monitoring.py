@@ -9,6 +9,7 @@ sys.path.insert(0, os.path.abspath(os.path.join(os.path.dirname(__file__), "..")
 
 import scan_manager
 import sensor_manager
+from database import clear_runtime_state, init_db
 from main import app
 from models import SensorHeartbeat
 
@@ -18,11 +19,14 @@ client = TestClient(app)
 
 @pytest.fixture(autouse=True)
 def reset_state():
+    init_db()
+    clear_runtime_state()
     sensor_manager.reset_sensor_state()
     scan_manager.reset_scan_state()
     yield
     scan_manager.reset_scan_state()
     sensor_manager.reset_sensor_state()
+    clear_runtime_state()
 
 
 def heartbeat(packet_count=0, monitoring=True):
@@ -121,3 +125,43 @@ def test_heartbeat_endpoint_requires_engine_key(monkeypatch):
 
     assert denied.status_code == 401
     assert accepted.status_code == 200
+
+
+def test_monitoring_preference_survives_api_restart():
+    sensor_manager.set_monitoring(False)
+    sensor_manager.reset_sensor_state()
+
+    status = sensor_manager.restore_sensor_state()
+
+    assert status["desired_monitoring"] is False
+
+
+def test_scan_result_and_schedule_survive_api_restart(monkeypatch):
+    alert_count = 4
+    sensor_manager.record_heartbeat(heartbeat(packet_count=10))
+    monkeypatch.setattr(scan_manager, "_total_alerts", lambda: alert_count)
+
+    scan_manager.set_schedule(True, 5)
+    sensor_manager.record_heartbeat(heartbeat(packet_count=25))
+    scan_manager.finish_scan()
+    scan_manager.reset_scan_state()
+
+    status = scan_manager.restore_scan_state()
+
+    assert status["enabled"] is True
+    assert status["interval_minutes"] == 5
+    assert status["state"] == "secure"
+    assert status["packets_analyzed"] == 15
+    assert status["next_scan_at"] is not None
+
+
+def test_interrupted_scan_is_not_restored_as_running(monkeypatch):
+    sensor_manager.record_heartbeat(heartbeat(packet_count=10))
+    monkeypatch.setattr(scan_manager, "_total_alerts", lambda: 0)
+
+    scan_manager.start_scan()
+    scan_manager.reset_scan_state()
+    status = scan_manager.restore_scan_state()
+
+    assert status["state"] == "idle"
+    assert "interrupted" in status["message"].lower()
