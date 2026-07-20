@@ -13,6 +13,7 @@ import {
   getScanStatus,
   runScanNow,
   setScanSchedule,
+  setSensorMonitoring,
 } from '../services/api'
 
 // Same fine film-grain noise as Landing.jsx/AuthLayout.jsx, generated once at
@@ -128,6 +129,7 @@ export default function Dashboard({ onConnectionChange }) {
   const [aiLoading,  setAiLoading]  = useState(false)
   const [scanStatus, setScanStatus] = useState(null)
   const [scanLoading, setScanLoading] = useState(false)
+  const [scanError, setScanError] = useState(null)
   const [revealed, setRevealed] = useState(false)
   const frozenRef = useRef([])
   const leftColRef = useRef(null)
@@ -227,10 +229,25 @@ export default function Dashboard({ onConnectionChange }) {
 
   const handleRunScan = async () => {
     setScanLoading(true)
+    setScanError(null)
     try {
       setScanStatus(await runScanNow())
     } catch (error) {
       console.error(error)
+      setScanError(error.message || 'Unable to start the network assessment.')
+    } finally {
+      setScanLoading(false)
+    }
+  }
+
+  const handleMonitoring = async (enabled) => {
+    setScanLoading(true)
+    setScanError(null)
+    try {
+      setScanStatus(await setSensorMonitoring(enabled))
+    } catch (error) {
+      console.error(error)
+      setScanError(error.message || 'Unable to update continuous monitoring.')
     } finally {
       setScanLoading(false)
     }
@@ -238,10 +255,12 @@ export default function Dashboard({ onConnectionChange }) {
 
   const handleSchedule = async (enabled, intervalMinutes = scanStatus?.interval_minutes || 5) => {
     setScanLoading(true)
+    setScanError(null)
     try {
       setScanStatus(await setScanSchedule(enabled, intervalMinutes))
     } catch (error) {
       console.error(error)
+      setScanError(error.message || 'Unable to update the assessment schedule.')
     } finally {
       setScanLoading(false)
     }
@@ -262,7 +281,7 @@ export default function Dashboard({ onConnectionChange }) {
     { label: 'Low',    value: lowDisplay,    tone: 'text-severity-low' },
   ]
 
-  const scanState = mapScanState(scanStatus, summary)
+  const scanState = mapScanState(scanStatus)
 
   return (
     <main className="relative">
@@ -323,7 +342,7 @@ export default function Dashboard({ onConnectionChange }) {
             className={`mb-1.5 text-balance text-[clamp(40px,6vw,72px)] font-bold leading-none tracking-[-0.02em] transition-all duration-300 ease-swift ${scanHeroColorClass(scanState)} ${revealed ? 'opacity-100 translate-y-0' : 'opacity-0 translate-y-3'}`}
             style={{ transitionDelay: '60ms', fontFamily: "Futura, 'Century Gothic', 'IBM Plex Sans', sans-serif" }}
           >
-            {scanHeadline(scanStatus, summary)}
+            {scanHeadline(scanStatus)}
           </h1>
 
           <p
@@ -332,6 +351,12 @@ export default function Dashboard({ onConnectionChange }) {
           >
             {scanMessage(scanStatus, summary)}
           </p>
+
+          {scanError && (
+            <p className="mb-4 flex max-w-[70ch] items-center gap-2 text-sm text-severity-high">
+              <AlertTriangle size={15} /> {scanError}
+            </p>
+          )}
 
           {chartData.length > 0 && (
             <div
@@ -357,18 +382,50 @@ export default function Dashboard({ onConnectionChange }) {
             ))}
           </div>
 
+          <div className="mb-5 flex flex-wrap gap-x-6 gap-y-2 font-mono text-[11px] text-ink-faint">
+            <span>
+              Sensor: <b className={scanStatus?.sensor?.online ? 'text-severity-low' : 'text-severity-high'}>
+                {scanStatus?.sensor?.online ? 'online' : 'offline'}
+              </b>
+            </span>
+            <span>Interface: <b className="text-ink-muted">{scanStatus?.sensor?.interface || 'not connected'}</b></span>
+            <span>Packets observed: <b className="text-ink-muted">{scanStatus?.sensor?.packet_count ?? 0}</b></span>
+            {scanStatus?.packets_analyzed > 0 && (
+              <span>Latest assessment: <b className="text-ink-muted">{scanStatus.packets_analyzed} packets</b></span>
+            )}
+          </div>
+
           <div
             className={`flex flex-wrap items-center gap-[10px] transition-all duration-300 ease-swift ${revealed ? 'opacity-100 translate-y-0' : 'opacity-0 translate-y-2'}`}
             style={{ transitionDelay: '240ms' }}
           >
-            <Button variant="primary" size="sm" onClick={handleRunScan} disabled={scanLoading || scanStatus?.state === 'running'}>
+            {!scanStatus?.sensor?.online ? (
+              <Button variant="primary" size="sm" disabled>
+                <Loader2 size={14} className="animate-spin" /> Waiting for sensor
+              </Button>
+            ) : scanStatus?.sensor?.desired_monitoring ? (
+              <Button variant="danger" size="sm" onClick={() => handleMonitoring(false)} disabled={scanLoading}>
+                <PauseCircle size={14} /> Stop monitoring
+              </Button>
+            ) : (
+              <Button variant="primary" size="sm" onClick={() => handleMonitoring(true)} disabled={scanLoading}>
+                {scanLoading ? <Loader2 size={14} className="animate-spin" /> : <PlayCircle size={14} />}
+                Start continuous monitoring
+              </Button>
+            )}
+            <Button
+              variant="secondary"
+              size="sm"
+              onClick={handleRunScan}
+              disabled={scanLoading || scanStatus?.state === 'running' || !scanStatus?.sensor?.online || !scanStatus?.sensor?.monitoring}
+            >
               {(scanLoading || scanStatus?.state === 'running') && <Loader2 size={14} className="animate-spin" />}
-              {scanStatus?.state === 'running' ? 'Scan running...' : 'Run scan now'}
+              {scanStatus?.state === 'running' ? 'Assessment running...' : 'Assess now'}
             </Button>
-            <Button variant="secondary" size="sm" onClick={() => handleSchedule(true, 5)} disabled={scanLoading}>
+            <Button variant="secondary" size="sm" onClick={() => handleSchedule(true, 5)} disabled={scanLoading || !scanStatus?.sensor?.monitoring}>
               Every 5 min
             </Button>
-            <Button variant="secondary" size="sm" onClick={() => handleSchedule(true, 10)} disabled={scanLoading}>
+            <Button variant="secondary" size="sm" onClick={() => handleSchedule(true, 10)} disabled={scanLoading || !scanStatus?.sensor?.monitoring}>
               Every 10 min
             </Button>
             {scanStatus?.enabled && (
@@ -422,7 +479,7 @@ export default function Dashboard({ onConnectionChange }) {
             <div className="mb-4 flex flex-wrap items-center justify-between gap-4">
               <div>
                 <h2 className={PANEL_H2}>AI Analysis</h2>
-                <p className="text-[11px] leading-[normal] text-ink-faint">Developer diagnostics from local Ollama, rendered as a live readout.</p>
+                <p className="text-[11px] leading-[normal] text-ink-faint">Advisory diagnostics from the configured AI provider, rendered as a live readout.</p>
               </div>
               <Button variant="secondary" size="sm" onClick={handleAnalyzeAlerts} disabled={aiLoading}>
                 {aiLoading ? <Loader2 size={14} className="animate-spin" /> : <Activity size={14} />}
@@ -435,7 +492,7 @@ export default function Dashboard({ onConnectionChange }) {
                 <span className="h-[7px] w-[7px] rounded-full bg-white/[0.12]" />
                 <span className="h-[7px] w-[7px] rounded-full bg-white/[0.12]" />
                 <span className="h-[7px] w-[7px] rounded-full bg-white/[0.12]" />
-                <span className="ml-1 text-[10px] text-ink-faint">ollama · llama3 · analysis.log</span>
+                <span className="ml-1 text-[10px] text-ink-faint">threatscope-ai · analysis.log</span>
               </div>
               <div className="px-4 py-3.5 font-mono text-[12.5px] leading-[1.7]">
                 {aiError && (
@@ -538,25 +595,42 @@ function riskTextClass(riskLevel) {
   return 'text-severity-medium'
 }
 
-function scanHeadline(scanStatus, summary) {
-  if (scanStatus?.state === 'running') return 'Scan started'
+function scanHeadline(scanStatus) {
+  if (!scanStatus?.sensor?.online) return 'Sensor Offline'
+  if (scanStatus?.sensor?.last_error) return 'Sensor Error'
+  if (!scanStatus?.sensor?.monitoring) {
+    return scanStatus?.sensor?.desired_monitoring ? 'Starting Sensor' : 'Monitoring Paused'
+  }
+  if (scanStatus?.state === 'running') return 'Assessment Running'
   if (scanStatus?.state === 'threats_found') return 'Threats detected'
-  if (scanStatus?.state === 'secure' || summary.total === 0) return 'Network Secure'
-  return 'Network monitoring active'
+  if (scanStatus?.state === 'no_data') return 'No Traffic Observed'
+  if (scanStatus?.state === 'sensor_offline') return 'Sensor Offline'
+  if (scanStatus?.state === 'secure') return 'Network Secure'
+  return 'Continuous Monitoring Active'
 }
 
 function scanMessage(scanStatus, summary) {
+  if (!scanStatus?.sensor?.online) {
+    return 'ThreatScope cannot inspect this network because no sensor service is connected. Install or start the sensor before assessing network safety.'
+  }
+  if (scanStatus?.sensor?.last_error) return scanStatus.sensor.last_error
+  if (!scanStatus?.sensor?.monitoring) {
+    return scanStatus?.sensor?.desired_monitoring
+      ? 'The sensor is online and preparing packet capture.'
+      : 'The sensor service is online, but packet inspection is paused. Start continuous monitoring to detect network threats.'
+  }
   if (scanStatus?.state === 'running') {
-    return 'ThreatScope is checking recent network activity. New alerts will appear below if suspicious traffic is found.'
+    return 'ThreatScope is actively inspecting network packets. New alerts will appear below if suspicious traffic is found.'
   }
   if (scanStatus?.state === 'threats_found') return scanStatus.message
-  if (scanStatus?.state === 'secure' || summary.total === 0) {
+  if (scanStatus?.state === 'no_data' || scanStatus?.state === 'sensor_offline') return scanStatus.message
+  if (scanStatus?.state === 'secure') {
     const scheduleClause = scanStatus?.enabled
-      ? `scheduled scans continue every ${scanStatus.interval_minutes} minutes`
-      : 'enable scheduled scans for continuous checks'
-    return `No threats detected in the latest scan window. ${summary.total} events analyzed this session — ${scheduleClause}.`
+      ? `assessments continue every ${scanStatus.interval_minutes} minutes`
+      : 'scheduled assessments are currently off'
+    return `${scanStatus.message} ${summary.total} alerts stored this session; ${scheduleClause}.`
   }
-  return 'Alerts below explain suspicious behavior in plain English so non-technical users can understand what happened.'
+  return 'The sensor is continuously inspecting traffic. Run an assessment to produce a verified safety result for a measured packet window.'
 }
 
 // 4 states (scanning/alert/secure/monitoring), derived from the exact same
@@ -565,21 +639,31 @@ function scanMessage(scanStatus, summary) {
 // Only "alert" gets its own color anywhere; every other state shares
 // ThreatScope's own signal teal, matching the mock (which never recolors
 // anything except the giant status text and the rings during an alert).
-function mapScanState(scanStatus, summary) {
+function mapScanState(scanStatus) {
+  if (!scanStatus?.sensor?.online || scanStatus?.state === 'sensor_offline') return 'offline'
+  if (scanStatus?.sensor?.last_error) return 'offline'
+  if (!scanStatus?.sensor?.monitoring) return 'paused'
   if (scanStatus?.state === 'running') return 'scanning'
   if (scanStatus?.state === 'threats_found') return 'alert'
-  if (scanStatus?.state === 'secure' || summary.total === 0) return 'secure'
+  if (scanStatus?.state === 'no_data') return 'no-data'
+  if (scanStatus?.state === 'secure') return 'secure'
   return 'monitoring'
 }
 
 function scanHeroColorClass(state) {
-  return state === 'alert' ? 'text-severity-high' : 'text-signal'
+  if (state === 'alert' || state === 'offline') return 'text-severity-high'
+  if (state === 'paused' || state === 'no-data') return 'text-severity-medium'
+  return 'text-signal'
 }
 
 function scanRingBorderClass(state) {
-  return state === 'alert' ? 'border-severity-high' : 'border-signal'
+  if (state === 'alert' || state === 'offline') return 'border-severity-high'
+  if (state === 'paused' || state === 'no-data') return 'border-severity-medium'
+  return 'border-signal'
 }
 
 function scanDotClass(state) {
-  return state === 'alert' ? 'bg-severity-high' : 'bg-signal'
+  if (state === 'alert' || state === 'offline') return 'bg-severity-high'
+  if (state === 'paused' || state === 'no-data') return 'bg-severity-medium'
+  return 'bg-signal'
 }

@@ -20,12 +20,13 @@ from datetime import datetime, timezone
 from slowapi import Limiter
 from slowapi.util import get_remote_address
 from slowapi.middleware import SlowAPIMiddleware
-from models import Alert, AlertSummary, ScanScheduleRequest
+from models import Alert, AlertSummary, MonitoringRequest, ScanScheduleRequest, SensorHeartbeat
 from database import init_db, insert_alert, get_alerts, get_summary, get_stats, clear_alerts
 from websocket import manager
 from auth import decode_dashboard_token, verify_engine_key, verify_token
 from ai_analysis import analyze_alerts, get_ai_config
-from scan_manager import get_scan_status, set_schedule, start_scan
+from scan_manager import SensorUnavailableError, get_scan_status, set_schedule, start_scan
+from sensor_manager import record_heartbeat, set_monitoring
 
 
 # ── Logging ────────────────────────────────────────────────────────────────
@@ -150,12 +151,25 @@ def delete_alerts(_engine=Depends(verify_engine_key)):
 @app.post("/ai/analyze-alerts")
 def analyze_recent_alerts(user=Depends(verify_token)):
     """
-    Runs local Ollama diagnostics over recent alerts.
+    Runs advisory diagnostics with the configured local or cloud AI provider.
     AI output is advisory; rule-based detections remain the source of truth.
     """
     config = get_ai_config()
     alerts = get_alerts(limit=config["alert_limit"], offset=0)
     return analyze_alerts(alerts)
+
+
+@app.post("/sensor/heartbeat")
+def sensor_heartbeat(heartbeat: SensorHeartbeat, _engine=Depends(verify_engine_key)):
+    """Records sensor health and returns the requested monitoring state."""
+    return record_heartbeat(heartbeat)
+
+
+@app.post("/sensor/monitoring")
+def update_sensor_monitoring(request: MonitoringRequest, user=Depends(verify_token)):
+    """Starts or pauses packet capture on the connected sensor."""
+    set_monitoring(request.enabled)
+    return get_scan_status()
 
 
 @app.get("/scan/status")
@@ -167,10 +181,12 @@ def scan_status(user=Depends(verify_token)):
 @app.post("/scan/run")
 def run_scan_now(user=Depends(verify_token)):
     """
-    Starts a short scan window immediately.
-    If no new alerts arrive during the window, the dashboard reports the network as secure.
+    Starts a verified assessment window on a connected monitoring sensor.
     """
-    return start_scan()
+    try:
+        return start_scan()
+    except SensorUnavailableError as exc:
+        raise HTTPException(status_code=409, detail=str(exc)) from exc
 
 
 @app.post("/scan/schedule")
@@ -178,7 +194,7 @@ def update_scan_schedule(request: ScanScheduleRequest, user=Depends(verify_token
     """Turns scheduled scan windows on or off at a 5 or 10 minute interval."""
     try:
         return set_schedule(request.enabled, request.interval_minutes)
-    except ValueError as e:
+    except (ValueError, SensorUnavailableError) as e:
         raise HTTPException(status_code=400, detail=str(e))
 
 

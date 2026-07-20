@@ -117,6 +117,7 @@ def test_analyze_alerts_with_mocked_cloud_provider(monkeypatch):
         assert url.endswith("/chat/completions")
         assert headers["Authorization"] == "Bearer test-key"
         assert json["model"] == "gpt-test"
+        assert json["messages"][0]["role"] == "system"
         return FakeResponse({
             "choices": [{
                 "message": {

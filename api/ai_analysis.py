@@ -151,7 +151,7 @@ def analyze_alerts_with_openai(alerts: List[dict]) -> Dict[str, Any]:
         "model": config["openai_model"],
         "messages": [
             {
-                "role": "developer",
+                "role": "system",
                 "content": "You return strict JSON for a cybersecurity dashboard. No markdown.",
             },
             {

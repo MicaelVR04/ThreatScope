@@ -37,6 +37,9 @@ Working features:
   - `SYN_FLOOD`
   - `PING_SWEEP`
   - `ARP_SPOOF`
+- Continuous packet monitoring through a managed local sensor service
+- Authenticated sensor heartbeat and dashboard start/stop controls
+- Verified assessment windows that require real packet activity
 
 The ARP spoof rule is a real rule in the engine, not only a simulated dashboard event. It watches for repeated conflicting ARP replies where multiple MAC addresses claim the same IP address.
 
@@ -89,6 +92,10 @@ Do not commit `.env`. The service-role key is backend-only and must not be expos
 Useful demo settings:
 
 ```bash
+API_URL=http://localhost:8000/alerts
+API_BASE_URL=http://localhost:8000
+ENGINE_API_KEY=generate-a-long-random-value
+MONITORING_DEFAULT_ENABLED=true
 DEMO_MODE=true
 ALERT_COOLDOWN_SECONDS=60
 ARP_ENTRY_TTL_SECONDS=300
@@ -168,17 +175,25 @@ npm install
 npm run dev
 ```
 
-Engine:
+One-time macOS sensor installation:
 
 ```bash
-cd engine
-python3 -m venv .venv
-source .venv/bin/activate
-pip install -r requirements.txt
-sudo python capture.py
+sudo ./scripts/install_sensor_macos.sh
 ```
 
-On macOS, live packet capture requires `sudo`. Set `NETWORK_INTERFACE` in `.env` if your active interface is not `en0`.
+The installer registers a root-owned `launchd` service. Administrator access is
+required once because packet capture is privileged; afterward the sensor starts
+at boot, reconnects automatically, and is controlled from the dashboard.
+
+Useful service commands:
+
+```bash
+sudo launchctl print system/com.threatscope.sensor
+sudo tail -f /var/log/threatscope-sensor.log
+sudo ./scripts/uninstall_sensor_macos.sh
+```
+
+Set `NETWORK_INTERFACE` in `.env` if the active interface is not `en0`.
 
 ## Demo Traffic
 
@@ -249,17 +264,22 @@ To use a cloud AI provider instead of local Ollama, set:
 ```bash
 AI_PROVIDER=openai
 OPENAI_API_KEY=your-api-key
-OPENAI_MODEL=gpt-4o-mini
-OPENAI_BASE_URL=https://api.openai.com/v1
+OPENAI_MODEL=qwen/qwen3.6-27b
+OPENAI_BASE_URL=https://api.groq.com/openai/v1
 ```
 
 Keep the API key server-side in `.env`. Do not expose it in dashboard code.
 
-## Scheduled Scans
+## Continuous Monitoring And Assessments
 
-The dashboard includes scan controls for running a scan now or scheduling scan windows every 5 or 10 minutes. During a scan window, ThreatScope watches for newly inserted alerts. If no new alerts appear, the dashboard reports **Network is secure**. If alerts arrive during the window, the dashboard reports that threats were detected and points users to the live feed.
+ThreatScope's sensor monitors packets continuously. The dashboard can start or
+pause packet capture without stopping the background service, and it can run an
+assessment immediately or every 5 or 10 minutes.
 
-The scan control is dashboard-friendly orchestration around the existing engine/API pipeline. The Python engine still owns packet analysis and alert generation.
+An assessment records both alert and packet-count deltas. The dashboard only
+reports **Network Secure** when the sensor stayed online and inspected at least
+one packet during the assessment. An offline sensor or an empty capture window
+produces an explicit unable-to-assess state instead of a false safety claim.
 
 ## Security Configuration
 

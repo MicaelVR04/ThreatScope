@@ -1,5 +1,5 @@
 import { useState } from 'react'
-import { Link, useNavigate } from 'react-router-dom'
+import { Link } from 'react-router-dom'
 import { Mail, Lock, Eye, EyeOff, Loader2 } from 'lucide-react'
 import Button from '../components/theme/Button'
 import AuthLayout, { AUTH_INPUT_CLASS, AUTH_LINK_CLASS } from '../components/AuthLayout'
@@ -11,17 +11,22 @@ export default function Login() {
   const [showPassword, setShowPassword] = useState(false)
   const [error, setError] = useState(null)
   const [loading, setLoading] = useState(false)
-  const navigate = useNavigate()
-
   const handleLogin = async () => {
     setError(null)
     setLoading(true)
-    const { error: authError } = await supabase.auth.signInWithPassword({ email, password })
-    setLoading(false)
-    if (authError) {
-      setError(authError.message)
-    } else {
-      navigate('/dashboard')
+    try {
+      if (!supabase) {
+        throw new Error('Supabase is not configured. Check the dashboard environment variables.')
+      }
+
+      const { error: authError } = await supabase.auth.signInWithPassword({ email, password })
+      if (authError) {
+        setError(authError.message)
+      }
+    } catch (authError) {
+      setError(authError.message || 'Unable to sign in. Please try again.')
+    } finally {
+      setLoading(false)
     }
   }
 

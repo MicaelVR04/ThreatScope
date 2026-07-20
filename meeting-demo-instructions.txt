@@ -38,7 +38,7 @@ Cloud AI framing:
 "The AI layer can also be switched to a cloud provider with an API key. That makes the analysis feature work without relying on one teammate's local machine, while the detection rules still remain the source of truth."
 
 Scheduled scan framing:
-"The dashboard can start a scan now or schedule scan windows every 5 or 10 minutes. When a scan starts, the dashboard tells the user ThreatScope is checking the network. If no new alerts appear during that scan window, it reports Network is secure."
+"The local sensor monitors packets continuously as a background service. The dashboard can pause or resume monitoring and schedule verified assessment windows every 5 or 10 minutes. ThreatScope only reports Network Secure when the sensor was online and actually inspected packets."
 
 Best setup:
 Use one machine as the demo machine if possible.
@@ -73,6 +73,7 @@ VITE_SUPABASE_URL=your_supabase_url
 VITE_SUPABASE_ANON_KEY=your_anon_or_publishable_key
 
 API_URL=http://localhost:8000/alerts
+API_BASE_URL=http://localhost:8000
 SUPABASE_JWT_SECRET=your_supabase_jwt_secret
 ENGINE_API_KEY=generate_a_long_random_value
 ALLOW_INSECURE_LOCAL_DEV=false
@@ -82,6 +83,9 @@ ARP_ENTRY_TTL_SECONDS=300
 ARP_SPOOF_CONFIRMATION_THRESHOLD=2
 SCAN_WINDOW_SECONDS=8
 SCAN_INTERVAL_MINUTES=5
+SENSOR_HEARTBEAT_INTERVAL_SECONDS=5
+SENSOR_HEARTBEAT_TIMEOUT_SECONDS=20
+MONITORING_DEFAULT_ENABLED=true
 
 Terminal 1: Start the API
 
@@ -121,6 +125,15 @@ http://localhost:5173
 What Cristian says:
 "The dashboard reads alerts from Supabase and subscribes to Supabase Realtime, so new alerts appear live without refreshing."
 
+One-time sensor installation:
+
+cd /Users/micaelvelez/DemoDayProject/ThreatScope
+sudo ./scripts/install_sensor_macos.sh
+
+After installation the sensor starts automatically at boot. Confirm the
+dashboard shows Sensor online and Continuous Monitoring Active before running
+an assessment.
+
 Optional Ollama setup:
 
 Install Ollama:
@@ -152,8 +165,8 @@ Optional cloud AI values:
 
 AI_PROVIDER=openai
 OPENAI_API_KEY=your-api-key
-OPENAI_MODEL=gpt-4o-mini
-OPENAI_BASE_URL=https://api.openai.com/v1
+OPENAI_MODEL=qwen/qwen3.6-27b
+OPENAI_BASE_URL=https://api.groq.com/openai/v1
 
 Terminal 3: Trigger demo alerts
 
@@ -180,9 +193,9 @@ What Micael says:
 
 What to show on screen:
 1. Open the dashboard at http://localhost:5173
-2. Show the scan status panel.
-3. Click Run scan now and point out the Scan started message.
-4. If no new alerts appear, show Network is secure.
+2. Show Sensor online and Continuous Monitoring Active.
+3. Click Assess now and point out the verified packet window.
+4. Explain that Network Secure only appears after packets were inspected.
 5. Run: python demo_traffic.py port-scan
 6. Show the Port scan alert appearing live with the plain-English explanation.
 7. Show the summary cards and charts updating.

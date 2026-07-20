@@ -105,6 +105,13 @@ export async function runScanNow() {
   return apiFetch('/scan/run', { method: 'POST' })
 }
 
+export async function setSensorMonitoring(enabled) {
+  return apiFetch('/sensor/monitoring', {
+    method: 'POST',
+    body: JSON.stringify({ enabled }),
+  })
+}
+
 export async function setScanSchedule(enabled, intervalMinutes) {
   return apiFetch('/scan/schedule', {
     method: 'POST',

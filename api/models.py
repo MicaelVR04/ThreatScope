@@ -55,3 +55,16 @@ class ScanScheduleRequest(BaseModel):
         if v not in [5, 10]:
             raise ValueError("interval_minutes must be 5 or 10")
         return v
+
+
+class SensorHeartbeat(BaseModel):
+    sensor_id: str
+    interface: str
+    monitoring: bool
+    packet_count: int
+    last_error: Optional[str] = None
+    version: str = "1.0.0"
+
+
+class MonitoringRequest(BaseModel):
+    enabled: bool

@@ -1,5 +1,5 @@
 import { useState } from 'react'
-import { Link, useNavigate } from 'react-router-dom'
+import { Link } from 'react-router-dom'
 import { Mail, Lock, Eye, EyeOff, Loader2 } from 'lucide-react'
 import Button from '../components/theme/Button'
 import AuthLayout, { AUTH_INPUT_CLASS, AUTH_LINK_CLASS } from '../components/AuthLayout'
@@ -28,21 +28,27 @@ export default function Register() {
   const [error, setError] = useState(null)
   const [success, setSuccess] = useState(null)
   const [loading, setLoading] = useState(false)
-  const navigate = useNavigate()
   const strength = password ? getPasswordStrength(password) : null
 
   const handleRegister = async () => {
     setError(null)
     setSuccess(null)
     setLoading(true)
-    const { data, error: authError } = await supabase.auth.signUp({ email, password })
-    setLoading(false)
-    if (authError) {
-      setError(authError.message)
-    } else if (data?.user && !data.session) {
-      setSuccess('Check your email to confirm your account before signing in.')
-    } else {
-      navigate('/dashboard')
+    try {
+      if (!supabase) {
+        throw new Error('Supabase is not configured. Check the dashboard environment variables.')
+      }
+
+      const { data, error: authError } = await supabase.auth.signUp({ email, password })
+      if (authError) {
+        setError(authError.message)
+      } else if (data?.user && !data.session) {
+        setSuccess('Check your email to confirm your account before signing in.')
+      }
+    } catch (authError) {
+      setError(authError.message || 'Unable to register. Please try again.')
+    } finally {
+      setLoading(false)
     }
   }
 

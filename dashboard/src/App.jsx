@@ -64,6 +64,11 @@ function ProtectedRoute({ session, children }) {
   return children
 }
 
+function PublicOnlyRoute({ session, children }) {
+  if (session) return <Navigate to="/dashboard" replace />
+  return children
+}
+
 // ── App shell ─────────────────────────────────────────────────────────────────
 function AppShell() {
   const [connected, setConnected] = useState(false)
@@ -115,8 +120,8 @@ function AppShell() {
         <ScrollToTop />
         <Routes>
           <Route path="/" element={<Landing />} />
-          <Route path="/login" element={<Login />} />
-          <Route path="/register" element={<Register />} />
+          <Route path="/login" element={<PublicOnlyRoute session={session}><Login /></PublicOnlyRoute>} />
+          <Route path="/register" element={<PublicOnlyRoute session={session}><Register /></PublicOnlyRoute>} />
           <Route
             path="/dashboard"
             element={
@@ -161,4 +166,3 @@ export default function App() {
     </BrowserRouter>
   )
 }
-

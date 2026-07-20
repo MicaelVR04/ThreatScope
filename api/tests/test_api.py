@@ -15,14 +15,11 @@ from datetime import datetime, timezone
 import sys
 import os
 
-# Endpoint behavior tests use an explicit local-only bypass. Production and
-# shared-demo environments must leave this disabled and supply real secrets.
-os.environ.setdefault("ALLOW_INSECURE_LOCAL_DEV", "true")
-
 # Add parent directory to path so we can import from api/
 sys.path.insert(0, os.path.abspath(os.path.join(os.path.dirname(__file__), "..")))
 
 from main import app
+from auth import verify_engine_key, verify_token
 from database import init_db, clear_alerts
 
 # ── Test Client ────────────────────────────────────────────────────────────
@@ -36,10 +33,16 @@ def setup_and_teardown():
     Runs before and after every test.
     Initializes the DB and clears all alerts so tests don't affect each other.
     """
-    init_db()
-    clear_alerts()
-    yield
-    clear_alerts()
+    app.dependency_overrides[verify_token] = lambda: {}
+    app.dependency_overrides[verify_engine_key] = lambda: None
+    try:
+        init_db()
+        clear_alerts()
+        yield
+        clear_alerts()
+    finally:
+        app.dependency_overrides.pop(verify_token, None)
+        app.dependency_overrides.pop(verify_engine_key, None)
 
 
 def make_alert(severity="HIGH", attack_type="PORT_SCAN"):
