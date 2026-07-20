@@ -23,6 +23,7 @@ class Alert(BaseModel):
     severity:  str
     message:   str
     timestamp: str
+    user_id:   Optional[str] = None
 
     @field_validator("severity")
     @classmethod
@@ -40,3 +41,31 @@ class AlertSummary(BaseModel):
     high:   int
     medium: int
     low:    int
+
+
+class ScanScheduleRequest(BaseModel):
+    """
+    Dashboard request for enabling/disabling scheduled scan windows.
+    """
+    enabled: bool
+    interval_minutes: int
+
+    @field_validator("interval_minutes")
+    @classmethod
+    def validate_interval(cls, v):
+        if v not in [5, 10]:
+            raise ValueError("interval_minutes must be 5 or 10")
+        return v
+
+
+class SensorHeartbeat(BaseModel):
+    sensor_id: str
+    interface: str
+    monitoring: bool
+    packet_count: int
+    last_error: Optional[str] = None
+    version: str = "1.0.0"
+
+
+class MonitoringRequest(BaseModel):
+    enabled: bool

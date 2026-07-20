@@ -10,12 +10,13 @@ Responsibilities:
 
 import os
 import logging
+from pathlib import Path
 from scapy.all import sniff
 from dotenv import load_dotenv
 from rules import analyze_packet
 from alert_sender import send_alert
 # ── Setup ──────────────────────────────────────────────────────────────────
-load_dotenv()
+load_dotenv(Path(__file__).resolve().parents[1] / ".env")
 
 INTERFACE = os.getenv("NETWORK_INTERFACE", "en0")
 

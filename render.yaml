@@ -1,0 +1,93 @@
+services:
+  - type: web
+    name: threatscope-api
+    runtime: python
+    plan: free
+    region: virginia
+    branch: dev
+    rootDir: api
+    buildCommand: pip install -r requirements.txt
+    startCommand: uvicorn main:app --host 0.0.0.0 --port $PORT --proxy-headers --forwarded-allow-ips="*"
+    healthCheckPath: /health
+    autoDeployTrigger: commit
+    maxShutdownDelaySeconds: 30
+    envVars:
+      - key: PYTHON_VERSION
+        value: 3.11.11
+      - key: ALLOW_INSECURE_LOCAL_DEV
+        value: "false"
+      - key: ALLOW_DATABASE_FALLBACK
+        value: "false"
+      - key: AI_PROVIDER
+        value: openai
+      - key: OPENAI_BASE_URL
+        value: https://api.groq.com/openai/v1
+      - key: OPENAI_MODEL
+        value: qwen/qwen3.6-27b
+      - key: OPENAI_API_KEY
+        sync: false
+      - key: SUPABASE_URL
+        sync: false
+      - key: SUPABASE_SERVICE_ROLE_KEY
+        sync: false
+      - key: SUPABASE_ALERTS_TABLE
+        value: alerts
+      - key: SUPABASE_RUNTIME_STATE_TABLE
+        value: runtime_state
+      - key: ENGINE_API_KEY
+        sync: false
+      - key: SENSOR_OWNER_USER_ID
+        sync: false
+      - key: SENSOR_HEARTBEAT_TIMEOUT_SECONDS
+        value: "90"
+      - key: SENSOR_HEARTBEAT_COMMAND_SECONDS
+        value: "15"
+      - key: MONITORING_DEFAULT_ENABLED
+        value: "true"
+      - key: SCAN_WINDOW_SECONDS
+        value: "8"
+      - key: SCAN_INTERVAL_MINUTES
+        value: "5"
+      - key: DASHBOARD_HOST
+        fromService:
+          type: web
+          name: threatscope-dashboard
+          envVarKey: RENDER_EXTERNAL_HOSTNAME
+
+  - type: web
+    name: threatscope-dashboard
+    runtime: static
+    branch: dev
+    rootDir: dashboard
+    buildCommand: npm ci && npm run build
+    staticPublishPath: dist
+    autoDeployTrigger: commit
+    envVars:
+      - key: NODE_VERSION
+        value: 22.12.0
+      - key: VITE_API_HOST
+        fromService:
+          type: web
+          name: threatscope-api
+          envVarKey: RENDER_EXTERNAL_HOSTNAME
+      - key: VITE_SUPABASE_URL
+        sync: false
+      - key: VITE_SUPABASE_ANON_KEY
+        sync: false
+    headers:
+      - path: /*
+        name: X-Content-Type-Options
+        value: nosniff
+      - path: /*
+        name: X-Frame-Options
+        value: DENY
+      - path: /*
+        name: Referrer-Policy
+        value: strict-origin-when-cross-origin
+      - path: /*
+        name: Permissions-Policy
+        value: camera=(), microphone=(), geolocation=()
+    routes:
+      - type: rewrite
+        source: /*
+        destination: /index.html

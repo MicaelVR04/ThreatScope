@@ -35,12 +35,9 @@ services:
     build: ./dashboard
     container_name: threatscope_dashboard
     ports:
-      - "5173:5173"
+      - "5173:8080"
     env_file:
       - .env
-    volumes:
-      - ./dashboard:/app
-      - /app/node_modules        # preserve node_modules inside container
     depends_on:
       - api
     restart: unless-stopped

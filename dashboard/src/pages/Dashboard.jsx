@@ -1,28 +1,47 @@
-import { useState, useEffect, useRef, useCallback } from 'react'
-import {
-  AreaChart, Area, XAxis, YAxis, Tooltip,
-  ResponsiveContainer, CartesianGrid, Legend,
-} from 'recharts'
-import { Activity, ShieldAlert, AlertTriangle, Info, PauseCircle, PlayCircle } from 'lucide-react'
+import { useState, useEffect, useLayoutEffect, useRef, useCallback } from 'react'
+import { Activity, AlertTriangle, Loader2, PauseCircle, PlayCircle } from 'lucide-react'
+import Button from '../components/theme/Button'
 import AlertCard from '../components/AlertCard'
-import SeverityChart from '../components/SeverityChart'
 import AttackTypeChart from '../components/AttackTypeChart'
+import NetworkPulse from '../components/NetworkPulse'
 import useWebSocket from '../hooks/useWebSocket'
-import { analyzeRecentAlerts, getAlertsSummary, getAlertStats, getAttackTypeStats } from '../services/api'
+import {
+  analyzeRecentAlerts,
+  getApiHealth,
+  getAlertStats,
+  getAlertsSummary,
+  getAttackTypeStats,
+  getScanStatus,
+  runScanNow,
+  setScanSchedule,
+  setSensorMonitoring,
+} from '../services/api'
 
-const SEV = {
-  HIGH:   { color: '#ef4444', icon: <ShieldAlert  size={18} color="#ef4444" /> },
-  MEDIUM: { color: '#f59e0b', icon: <AlertTriangle size={18} color="#f59e0b" /> },
-  LOW:    { color: '#22c55e', icon: <Info          size={18} color="#22c55e" /> },
-}
+// Same fine film-grain noise as Landing.jsx/AuthLayout.jsx, generated once at
+// module load — not rebuilt, just reused so every page shares the exact same
+// texture.
+const NOISE_SVG = `<svg xmlns="http://www.w3.org/2000/svg" width="200" height="200">
+  <filter id="n">
+    <feTurbulence type="fractalNoise" baseFrequency="0.85" numOctaves="2" stitchTiles="stitch" />
+    <feColorMatrix type="saturate" values="0" />
+  </filter>
+  <rect width="100%" height="100%" filter="url(#n)" />
+</svg>`
+const NOISE_DATA_URI = `data:image/svg+xml,${encodeURIComponent(NOISE_SVG)}`
+
+// Panel heading style shared by Attack Surface / Attack Types / Live Network
+// Pulse / AI Analysis — sans (not mono), 13px, tracked .05em, matching the
+// mock's `.panel h2` exactly.
+const PANEL_H2 = 'mb-1 text-[13px] font-semibold uppercase leading-[normal] tracking-[0.05em] text-ink-muted'
+const PANEL_HINT = 'mb-4 text-[11px] leading-[normal] text-ink-faint'
 
 const FEED_LIMIT = 20
 
 function formatChartData(rawData) {
   const buckets = {}
   rawData.forEach(({ timestamp, severity }) => {
-    const time = new Date(timestamp).toLocaleTimeString([], { 
-      hour: '2-digit', 
+    const time = new Date(timestamp).toLocaleTimeString([], {
+      hour: '2-digit',
       minute: '2-digit',
       second: '2-digit'
     })
@@ -30,6 +49,74 @@ function formatChartData(rawData) {
     buckets[time][severity] = (buckets[time][severity] || 0) + 1
   })
   return Object.values(buckets)
+}
+
+// Compact real-data sparkline for the hero — sums each bucket's severities
+// into one "event volume" line rather than pulling in fake motion, so the
+// hero stays honest about what it's showing.
+function sparkPoints(chartData, width = 200, height = 32) {
+  if (chartData.length === 0) return `0,${height} ${width},${height}`
+  const totals = chartData.map(d => (d.HIGH || 0) + (d.MEDIUM || 0) + (d.LOW || 0))
+  const max = Math.max(1, ...totals)
+  const step = width / Math.max(1, totals.length - 1)
+  return totals.map((v, i) => `${i * step},${height - (v / max) * height}`).join(' ')
+}
+
+function heatPct(count, total) {
+  return total > 0 ? Math.round((count / total) * 100) : 0
+}
+
+// Occasional detection blips inside the hero rings — same `radar-ping`
+// keyframe and polar-coordinate placement as the landing page's Hero radar,
+// but untimed here (there's no rotating sweep on this calmer ring motif to
+// sync to), so each dot just gets its own offset into the 6s cycle for a
+// staggered, non-uniform blink pattern rather than all firing at once.
+const RADAR_DOTS = [
+  { angle: 15, radius: 0.32, delay: 0 },
+  { angle: 100, radius: 0.48, delay: -2.1 },
+  { angle: 190, radius: 0.28, delay: -4.4 },
+  { angle: 260, radius: 0.42, delay: -1.2 },
+  { angle: 330, radius: 0.2, delay: -3.6 },
+]
+
+function radarDotStyle({ angle, radius, delay }) {
+  const rad = (angle * Math.PI) / 180
+  return {
+    left: `${50 + radius * 50 * Math.sin(rad)}%`,
+    top: `${50 - radius * 50 * Math.cos(rad)}%`,
+    animationDelay: `${delay}s`,
+  }
+}
+
+// Smoothly counts from the previous value to the next over `duration`ms,
+// instead of snapping — same idea as the mock's count-up stat strip. Called
+// a fixed number of times per render (once per stat), never inside a loop,
+// so it stays rules-of-hooks safe.
+function useCountUp(value, duration = 700) {
+  const [display, setDisplay] = useState(value)
+  const prevRef = useRef(value)
+
+  useEffect(() => {
+    const from = prevRef.current
+    const to = value
+    if (from === to) return
+    const start = performance.now()
+    let frame
+    const tick = (now) => {
+      const p = Math.min(1, (now - start) / duration)
+      const eased = 1 - Math.pow(1 - p, 3)
+      setDisplay(Math.round(from + (to - from) * eased))
+      if (p < 1) {
+        frame = requestAnimationFrame(tick)
+      } else {
+        prevRef.current = to
+      }
+    }
+    frame = requestAnimationFrame(tick)
+    return () => cancelAnimationFrame(frame)
+  }, [value, duration])
+
+  return display
 }
 
 export default function Dashboard({ onConnectionChange }) {
@@ -41,7 +128,52 @@ export default function Dashboard({ onConnectionChange }) {
   const [aiResult,   setAiResult]   = useState(null)
   const [aiError,    setAiError]    = useState(null)
   const [aiLoading,  setAiLoading]  = useState(false)
+  const [scanStatus, setScanStatus] = useState(null)
+  const [scanLoading, setScanLoading] = useState(false)
+  const [scanError, setScanError] = useState(null)
+  const [apiOnline, setApiOnline] = useState(null)
+  const [apiError, setApiError] = useState(null)
+  const [revealed, setRevealed] = useState(false)
   const frozenRef = useRef([])
+  const leftColRef = useRef(null)
+  const [feedHeight, setFeedHeight] = useState(null)
+
+  // Same technique as Hero's headlineIn: a boolean flipped post-mount drives
+  // a sequence of per-element transitionDelays below, so the scan panel
+  // reveals piece by piece instead of fading in as one flat block.
+  useEffect(() => { setRevealed(true) }, [])
+
+  // Measures the left column's real rendered height in JS rather than
+  // relying on flex `stretch` alone — with no fixed height anywhere in the
+  // feed panel, `stretch` and the feed's own `h-full`/`flex-1` become
+  // mutually circular (the feed's own alert-list content decides its
+  // "natural" size, which can end up taller than the cards and pulls the
+  // whole row up to match it, instead of the other way around). A
+  // ResizeObserver sidesteps that: once we have a concrete pixel number,
+  // percentage/flex heights downstream resolve unambiguously. Only applied
+  // at the `lg` breakpoint, where the columns actually sit side by side.
+  //
+  // useLayoutEffect (not useEffect) so this first measurement happens
+  // before the browser paints — otherwise the panel visibly flashes from
+  // the 520px fallback to its real height one frame later. A second, later
+  // jump can still happen once async data (e.g. Attack Types) finishes
+  // loading and changes the left column's height for real — that one's
+  // unavoidable without knowing the data's size in advance, and it's the
+  // same shift the left column itself would show regardless of this fix.
+  useLayoutEffect(() => {
+    const el = leftColRef.current
+    if (!el) return
+    const desktop = window.matchMedia('(min-width: 1024px)')
+    const measure = () => setFeedHeight(desktop.matches ? el.getBoundingClientRect().height : null)
+    const ro = new ResizeObserver(measure)
+    ro.observe(el)
+    desktop.addEventListener('change', measure)
+    measure()
+    return () => {
+      ro.disconnect()
+      desktop.removeEventListener('change', measure)
+    }
+  }, [])
 
   const refreshDashboardData = useCallback(async () => {
     try {
@@ -64,6 +196,40 @@ export default function Dashboard({ onConnectionChange }) {
     refreshDashboardData()
   }, [refreshDashboardData])
 
+  const refreshScanStatus = useCallback(async () => {
+    try {
+      setScanStatus(await getScanStatus())
+      setApiOnline(true)
+      setApiError(null)
+    } catch (error) {
+      console.error(error)
+      setApiOnline(false)
+      setApiError(error.message || 'ThreatScope API is unavailable.')
+    }
+  }, [])
+
+  useEffect(() => {
+    refreshScanStatus()
+    const id = setInterval(refreshScanStatus, 5000)
+    return () => clearInterval(id)
+  }, [refreshScanStatus])
+
+  useEffect(() => {
+    const refreshApiHealth = async () => {
+      try {
+        await getApiHealth()
+        setApiOnline(true)
+        setApiError(null)
+      } catch (error) {
+        setApiOnline(false)
+        setApiError(error.message || 'ThreatScope API is unavailable.')
+      }
+    }
+    refreshApiHealth()
+    const id = setInterval(refreshApiHealth, 30000)
+    return () => clearInterval(id)
+  }, [])
+
   useEffect(() => {
     if (wsAlerts.length > 0) {
       refreshDashboardData()
@@ -78,186 +244,464 @@ export default function Dashboard({ onConnectionChange }) {
       setAiResult(result)
     } catch (error) {
       console.error(error)
-      setAiError(error.message || 'Ollama is not available. Start Ollama and pull the configured model.')
+      setAiError(error.message || 'AI analysis failed. Check the configured provider and try again.')
     } finally {
       setAiLoading(false)
+    }
+  }
+
+  const handleRunScan = async () => {
+    setScanLoading(true)
+    setScanError(null)
+    try {
+      setScanStatus(await runScanNow())
+    } catch (error) {
+      console.error(error)
+      setScanError(error.message || 'Unable to start the network assessment.')
+    } finally {
+      setScanLoading(false)
+    }
+  }
+
+  const handleMonitoring = async (enabled) => {
+    setScanLoading(true)
+    setScanError(null)
+    try {
+      setScanStatus(await setSensorMonitoring(enabled))
+    } catch (error) {
+      console.error(error)
+      setScanError(error.message || 'Unable to update continuous monitoring.')
+    } finally {
+      setScanLoading(false)
+    }
+  }
+
+  const handleSchedule = async (enabled, intervalMinutes = scanStatus?.interval_minutes || 5) => {
+    setScanLoading(true)
+    setScanError(null)
+    try {
+      setScanStatus(await setScanSchedule(enabled, intervalMinutes))
+    } catch (error) {
+      console.error(error)
+      setScanError(error.message || 'Unable to update the assessment schedule.')
+    } finally {
+      setScanLoading(false)
     }
   }
 
   const displayAlerts = paused ? frozenRef.current : wsAlerts.slice(0, FEED_LIMIT)
   if (!paused) frozenRef.current = displayAlerts
 
-  const CARDS = [
-    { label: 'Total',  value: summary.total,  color: '#6366f1', icon: <Activity size={18} color="#6366f1" /> },
-    { label: 'High',   value: summary.high,   ...SEV.HIGH },
-    { label: 'Medium', value: summary.medium, ...SEV.MEDIUM },
-    { label: 'Low',    value: summary.low,    ...SEV.LOW },
+  const totalDisplay  = useCountUp(summary.total)
+  const highDisplay   = useCountUp(summary.high)
+  const mediumDisplay = useCountUp(summary.medium)
+  const lowDisplay    = useCountUp(summary.low)
+
+  const STATS = [
+    { label: 'Total',  value: totalDisplay,  tone: 'text-signal' },
+    { label: 'High',   value: highDisplay,   tone: 'text-severity-high' },
+    { label: 'Medium', value: mediumDisplay, tone: 'text-severity-medium' },
+    { label: 'Low',    value: lowDisplay,    tone: 'text-severity-low' },
   ]
 
+  const scanState = mapScanState(scanStatus)
+
   return (
-    <main style={styles.main}>
+    <main className="relative">
 
-      {/* Summary cards */}
-      <div style={styles.cards}>
-        {CARDS.map(({ label, value, color, icon }) => (
-          <div key={label} style={{ ...styles.card, borderTop: `4px solid ${color}` }}>
-            <div style={styles.cardHeader}>{icon}<span style={styles.cardLabel}>{label}</span></div>
-            <span style={{ ...styles.cardValue, color }}>{value}</span>
-          </div>
-        ))}
-      </div>
+      {/* Noise texture — page-level, fixed, same treatment as Landing/AuthLayout. */}
+      <div aria-hidden="true" className="pointer-events-none fixed inset-0 z-0 opacity-[0.02]" style={{ backgroundImage: `url("${NOISE_DATA_URI}")`, backgroundRepeat: 'repeat', backgroundSize: '200px 200px' }} />
 
-      {/* Charts row */}
-      <div style={styles.chartsRow}>
-        <section style={styles.chartCard}>
-          <h2 style={styles.sectionTitle}>Severity Breakdown</h2>
-          <SeverityChart data={summary} />
-        </section>
-        <section style={{ ...styles.chartCard, flex: 2 }}>
-          <h2 style={styles.sectionTitle}>Attack Types</h2>
-          <AttackTypeChart data={typeStats} />
-        </section>
-      </div>
+      {/* Ambient wash — fixed to the viewport corner, constant signal teal
+          regardless of scan state (the mock never recolors this; only the
+          hero text and rings signal alert). */}
+      <div aria-hidden="true" className="pointer-events-none fixed -right-[160px] -top-[220px] z-0 h-[640px] w-[640px] animate-breathe rounded-full bg-signal blur-[90px]" />
 
-      {/* Time-series area chart */}
-      <section style={styles.section}>
-        <h2 style={styles.sectionTitle}>Alert Activity Over Time</h2>
-        {chartData.length === 0 ? (
-          <p style={styles.empty}>No stats data available.</p>
-        ) : (
-          <ResponsiveContainer width="100%" height={220}>
-            <AreaChart data={chartData} margin={{ top: 5, right: 10, left: -20, bottom: 0 }}>
-              <defs>
-                {Object.entries(SEV).map(([k, { color }]) => (
-                  <linearGradient key={k} id={`grad-${k}`} x1="0" y1="0" x2="0" y2="1">
-                    <stop offset="5%"  stopColor={color} stopOpacity={0.25} />
-                    <stop offset="95%" stopColor={color} stopOpacity={0.02} />
-                  </linearGradient>
-                ))}
-              </defs>
-              <CartesianGrid strokeDasharray="3 3" stroke="#1e293b" />
-              <XAxis dataKey="timestamp" stroke="#475569" tick={{ fontSize: 11 }} />
-              <YAxis stroke="#475569" allowDecimals={false} tick={{ fontSize: 11 }} />
-              <Tooltip
-                contentStyle={{ background: '#1e293b', border: '1px solid #334155', borderRadius: 6 }}
-                labelStyle={{ color: '#94a3b8', fontSize: 11 }}
-              />
-              <Legend wrapperStyle={{ fontSize: 12, color: '#94a3b8' }} />
-              {Object.entries(SEV).map(([k, { color }]) => (
-                <Area
-                  key={k} type="monotone" dataKey={k}
-                  stroke={color} strokeWidth={2}
-                  fill={`url(#grad-${k})`}
-                />
-              ))}
-            </AreaChart>
-          </ResponsiveContainer>
-        )}
-      </section>
+      {/* Centered content column — mirrors the mock's `.page` as ONE element
+          (max-width 1320px, its own padding, border-box) so the content
+          area is 1320px total including padding, not 1320px on top of a
+          separate outer padding — that double-counting is what made every
+          card render wider than the mock's.
 
-      {/* AI developer diagnostics */}
-      <section style={styles.aiSection}>
-        <div style={styles.aiHeader}>
-          <div>
-            <h2 style={styles.sectionTitle}>AI Analysis</h2>
-            <p style={styles.aiSubtext}>Developer diagnostics from local Ollama. Rule detections stay authoritative.</p>
-          </div>
-          <button style={styles.aiButton} onClick={handleAnalyzeAlerts} disabled={aiLoading}>
-            <Activity size={14} />
-            {aiLoading ? 'Analyzing...' : 'Analyze recent alerts'}
-          </button>
+          Body text uses the app's normal IBM Plex Sans (font-sans) — that's
+          also the mock's OWN first-choice body font ('IBM Plex Sans',
+          -apple-system, ...); the mock's sandbox just couldn't download it
+          and silently fell back to -apple-system, but our app loads it for
+          real, so no override is needed here. */}
+      <div className="relative z-10 mx-auto max-w-[1320px] px-8 pb-[60px] pt-7">
+
+      {/* Scan status hero */}
+      <section className="relative mb-[22px] overflow-hidden rounded-2xl border border-white/[0.12] bg-[linear-gradient(160deg,rgba(46,235,209,0.07),rgba(13,19,27,0.4)_55%)] px-9 pb-7 pt-[34px]">
+
+        {/* Concentric rings — one static anchor at full size (0 inset) plus
+            three staggered pulsing rings nested inside it (34/68/102px
+            insets), exactly the mock's structure. Positioned against this
+            `relative` hero section specifically — without that, `top-1/2`
+            resolves against the page wrapper instead and the rings end up
+            far below the hero. */}
+        <div aria-hidden="true" className="pointer-events-none absolute -right-10 top-1/2 h-[340px] w-[340px] -translate-y-1/2 opacity-50">
+          <div className={`absolute inset-0 rounded-full border opacity-[0.16] ${scanRingBorderClass(scanState)}`} />
+          <div className={`absolute inset-[34px] rounded-full border animate-ring-pulse opacity-[0.16] ${scanRingBorderClass(scanState)}`} />
+          <div className={`absolute inset-[68px] rounded-full border animate-ring-pulse opacity-[0.16] ${scanRingBorderClass(scanState)}`} style={{ animationDelay: '0.8s' }} />
+          <div className={`absolute inset-[102px] rounded-full border animate-ring-pulse opacity-[0.16] ${scanRingBorderClass(scanState)}`} style={{ animationDelay: '1.6s' }} />
+          {RADAR_DOTS.map((dot, i) => (
+            <span
+              key={i}
+              className={`absolute h-1.5 w-1.5 -translate-x-1/2 -translate-y-1/2 animate-radar-ping rounded-full ${scanDotClass(scanState)}`}
+              style={radarDotStyle(dot)}
+            />
+          ))}
         </div>
 
-        {aiError && (
-          <div style={styles.aiError}>
-            <AlertTriangle size={16} />
-            <span>{aiError}</span>
-          </div>
-        )}
+        <div className="relative">
+          <p
+            className={`mb-3 flex items-center gap-2 font-mono text-[11px] uppercase tracking-[0.14em] text-signal transition-all duration-300 ease-swift ${revealed ? 'opacity-100 translate-y-0' : 'opacity-0 translate-y-2'}`}
+          >
+            <span className="h-1.5 w-1.5 rounded-full bg-signal animate-blink" />
+            Live Network Status
+          </p>
 
-        {!aiError && !aiResult && (
-          <p style={styles.aiEmpty}>Run analysis after alerts appear in the dashboard.</p>
-        )}
+          <h1
+            className={`mb-1.5 text-balance text-[clamp(40px,6vw,72px)] font-bold leading-none tracking-[-0.02em] transition-all duration-300 ease-swift ${scanHeroColorClass(scanState)} ${revealed ? 'opacity-100 translate-y-0' : 'opacity-0 translate-y-3'}`}
+            style={{ transitionDelay: '60ms', fontFamily: "Futura, 'Century Gothic', 'IBM Plex Sans', sans-serif" }}
+          >
+            {scanHeadline(scanStatus)}
+          </h1>
 
-        {aiResult && (
-          <div style={styles.aiResult}>
-            <div style={styles.aiMeta}>
-              <span style={styles.aiMetaItem}>Model: {aiResult.model}</span>
-              <span style={styles.aiMetaItem}>{aiResult.alert_count} alerts analyzed</span>
-              <span style={{ ...styles.aiRisk, ...riskStyle(aiResult.risk_level) }}>{aiResult.risk_level}</span>
+          <p
+            className={`mb-[22px] max-w-[52ch] text-sm leading-[1.55] text-ink-muted transition-all duration-300 ease-swift ${revealed ? 'opacity-100 translate-y-0' : 'opacity-0 translate-y-2'}`}
+            style={{ transitionDelay: '120ms' }}
+          >
+            {scanMessage(scanStatus, summary)}
+          </p>
+
+          {scanError && (
+            <p className="mb-4 flex max-w-[70ch] items-center gap-2 text-sm text-severity-high">
+              <AlertTriangle size={15} /> {scanError}
+            </p>
+          )}
+          {apiError && (
+            <p className="mb-4 flex max-w-[70ch] items-center gap-2 text-sm text-severity-high">
+              <AlertTriangle size={15} /> {apiError}
+            </p>
+          )}
+
+          {chartData.length > 0 && (
+            <div
+              className={`mb-[22px] flex items-center gap-[10px] transition-all duration-300 ease-swift ${revealed ? 'opacity-100 translate-y-0' : 'opacity-0 translate-y-2'}`}
+              style={{ transitionDelay: '160ms' }}
+            >
+              <svg viewBox="0 0 200 32" className="h-[34px] w-[180px] text-signal" preserveAspectRatio="none">
+                <polyline points={sparkPoints(chartData)} fill="none" stroke="currentColor" strokeWidth="2" />
+              </svg>
+              <span className="font-mono text-[11px] text-ink-faint">this session · event volume</span>
             </div>
-            <p style={styles.aiText}><strong>Summary:</strong> {aiResult.summary}</p>
-            <p style={styles.aiText}><strong>Pattern:</strong> {aiResult.pattern}</p>
-            <p style={styles.aiText}><strong>Demo note:</strong> {aiResult.demo_note}</p>
-            {aiResult.rule_tuning_suggestions?.length > 0 && (
-              <div>
-                <p style={styles.aiLabel}>Rule tuning suggestions</p>
-                <ul style={styles.aiList}>
-                  {aiResult.rule_tuning_suggestions.map((item, index) => (
-                    <li key={`${item}-${index}`}>{item}</li>
-                  ))}
-                </ul>
+          )}
+
+          <div
+            className={`mb-5 flex flex-wrap gap-[22px] transition-all duration-300 ease-swift ${revealed ? 'opacity-100 translate-y-0' : 'opacity-0 translate-y-2'}`}
+            style={{ transitionDelay: '200ms' }}
+          >
+            {STATS.map(({ label, value, tone }) => (
+              <div key={label} className="flex flex-col gap-0.5">
+                <span className={`font-mono text-[26px] font-bold tabular-nums ${tone}`}>{value}</span>
+                <span className="font-mono text-[11px] uppercase tracking-[0.04em] text-ink-faint">{label}</span>
               </div>
-            )}
-            <p style={styles.aiDisclaimer}>{aiResult.disclaimer}</p>
+            ))}
           </div>
-        )}
-      </section>
 
-      {/* Live alert feed */}
-      <section style={styles.section}>
-        <div style={styles.feedHeader}>
-          <h2 style={styles.sectionTitle}>Live Alert Feed</h2>
-          <span style={styles.feedCount}>{wsAlerts.length} received</span>
-          <button style={styles.pauseBtn} onClick={() => setPaused(p => !p)}>
-            {paused
-              ? <><PlayCircle  size={14} /> Resume</>
-              : <><PauseCircle size={14} /> Pause</>}
-          </button>
+          <div className="mb-5 flex flex-wrap gap-x-6 gap-y-2 font-mono text-[11px] text-ink-faint">
+            <span>
+              Cloud API: <b className={apiOnline ? 'text-severity-low' : 'text-severity-high'}>
+                {apiOnline === null ? 'checking' : apiOnline ? 'online' : 'offline'}
+              </b>
+            </span>
+            <span>
+              Sensor: <b className={scanStatus?.sensor?.online ? 'text-severity-low' : 'text-severity-high'}>
+                {scanStatus?.sensor?.online ? 'online' : 'offline'}
+              </b>
+            </span>
+            <span>Interface: <b className="text-ink-muted">{scanStatus?.sensor?.interface || 'not connected'}</b></span>
+            <span>Packets observed: <b className="text-ink-muted">{scanStatus?.sensor?.packet_count ?? 0}</b></span>
+            {scanStatus?.packets_analyzed > 0 && (
+              <span>Latest assessment: <b className="text-ink-muted">{scanStatus.packets_analyzed} packets</b></span>
+            )}
+          </div>
+
+          <div
+            className={`flex flex-wrap items-center gap-[10px] transition-all duration-300 ease-swift ${revealed ? 'opacity-100 translate-y-0' : 'opacity-0 translate-y-2'}`}
+            style={{ transitionDelay: '240ms' }}
+          >
+            {!scanStatus?.sensor?.online ? (
+              <Button variant="primary" size="sm" disabled>
+                <Loader2 size={14} className="animate-spin" /> Waiting for sensor
+              </Button>
+            ) : scanStatus?.sensor?.desired_monitoring ? (
+              <Button variant="danger" size="sm" onClick={() => handleMonitoring(false)} disabled={scanLoading}>
+                <PauseCircle size={14} /> Stop monitoring
+              </Button>
+            ) : (
+              <Button variant="primary" size="sm" onClick={() => handleMonitoring(true)} disabled={scanLoading}>
+                {scanLoading ? <Loader2 size={14} className="animate-spin" /> : <PlayCircle size={14} />}
+                Start continuous monitoring
+              </Button>
+            )}
+            <Button
+              variant="secondary"
+              size="sm"
+              onClick={handleRunScan}
+              disabled={scanLoading || apiOnline === false || scanStatus?.state === 'running' || !scanStatus?.sensor?.online || !scanStatus?.sensor?.monitoring}
+            >
+              {(scanLoading || scanStatus?.state === 'running') && <Loader2 size={14} className="animate-spin" />}
+              {scanStatus?.state === 'running' ? 'Assessment running...' : 'Assess now'}
+            </Button>
+            <Button variant="secondary" size="sm" onClick={() => handleSchedule(true, 5)} disabled={scanLoading || apiOnline === false || !scanStatus?.sensor?.monitoring}>
+              Every 5 min
+            </Button>
+            <Button variant="secondary" size="sm" onClick={() => handleSchedule(true, 10)} disabled={scanLoading || apiOnline === false || !scanStatus?.sensor?.monitoring}>
+              Every 10 min
+            </Button>
+            {scanStatus?.enabled && (
+              <Button variant="danger" size="sm" onClick={() => handleSchedule(false, scanStatus.interval_minutes)} disabled={scanLoading}>
+                Stop schedule
+              </Button>
+            )}
+          </div>
         </div>
-        {displayAlerts.length === 0
-          ? <p style={styles.empty}>No alerts detected yet. Listening...</p>
-          : displayAlerts.map((alert, i) => <AlertCard key={alert.id ?? i} alert={alert} />)
-        }
       </section>
 
+      {/* Two-column body: charts + AI (left) / live feed (right) — 340px
+          sidebar, 18px gaps. Default flex cross-axis is `stretch`, so the
+          feed column naturally matches the left column's full height. */}
+      <div className="flex flex-col gap-[18px] lg:flex-row">
+        <div className="min-w-0 flex-1" ref={leftColRef}>
+
+          {/* Attack Surface — full-width standalone panel (not squeezed into
+              a row with Attack Types), so the heat strip reads as one long
+              smooth horizontal bar the way the mock's does. */}
+          <section className="mb-[18px] animate-fade-up rounded-xl border border-white/[0.08] bg-surface px-[22px] py-5" style={{ animationDelay: '40ms' }}>
+            <h2 className={PANEL_H2}>Attack Surface</h2>
+            <p className={PANEL_HINT}>Severity distribution across the last {summary.total} events — segmented, not siloed into separate cards.</p>
+            <div className="mb-2.5 flex h-3.5 overflow-hidden rounded-lg bg-surface-2">
+              <div className="h-full bg-severity-high shadow-[inset_0_0_12px_rgba(239,68,68,0.5)] transition-[width] duration-[1100ms] ease-swift" style={{ width: `${heatPct(summary.high, summary.total)}%` }} />
+              <div className="h-full bg-severity-medium transition-[width] duration-[1100ms] ease-swift" style={{ width: `${heatPct(summary.medium, summary.total)}%` }} />
+              <div className="h-full bg-severity-low transition-[width] duration-[1100ms] ease-swift" style={{ width: `${heatPct(summary.low, summary.total)}%` }} />
+            </div>
+            <div className="flex flex-wrap gap-4 text-xs text-ink-muted">
+              <span>High <b className="font-semibold text-severity-high">{heatPct(summary.high, summary.total)}%</b></span>
+              <span>Medium <b className="font-semibold text-severity-medium">{heatPct(summary.medium, summary.total)}%</b></span>
+              <span>Low <b className="font-semibold text-severity-low">{heatPct(summary.low, summary.total)}%</b></span>
+            </div>
+          </section>
+
+          {/* Live network pulse — real packet-count deltas from the sensor.
+              The traveling highlight moves continuously, while the curve
+              itself changes only when captured packet totals change. */}
+          <section className="mb-[18px] animate-fade-up rounded-xl border border-white/[0.08] bg-surface px-[22px] py-5" style={{ animationDelay: '80ms' }}>
+            <h2 className={PANEL_H2}>Live Network Pulse</h2>
+            <p className={PANEL_HINT}>
+              Captured packet activity from the connected sensor · sampled every 5 seconds.
+            </p>
+            <div className="h-[120px] overflow-hidden rounded-lg bg-gradient-to-b from-signal/[0.05] to-transparent">
+              <NetworkPulse
+                packetCount={scanStatus?.sensor?.packet_count}
+                active={Boolean(scanStatus?.sensor?.online && scanStatus?.sensor?.monitoring)}
+              />
+            </div>
+          </section>
+
+          {/* AI developer diagnostics — same states as before (error / empty /
+              loading / result), rendered as a terminal readout instead of a
+              bordered text block. */}
+          <section className="animate-fade-up rounded-xl border border-white/[0.08] bg-surface px-[22px] py-5" style={{ animationDelay: '120ms' }}>
+            <div className="mb-4 flex flex-wrap items-center justify-between gap-4">
+              <div>
+                <h2 className={PANEL_H2}>AI Analysis</h2>
+                <p className="text-[11px] leading-[normal] text-ink-faint">Advisory diagnostics from the configured AI provider, rendered as a live readout.</p>
+              </div>
+              <Button variant="secondary" size="sm" onClick={handleAnalyzeAlerts} disabled={aiLoading || apiOnline === false}>
+                {aiLoading ? <Loader2 size={14} className="animate-spin" /> : <Activity size={14} />}
+                {aiLoading ? 'Analyzing...' : 'Analyze recent alerts'}
+              </Button>
+            </div>
+
+            <div className="overflow-hidden rounded-[10px] border border-white/[0.12] bg-base">
+              <div className="flex items-center gap-1.5 border-b border-white/[0.08] bg-surface-2 px-3 py-2">
+                <span className="h-[7px] w-[7px] rounded-full bg-white/[0.12]" />
+                <span className="h-[7px] w-[7px] rounded-full bg-white/[0.12]" />
+                <span className="h-[7px] w-[7px] rounded-full bg-white/[0.12]" />
+                <span className="ml-1 text-[10px] text-ink-faint">threatscope-ai · analysis.log</span>
+              </div>
+              <div className="px-4 py-3.5 font-mono text-[12.5px] leading-[1.7]">
+                {aiError && (
+                  <p className="flex items-center gap-2 text-severity-high">
+                    <AlertTriangle size={14} /> {aiError}
+                  </p>
+                )}
+
+                {!aiError && !aiResult && !aiLoading && (
+                  <p className="text-ink-faint">
+                    <span className="text-signal">&gt;</span> waiting for analysis
+                    <span className="ml-1 inline-block h-[13px] w-1.5 animate-cursor-blink bg-signal align-middle" />
+                  </p>
+                )}
+
+                {aiLoading && (
+                  <p className="text-ink-muted"><span className="text-signal">&gt;</span> analyzing {aiResult?.alert_count ?? summary.total} alerts…</p>
+                )}
+
+                {aiResult && (
+                  <div className="flex flex-col gap-1.5 text-ink-muted">
+                    <p><span className="text-signal">&gt;</span> model: {aiResult.model} · {aiResult.alert_count} alerts analyzed</p>
+                    <p><span className="text-signal">&gt;</span> pattern: {aiResult.pattern}</p>
+                    <p><span className="text-signal">&gt;</span> summary: {aiResult.summary}</p>
+                    <p><span className="text-signal">&gt;</span> risk_level: <b className={riskTextClass(aiResult.risk_level)}>{aiResult.risk_level}</b></p>
+                    {aiResult.rule_tuning_suggestions?.length > 0 && (
+                      <div className="mt-1">
+                        <p className="text-ink-faint">&gt; rule tuning suggestions:</p>
+                        <ul className="ml-4 list-disc">
+                          {aiResult.rule_tuning_suggestions.map((item, index) => (
+                            <li key={`${item}-${index}`}>{item}</li>
+                          ))}
+                        </ul>
+                      </div>
+                    )}
+                    <p className="mt-1 text-[11px] text-ink-faint">{aiResult.demo_note} · {aiResult.disclaimer}</p>
+                    <p className="mt-1">
+                      <span className="text-signal">&gt;</span> _<span className="ml-0.5 inline-block h-[13px] w-1.5 animate-cursor-blink bg-signal align-middle" />
+                    </p>
+                  </div>
+                )}
+              </div>
+            </div>
+          </section>
+
+          {/* Attack Types — real functional data the mock never showed;
+              moved here after the mock-matching sequence (Attack Surface /
+              Live Network Pulse / AI Analysis) instead of competing with
+              Attack Surface for width in a cramped side-by-side row. */}
+          <section className="mt-[18px] animate-fade-up rounded-xl border border-white/[0.08] bg-surface px-[22px] py-5" style={{ animationDelay: '160ms' }}>
+            <h2 className={PANEL_H2}>Attack Types</h2>
+            <AttackTypeChart data={typeStats} />
+          </section>
+        </div>
+
+        {/* Live alert feed — stretches to match the left column's full
+            height (flex `stretch` is the default cross-axis behavior on the
+            outer row, so this just needs to opt in down through the tree)
+            instead of stopping at a fixed 520px. Header stays a fixed
+            height at the top; only the line list flexes to fill whatever
+            space is left, so its bottom edge lands exactly level with
+            Attack Types. `min-h-0` is required here — flex children default
+            to a content-based min-height, which would otherwise stop this
+            from shrinking to fit and break its internal scroll. */}
+        <aside className="w-full shrink-0 animate-fade-up lg:w-[340px]" style={{ animationDelay: '200ms' }}>
+          <section
+            className="flex flex-col overflow-hidden rounded-xl border border-white/[0.08] bg-surface"
+            style={{ height: feedHeight ? `${feedHeight}px` : '520px' }}
+          >
+            <div className="flex items-center gap-2 border-b border-white/[0.08] px-4 py-[11px] font-mono text-[11px] text-ink-faint">
+              <span>live_feed.stream</span>
+              <span className={`ml-auto flex items-center gap-1.5 text-[10px] ${connected ? 'text-severity-low' : 'text-severity-high'}`}>
+                <span className={`h-1.5 w-1.5 rounded-full ${connected ? 'bg-severity-low animate-live-blink' : 'bg-severity-high'}`} />
+                {connected ? 'feed connected' : 'feed offline'}
+              </span>
+              <Button variant="ghost" size="sm" className="group ml-1" onClick={() => setPaused(p => !p)}>
+                {paused
+                  ? <><PlayCircle  size={14} className="transition-transform duration-200 ease-swift group-hover:scale-110" /> Resume</>
+                  : <><PauseCircle size={14} className="transition-transform duration-200 ease-swift group-hover:scale-110" /> Pause</>}
+              </Button>
+            </div>
+            <div className="feed-scroll min-h-0 flex-1 overflow-y-auto px-4 py-3.5 text-xs leading-[1.9]" style={{ scrollbarWidth: 'thin' }}>
+              {displayAlerts.length === 0
+                ? <p className="italic text-ink-faint">No alerts detected yet. Listening...</p>
+                : displayAlerts.map((alert, i) => <AlertCard key={alert.id ?? i} alert={alert} />)
+              }
+            </div>
+          </section>
+        </aside>
+      </div>
+
+      </div>
     </main>
   )
 }
 
-function riskStyle(riskLevel) {
-  if (riskLevel === 'HIGH') return { borderColor: '#ef444440', color: '#ef4444' }
-  if (riskLevel === 'LOW') return { borderColor: '#22c55e40', color: '#22c55e' }
-  return { borderColor: '#f59e0b40', color: '#f59e0b' }
+function riskTextClass(riskLevel) {
+  if (riskLevel === 'HIGH') return 'text-severity-high'
+  if (riskLevel === 'LOW') return 'text-severity-low'
+  return 'text-severity-medium'
 }
 
-const styles = {
-  main:         { padding: '24px 32px' },
-  cards:        { display: 'flex', gap: 16, marginBottom: 32, flexWrap: 'wrap' },
-  card:         { flex: 1, minWidth: 140, background: '#1e293b', borderRadius: 8, padding: '16px 20px', display: 'flex', flexDirection: 'column', gap: 8 },
-  cardHeader:   { display: 'flex', alignItems: 'center', gap: 8 },
-  cardLabel:    { fontSize: 13, color: '#94a3b8' },
-  cardValue:    { fontSize: 34, fontWeight: 'bold' },
-  chartsRow:    { display: 'flex', gap: 16, marginBottom: 32, flexWrap: 'wrap' },
-  chartCard:    { flex: 1, minWidth: 260, background: '#1e293b', borderRadius: 8, padding: '20px 24px' },
-  section:      { marginBottom: 32 },
-  sectionTitle: { fontSize: 14, fontWeight: 600, color: '#94a3b8', marginBottom: 12, textTransform: 'uppercase', letterSpacing: 0.8 },
-  aiSection:    { marginBottom: 32, background: '#1e293b', borderRadius: 8, padding: '20px 24px', border: '1px solid #334155' },
-  aiHeader:     { display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 16, marginBottom: 16, flexWrap: 'wrap' },
-  aiSubtext:    { color: '#64748b', fontSize: 13, marginTop: -4 },
-  aiButton:     { display: 'flex', alignItems: 'center', gap: 8, border: '1px solid #6366f1', borderRadius: 6, padding: '8px 12px', background: '#111827', color: '#c7d2fe', fontSize: 13, fontWeight: 700, cursor: 'pointer' },
-  aiEmpty:      { color: '#64748b', fontStyle: 'italic', fontSize: 14 },
-  aiError:      { display: 'flex', alignItems: 'center', gap: 8, color: '#fca5a5', background: '#7f1d1d33', border: '1px solid #ef444440', borderRadius: 6, padding: '10px 12px', fontSize: 13 },
-  aiResult:     { display: 'flex', flexDirection: 'column', gap: 10 },
-  aiMeta:       { display: 'flex', alignItems: 'center', gap: 10, flexWrap: 'wrap', marginBottom: 2 },
-  aiMetaItem:   { color: '#94a3b8', fontSize: 12, border: '1px solid #334155', borderRadius: 99, padding: '4px 9px' },
-  aiRisk:       { fontSize: 12, fontWeight: 800, border: '1px solid', borderRadius: 99, padding: '4px 9px' },
-  aiText:       { color: '#cbd5e1', fontSize: 14, lineHeight: 1.55 },
-  aiLabel:      { color: '#94a3b8', fontSize: 12, textTransform: 'uppercase', letterSpacing: 0.8, marginTop: 4, marginBottom: 6 },
-  aiList:       { color: '#cbd5e1', fontSize: 14, lineHeight: 1.55, paddingLeft: 20 },
-  aiDisclaimer: { color: '#64748b', fontSize: 12, marginTop: 2 },
-  feedHeader:   { display: 'flex', alignItems: 'center', gap: 12, marginBottom: 12 },
-  feedCount:    { fontSize: 12, color: '#475569', flex: 1 },
-  pauseBtn:     { display: 'flex', alignItems: 'center', gap: 6, background: '#1e293b', border: '1px solid #334155', color: '#94a3b8', padding: '4px 12px', borderRadius: 6, fontSize: 12, cursor: 'pointer' },
-  empty:        { color: '#475569', fontStyle: 'italic' },
+function scanHeadline(scanStatus) {
+  if (!scanStatus?.sensor?.online) return 'Sensor Offline'
+  if (scanStatus?.sensor?.last_error) return 'Sensor Error'
+  if (!scanStatus?.sensor?.monitoring) {
+    return scanStatus?.sensor?.desired_monitoring ? 'Starting Sensor' : 'Monitoring Paused'
+  }
+  if (scanStatus?.state === 'running') return 'Assessment Running'
+  if (scanStatus?.state === 'threats_found') return 'Threats detected'
+  if (scanStatus?.state === 'no_data') return 'No Traffic Observed'
+  if (scanStatus?.state === 'sensor_offline') return 'Sensor Offline'
+  if (scanStatus?.state === 'secure') return 'No Known Threats Detected'
+  return 'Continuous Monitoring Active'
+}
+
+function scanMessage(scanStatus, summary) {
+  if (!scanStatus?.sensor?.online) {
+    return 'ThreatScope cannot inspect this network because no sensor service is connected. Install or start the sensor before assessing network safety.'
+  }
+  if (scanStatus?.sensor?.last_error) return scanStatus.sensor.last_error
+  if (!scanStatus?.sensor?.monitoring) {
+    return scanStatus?.sensor?.desired_monitoring
+      ? 'The sensor is online and preparing packet capture.'
+      : 'The sensor service is online, but packet inspection is paused. Start continuous monitoring to detect network threats.'
+  }
+  if (scanStatus?.state === 'running') {
+    return 'ThreatScope is actively inspecting network packets. New alerts will appear below if suspicious traffic is found.'
+  }
+  if (scanStatus?.state === 'threats_found') return scanStatus.message
+  if (scanStatus?.state === 'no_data' || scanStatus?.state === 'sensor_offline') return scanStatus.message
+  if (scanStatus?.state === 'secure') {
+    const scheduleClause = scanStatus?.enabled
+      ? `assessments continue every ${scanStatus.interval_minutes} minutes`
+      : 'scheduled assessments are currently off'
+    return `${scanStatus.message} ${summary.total} alerts stored this session; ${scheduleClause}.`
+  }
+  return 'The sensor is continuously inspecting traffic. Run an assessment to produce a verified safety result for a measured packet window.'
+}
+
+// 4 states (scanning/alert/secure/monitoring), derived from the exact same
+// conditions scanHeadline/scanMessage already check — kept as one shared
+// mapper so the hero text color and ring color can't drift out of sync.
+// Only "alert" gets its own color anywhere; every other state shares
+// ThreatScope's own signal teal, matching the mock (which never recolors
+// anything except the giant status text and the rings during an alert).
+function mapScanState(scanStatus) {
+  if (!scanStatus?.sensor?.online || scanStatus?.state === 'sensor_offline') return 'offline'
+  if (scanStatus?.sensor?.last_error) return 'offline'
+  if (!scanStatus?.sensor?.monitoring) return 'paused'
+  if (scanStatus?.state === 'running') return 'scanning'
+  if (scanStatus?.state === 'threats_found') return 'alert'
+  if (scanStatus?.state === 'no_data') return 'no-data'
+  if (scanStatus?.state === 'secure') return 'secure'
+  return 'monitoring'
+}
+
+function scanHeroColorClass(state) {
+  if (state === 'alert' || state === 'offline') return 'text-severity-high'
+  if (state === 'paused' || state === 'no-data') return 'text-severity-medium'
+  return 'text-signal'
+}
+
+function scanRingBorderClass(state) {
+  if (state === 'alert' || state === 'offline') return 'border-severity-high'
+  if (state === 'paused' || state === 'no-data') return 'border-severity-medium'
+  return 'border-signal'
+}
+
+function scanDotClass(state) {
+  if (state === 'alert' || state === 'offline') return 'bg-severity-high'
+  if (state === 'paused' || state === 'no-data') return 'bg-severity-medium'
+  return 'bg-signal'
 }

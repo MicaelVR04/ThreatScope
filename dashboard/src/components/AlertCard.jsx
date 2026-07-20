@@ -1,42 +1,25 @@
-import SeverityBadge from './SeverityBadge'
-import { AlertTriangle, ShieldAlert, Info } from 'lucide-react'
+import { threatLabel } from '../utils/threatLabels'
 
-const SEVERITY_ICON = {
-  HIGH:   <ShieldAlert size={16} color="#ef4444" />,
-  MEDIUM: <AlertTriangle size={16} color="#f59e0b" />,
-  LOW:    <Info size={16} color="#22c55e" />,
-}
+const GLYPH = { HIGH: '▲', MEDIUM: '▶', LOW: '•' }
+const GLYPH_COLOR = { HIGH: 'text-severity-high', MEDIUM: 'text-severity-medium', LOW: 'text-severity-low' }
 
-const BORDER_COLOR = { HIGH: '#ef4444', MEDIUM: '#f59e0b', LOW: '#22c55e' }
-
+// Matches the mock's .fl exactly: only HIGH severity gets its own bold-text
+// color (the glyph is colored for all three, but the label+severity text
+// itself only turns red for HIGH — medium/low stay plain ink).
 export default function AlertCard({ alert }) {
-  const border = BORDER_COLOR[alert.severity] || '#334155'
+  const glyphColor = GLYPH_COLOR[alert.severity] || 'text-ink-faint'
+  const bodyBold = alert.severity === 'HIGH' ? 'text-severity-high' : 'text-ink'
   return (
-    <div style={{ ...styles.card, borderLeft: `4px solid ${border}` }}>
-      <div style={styles.header}>
-        {SEVERITY_ICON[alert.severity] ?? <Info size={16} color="#94a3b8" />}
-        <SeverityBadge severity={alert.severity} />
-        <span style={styles.type}>{alert.type}</span>
-        <span style={styles.time}>{new Date(alert.timestamp).toLocaleTimeString()}</span>
-      </div>
-      <div style={styles.meta}>
-        <span style={styles.ip}>{alert.src_ip}</span>
-        <span style={styles.arrow}>→</span>
-        <span style={styles.ip}>{alert.dst_ip}</span>
-        {alert.protocol && <span style={styles.tag}>{alert.protocol}</span>}
-        {alert.dst_port && <span style={styles.tag}>:{alert.dst_port}</span>}
-      </div>
+    <div className="mb-[7px] flex animate-fl-in gap-2">
+      <span className="shrink-0 font-mono text-[11px] text-ink-faint">
+        {new Date(alert.timestamp).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit', second: '2-digit' })}
+      </span>
+      <span className={`w-[14px] shrink-0 font-mono text-xs ${glyphColor}`}>{GLYPH[alert.severity] || '•'}</span>
+      <span className="text-ink-muted">
+        {threatLabel(alert.type)} <b className={`font-semibold ${bodyBold}`}>{alert.severity}</b>
+        <br />
+        <span className="font-mono text-[11px] text-ink-faint">{alert.src_ip} → {alert.dst_ip}</span>
+      </span>
     </div>
   )
-}
-
-const styles = {
-  card:   { background: '#1e293b', borderRadius: 8, padding: '12px 16px', marginBottom: 8 },
-  header: { display: 'flex', alignItems: 'center', gap: 10, marginBottom: 8 },
-  type:   { flex: 1, fontSize: 14, fontWeight: 600, color: '#f1f5f9' },
-  meta:   { display: 'flex', alignItems: 'center', gap: 8, fontSize: 13, color: '#94a3b8' },
-  ip:     { fontFamily: 'monospace', color: '#cbd5e1' },
-  arrow:  { color: '#475569' },
-  tag:    { background: '#0f172a', border: '1px solid #334155', borderRadius: 4, padding: '1px 6px', fontSize: 11, color: '#64748b' },
-  time:   { color: '#475569', fontSize: 12, marginLeft: 'auto' },
 }

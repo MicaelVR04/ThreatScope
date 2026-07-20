@@ -9,6 +9,7 @@ dist/
 build/
 venv/
 .venv/
+.venv
 env/
 
 # Environment variables - NEVER commit this
@@ -42,3 +43,9 @@ logs/
 .coverage
 htmlcov/
 .pytest_cache/
+
+# AI agent tooling (local machine artifacts, not project source)
+.agents/
+.claude/
+.venv-check/
+skills-lock.json

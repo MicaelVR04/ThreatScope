@@ -37,6 +37,9 @@ Working features:
   - `SYN_FLOOD`
   - `PING_SWEEP`
   - `ARP_SPOOF`
+- Continuous packet monitoring through a managed local sensor service
+- Authenticated sensor heartbeat and dashboard start/stop controls
+- Verified assessment windows that require real packet activity
 
 The ARP spoof rule is a real rule in the engine, not only a simulated dashboard event. It watches for repeated conflicting ARP replies where multiple MAC addresses claim the same IP address.
 
@@ -79,6 +82,7 @@ Fill in the Supabase values in `.env`:
 SUPABASE_URL=https://your-project.supabase.co
 SUPABASE_SERVICE_ROLE_KEY=your-service-role-key
 SUPABASE_ALERTS_TABLE=alerts
+SUPABASE_RUNTIME_STATE_TABLE=runtime_state
 
 VITE_SUPABASE_URL=https://your-project.supabase.co
 VITE_SUPABASE_ANON_KEY=your-anon-or-publishable-key
@@ -89,6 +93,10 @@ Do not commit `.env`. The service-role key is backend-only and must not be expos
 Useful demo settings:
 
 ```bash
+API_URL=http://localhost:8000/alerts
+API_BASE_URL=http://localhost:8000
+ENGINE_API_KEY=generate-a-long-random-value
+MONITORING_DEFAULT_ENABLED=true
 DEMO_MODE=true
 ALERT_COOLDOWN_SECONDS=60
 ARP_ENTRY_TTL_SECONDS=300
@@ -99,10 +107,18 @@ ARP_SPOOF_CONFIRMATION_THRESHOLD=2
 Optional local AI diagnostics:
 
 ```bash
+AI_PROVIDER=ollama
 OLLAMA_BASE_URL=http://127.0.0.1:11434
 OLLAMA_MODEL=qwen2.5:7b
 OLLAMA_TIMEOUT_SECONDS=45
 OLLAMA_ALERT_LIMIT=20
+```
+
+Optional scheduled scan settings:
+
+```bash
+SCAN_WINDOW_SECONDS=8
+SCAN_INTERVAL_MINUTES=5
 ```
 
 ## Supabase Setup
@@ -115,9 +131,16 @@ OLLAMA_ALERT_LIMIT=20
 supabase/alerts_schema.sql
 ```
 
-This creates the `alerts` table, indexes, read policy, and adds the table to the Supabase Realtime publication.
+4. Run the private runtime-state migration:
 
-The dashboard needs read access through the anon or publishable key. The API uses the service-role key to insert alerts.
+```text
+supabase/runtime_state_schema.sql
+```
+
+The alerts policy permits reads only for signed-in users. Anonymous visitors
+cannot read alert rows. The private runtime table has no browser policy; only
+the backend service role uses it to restore monitoring and assessment state
+after an API restart.
 
 ## Running Locally
 
@@ -160,17 +183,65 @@ npm install
 npm run dev
 ```
 
-Engine:
+### One-Time Sensor Setup (macOS)
+
+Only the person responsible for the monitored network installs the sensor.
+Regular dashboard users do not need it. Administrator access is requested once
+because macOS protects packet-capture access.
+
+From the configured ThreatScope project directory, run:
 
 ```bash
-cd engine
-python3 -m venv .venv
-source .venv/bin/activate
-pip install -r requirements.txt
-sudo python capture.py
+./scripts/setup_sensor_macos.sh
 ```
 
-On macOS, live packet capture requires `sudo`. Set `NETWORK_INTERFACE` in `.env` if your active interface is not `en0`.
+The guided command creates the Python environment, installs the sensor
+dependencies, and then requests administrator access to register the root-owned
+`launchd` service. Afterward the sensor starts at boot, reconnects
+automatically, and is controlled from the dashboard.
+
+Useful service commands:
+
+```bash
+sudo ./scripts/control_sensor_macos.sh status
+sudo ./scripts/control_sensor_macos.sh stop
+sudo ./scripts/control_sensor_macos.sh disable
+sudo ./scripts/control_sensor_macos.sh enable
+sudo tail -f /var/log/threatscope-sensor.log
+sudo ./scripts/uninstall_sensor_macos.sh
+```
+
+The dashboard's **Stop monitoring** control pauses packet capture while leaving
+the service online. The `disable` command stops the entire service and prevents
+it from starting after a reboot. The sensor can be inspected in Activity
+Monitor as a Python background process; its command line points to
+`engine/sensor.py`.
+
+The service inspects packets in memory and sends compact alerts plus heartbeat
+status to the API. It does not store or upload raw packet captures. If the API
+temporarily becomes unavailable, the sensor keeps its last monitoring setting
+and reconnects automatically.
+
+Set `NETWORK_INTERFACE` in `.env` if the active interface is not `en0`.
+
+## Free Holberton Staging Deployment
+
+The repository includes `render.yaml` for a no-cost staging deployment:
+
+- Render static site for the React dashboard
+- Render free Python web service for FastAPI
+- Existing Supabase project for authentication, alerts, realtime, and runtime state
+- Existing Groq key for cloud AI analysis
+
+The generated Render hostnames are connected automatically. Follow
+`docs/free-staging-deployment.md` for the exact secret-entry, Supabase, sensor,
+and demo verification steps.
+
+This is a presentation environment, not a commercial production tier. Render
+free web services sleep after inactivity and can take about a minute to wake.
+Pre-warm the API before a meeting. A public release also needs per-sensor
+enrollment credentials, tenant isolation, signed installers, monitoring, and
+paid always-on infrastructure.
 
 ## Demo Traffic
 
@@ -234,7 +305,49 @@ ollama run qwen2.5:7b
 
 When the API and dashboard are running, log in to the dashboard and use the **AI Analysis** panel to analyze recent alerts. If Ollama is not running or the configured model is missing, the dashboard will show a friendly setup error.
 
-For a clean presentation, clear older test alerts or set `OLLAMA_ALERT_LIMIT=4` so the AI only summarizes the latest four demo alerts. Historical simulated rows can make the AI describe older sources or severities that are not part of the current demo run.
+AI Analysis follows the latest assessment window, so a secure assessment does
+not summarize unrelated historical alerts. Signed-in users can remove their
+own stored test data from **Alert History > Clear alert history** without
+deleting another user's rows.
+
+The shared demo uses Groq cloud AI:
+
+```bash
+AI_PROVIDER=openai
+OPENAI_API_KEY=your-api-key
+OPENAI_MODEL=qwen/qwen3.6-27b
+OPENAI_BASE_URL=https://api.groq.com/openai/v1
+```
+
+Keep the API key server-side in `.env`. Do not expose it in dashboard code.
+
+## Continuous Monitoring And Assessments
+
+ThreatScope's sensor monitors packets continuously. The dashboard can start or
+pause packet capture without stopping the background service, and it can run an
+assessment immediately or every 5 or 10 minutes.
+
+An assessment records both alert and packet-count deltas. The dashboard only
+reports **No Known Threats Detected** when the sensor stayed online, inspected
+at least one packet, and no packet matched the four enabled detection rules. An
+offline sensor or an empty capture window never produces that result, and the
+result is not a guarantee against attack types ThreatScope does not detect.
+
+## Security Configuration
+
+For a shared demo or deployment, keep `ALLOW_INSECURE_LOCAL_DEV=false` and configure both server-side secrets in `.env`:
+
+```bash
+ENGINE_API_KEY=a_long_random_value
+SENSOR_OWNER_USER_ID=the_demo_users_supabase_uuid
+```
+
+Dashboard API requests require a valid Supabase access token. For legacy HS256 Supabase projects, also set `SUPABASE_JWT_SECRET`; newer asymmetric-key projects are verified against the public JWKS endpoint using the existing `SUPABASE_URL`. The packet engine and `api/simulate.py` submit alerts with `X-Engine-Key`; this key must never be exposed to the browser. The demo reset endpoint uses the same internal key.
+
+The API assigns sensor alerts to `SENSOR_OWNER_USER_ID`. Supabase RLS limits
+browser reads to that UUID, and the API limits AI and sensor controls to the
+same owner. This supports one securely scoped staging sensor; public multi-user
+deployment will require per-sensor enrollment credentials.
 
 ## Tests
 

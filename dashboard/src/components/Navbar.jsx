@@ -1,63 +1,101 @@
-import { NavLink } from 'react-router-dom'
-import { Shield, LayoutDashboard, Clock, Wifi, WifiOff, LogOut } from 'lucide-react'
+import { NavLink, useNavigate } from 'react-router-dom'
+import { Shield, LayoutDashboard, Clock, Wifi, WifiOff, LogOut, Home } from 'lucide-react'
+import Button from './theme/Button'
 
 export default function Navbar({ connected, userEmail, signingOut, onLogout }) {
+  const navigate = useNavigate()
+
   return (
-    <header style={styles.nav}>
-      <div style={styles.brand}>
-        <div style={styles.logoMark} aria-hidden="true">
-          <Shield size={18} color="#f8fafc" strokeWidth={2.4} />
+    <header className="flex flex-wrap items-center gap-3 border-b border-white/[0.08] bg-surface px-4 py-3.5 sm:gap-6 sm:px-8">
+      <div className="flex items-center gap-2.5">
+        <div
+          aria-hidden="true"
+          className="grid h-[34px] w-[34px] shrink-0 place-items-center rounded-lg bg-signal shadow-[0_0_0_1px_rgba(255,255,255,0.08),0_8px_22px_-4px_rgba(46,235,209,0.35)]"
+        >
+          <Shield size={18} className="text-base" strokeWidth={2.4} />
         </div>
         <div>
-          <span style={styles.title}>ThreatScope</span>
-          <span style={styles.subtitle}>NIDS Console</span>
+          <span className="block font-display text-lg font-bold tracking-tight text-ink">ThreatScope</span>
+          <span className="ts-console-label mt-px block font-mono text-[10px] font-bold uppercase tracking-[0.8px] text-ink-faint">NIDS Console</span>
         </div>
       </div>
 
-      <nav style={styles.links}>
-        <NavLink to="/" end style={({ isActive }) => ({ ...styles.link, ...(isActive ? styles.active : {}) })}>
+      <nav className="flex flex-1 gap-3 sm:ml-3 sm:gap-5">
+        <NavLink
+          to="/dashboard"
+          end
+          className={({ isActive }) =>
+            `flex items-center gap-1.5 py-1 font-sans text-sm no-underline transition-colors duration-150 ease-swift ${
+              isActive ? 'font-semibold text-signal' : 'text-ink-muted'
+            }`
+          }
+        >
           <LayoutDashboard size={15} />
           Dashboard
         </NavLink>
-        <NavLink to="/history" style={({ isActive }) => ({ ...styles.link, ...(isActive ? styles.active : {}) })}>
+        <NavLink
+          to="/history"
+          className={({ isActive }) =>
+            `flex items-center gap-1.5 py-1 font-sans text-sm no-underline transition-colors duration-150 ease-swift ${
+              isActive ? 'font-semibold text-signal' : 'text-ink-muted'
+            }`
+          }
+        >
           <Clock size={15} />
           Alert History
         </NavLink>
       </nav>
 
-      <div style={styles.actions}>
-        <div style={{ ...styles.statusWrap, borderColor: connected ? '#22c55e40' : '#ef444440' }}>
+      <div className="flex items-center gap-2 sm:gap-3">
+        <div
+          className={`flex items-center gap-1.5 rounded-full border px-3 py-1 ${
+            connected ? 'border-severity-low/25' : 'border-severity-high/25'
+          }`}
+        >
           {connected ? (
             <>
-              <span style={styles.pulse} />
-              <Wifi size={13} color="#22c55e" />
-              <span style={{ ...styles.statusText, color: '#22c55e' }}>LIVE</span>
+              <span className="h-[7px] w-[7px] rounded-full bg-severity-low animate-[ts-pulse_1.4s_ease-in-out_infinite]" />
+              <Wifi size={13} className="text-severity-low" />
+              <span className="font-mono text-[11px] font-bold tracking-[0.8px] text-severity-low">FEED LIVE</span>
             </>
           ) : (
             <>
-              <WifiOff size={13} color="#ef4444" />
-              <span style={{ ...styles.statusText, color: '#ef4444' }}>DISCONNECTED</span>
+              <WifiOff size={13} className="text-severity-high" />
+              <span className="font-mono text-[11px] font-bold tracking-[0.8px] text-severity-high">FEED OFFLINE</span>
             </>
           )}
         </div>
 
         {userEmail && (
-          <span className="ts-user-email" style={styles.userEmail} title={userEmail}>
+          <span className="ts-user-email max-w-[210px] truncate font-sans text-xs text-ink-muted" title={userEmail}>
             {userEmail}
           </span>
         )}
 
-        <button
+        <Button
           type="button"
-          style={{ ...styles.logoutBtn, ...(signingOut ? styles.logoutBtnDisabled : {}) }}
+          variant="ghost"
+          size="sm"
+          onClick={() => navigate('/')}
+          title="Back to landing page"
+          aria-label="Back to landing page"
+        >
+          <Home size={15} />
+          <span className="ts-logout-text leading-none">Home</span>
+        </Button>
+
+        <Button
+          type="button"
+          variant="secondary"
+          size="sm"
           onClick={onLogout}
           disabled={signingOut}
           title="Sign out"
           aria-label="Sign out"
         >
           <LogOut size={15} />
-          <span className="ts-logout-text" style={styles.logoutText}>{signingOut ? 'Signing out' : 'Logout'}</span>
-        </button>
+          <span className="ts-logout-text leading-none">{signingOut ? 'Signing out' : 'Logout'}</span>
+        </Button>
       </div>
 
       <style>{`
@@ -72,26 +110,13 @@ export default function Navbar({ connected, userEmail, signingOut, onLogout }) {
             display: none;
           }
         }
+
+        @media (max-width: 480px) {
+          .ts-console-label {
+            display: none;
+          }
+        }
       `}</style>
     </header>
   )
-}
-
-const styles = {
-  nav:        { display: 'flex', alignItems: 'center', gap: 24, padding: '14px 32px', borderBottom: '1px solid #1e293b', background: '#0f172a' },
-  brand:      { display: 'flex', alignItems: 'center', gap: 10, minWidth: 180 },
-  logoMark:   { width: 34, height: 34, borderRadius: 8, display: 'grid', placeItems: 'center', background: 'linear-gradient(135deg, #6366f1, #14b8a6)', boxShadow: '0 0 0 1px rgba(255,255,255,0.08), 0 8px 22px rgba(20,184,166,0.16)' },
-  title:      { display: 'block', fontSize: 17, fontWeight: 'bold', color: '#f1f5f9', letterSpacing: 0 },
-  subtitle:   { display: 'block', marginTop: 1, fontSize: 10, fontWeight: 700, color: '#64748b', letterSpacing: 0.8, textTransform: 'uppercase' },
-  links:      { display: 'flex', gap: 20, flex: 1, marginLeft: 12 },
-  link:       { display: 'flex', alignItems: 'center', gap: 6, color: '#64748b', textDecoration: 'none', fontSize: 14, padding: '4px 0' },
-  active:     { color: '#818cf8', fontWeight: 600 },
-  actions:    { display: 'flex', alignItems: 'center', gap: 12 },
-  statusWrap: { display: 'flex', alignItems: 'center', gap: 6, border: '1px solid', borderRadius: 99, padding: '4px 12px' },
-  statusText: { fontSize: 11, fontWeight: 'bold', letterSpacing: 0.8 },
-  userEmail:  { maxWidth: 210, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap', color: '#94a3b8', fontSize: 12 },
-  logoutBtn:  { display: 'flex', alignItems: 'center', gap: 7, border: '1px solid #334155', borderRadius: 6, padding: '7px 10px', background: '#111827', color: '#cbd5e1', fontSize: 13, fontWeight: 700, cursor: 'pointer' },
-  logoutBtnDisabled: { opacity: 0.65, cursor: 'not-allowed' },
-  logoutText: { lineHeight: 1 },
-  pulse:      { width: 7, height: 7, borderRadius: '50%', background: '#22c55e', animation: 'ts-pulse 1.4s ease-in-out infinite' },
 }

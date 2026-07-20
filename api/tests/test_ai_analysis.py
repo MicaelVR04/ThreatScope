@@ -4,14 +4,20 @@ tests/test_ai_analysis.py — Unit tests for local Ollama diagnostics.
 
 import os
 import sys
+from datetime import datetime, timezone
 
 import pytest
 import requests
 from fastapi import HTTPException
+from fastapi.testclient import TestClient
 
 sys.path.insert(0, os.path.abspath(os.path.join(os.path.dirname(__file__), "..")))
 
-from ai_analysis import analyze_alerts_with_ollama, compact_alerts
+from ai_analysis import analyze_alerts, analyze_alerts_with_ollama, build_prompt, compact_alerts
+import main
+
+
+client = TestClient(main.app)
 
 
 def make_alert():
@@ -51,6 +57,15 @@ def test_compact_alerts_removes_extra_fields():
         "timestamp": "2026-07-04T21:56:42.093403+00:00",
         "message": "192.168.99.50 sent 100+ SYN packets",
     }]
+
+
+def test_prompt_includes_current_time_for_timestamp_interpretation():
+    current_time = datetime(2026, 7, 20, 12, 0, tzinfo=timezone.utc)
+
+    prompt = build_prompt([make_alert()], current_time=current_time)
+
+    assert "2026-07-20T12:00:00+00:00" in prompt
+    assert "Do not call an alert timestamp future-dated" in prompt
 
 
 def test_analyze_alerts_with_mocked_ollama(monkeypatch):
@@ -106,3 +121,65 @@ def test_analyze_alerts_empty_short_circuits(monkeypatch):
 
     assert result["alert_count"] == 0
     assert result["risk_level"] == "LOW"
+
+
+def test_analyze_alerts_with_mocked_cloud_provider(monkeypatch):
+    monkeypatch.setenv("AI_PROVIDER", "openai")
+    monkeypatch.setenv("OPENAI_API_KEY", "test-key")
+    monkeypatch.setenv("OPENAI_MODEL", "gpt-test")
+
+    def fake_post(url, headers, json, timeout):
+        assert url.endswith("/chat/completions")
+        assert headers["Authorization"] == "Bearer test-key"
+        assert json["model"] == "gpt-test"
+        assert json["messages"][0]["role"] == "system"
+        return FakeResponse({
+            "choices": [{
+                "message": {
+                    "content": (
+                        '{"summary":"Recent alerts look like a demo scan.",'
+                        '"pattern":"Recon followed by active disruption.",'
+                        '"risk_level":"HIGH",'
+                        '"demo_note":"Likely deterministic demo traffic.",'
+                        '"rule_tuning_suggestions":["Tune cooldown windows.","Explain alert names in the UI."]}'
+                    )
+                }
+            }]
+        })
+
+    monkeypatch.setattr(requests, "post", fake_post)
+
+    result = analyze_alerts([make_alert()])
+
+    assert result["model"] == "gpt-test"
+    assert result["risk_level"] == "HIGH"
+    assert "demo scan" in result["summary"]
+
+
+def test_secure_assessment_does_not_send_historical_alerts_to_ai(monkeypatch):
+    captured = {}
+    main.app.dependency_overrides[main.verify_sensor_owner] = lambda: {
+        "sub": "test-user-id"
+    }
+    monkeypatch.setattr(main, "get_alerts", lambda **kwargs: [make_alert()])
+    monkeypatch.setattr(
+        main,
+        "get_scan_status",
+        lambda: {
+            "state": "secure",
+            "last_started_at": "2026-07-20T12:00:00+00:00",
+        },
+    )
+
+    def fake_analyze(alerts):
+        captured["alerts"] = alerts
+        return {"alert_count": len(alerts)}
+
+    monkeypatch.setattr(main, "analyze_alerts", fake_analyze)
+    try:
+        response = client.post("/ai/analyze-alerts")
+    finally:
+        main.app.dependency_overrides.pop(main.verify_sensor_owner, None)
+
+    assert response.status_code == 200
+    assert captured["alerts"] == []

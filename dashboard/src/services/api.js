@@ -1,6 +1,5 @@
 import { supabase } from '../supabaseClient'
-
-const API_URL = import.meta.env.VITE_API_URL || 'http://localhost:8000'
+import { API_URL } from './config'
 
 async function getHeaders() {
   const { data: { session } } = await supabase.auth.getSession()
@@ -12,19 +11,24 @@ async function getHeaders() {
 
 async function apiFetch(path, options = {}) {
   const headers = await getHeaders()
-  const res = await fetch(`${API_URL}${path}`, {
-    ...options,
-    headers: {
-      ...headers,
-      ...(options.headers || {}),
-    },
-  })
+  let res
+  try {
+    res = await fetch(`${API_URL}${path}`, {
+      ...options,
+      headers: {
+        ...headers,
+        ...(options.headers || {}),
+      },
+    })
+  } catch {
+    throw new Error('ThreatScope API is offline. Start the API service and try again.')
+  }
   if (!res.ok) {
     let message = `API error: ${res.status}`
     try {
       const data = await res.json()
       if (data?.detail) message = data.detail
-    } catch {}
+    } catch { /* response body wasn't JSON — fall back to the generic message above */ }
     throw new Error(message)
   }
   return res.json()
@@ -95,4 +99,37 @@ export async function getAttackTypeStats() {
 
 export async function analyzeRecentAlerts() {
   return apiFetch('/ai/analyze-alerts', { method: 'POST' })
+}
+
+export async function clearMyAlerts() {
+  return apiFetch('/alerts/mine', { method: 'DELETE' })
+}
+
+export async function getApiHealth() {
+  return apiFetch('/health')
+}
+
+export async function getScanStatus() {
+  return apiFetch('/scan/status')
+}
+
+export async function runScanNow() {
+  return apiFetch('/scan/run', { method: 'POST' })
+}
+
+export async function setSensorMonitoring(enabled) {
+  return apiFetch('/sensor/monitoring', {
+    method: 'POST',
+    body: JSON.stringify({ enabled }),
+  })
+}
+
+export async function setScanSchedule(enabled, intervalMinutes) {
+  return apiFetch('/scan/schedule', {
+    method: 'POST',
+    body: JSON.stringify({
+      enabled,
+      interval_minutes: intervalMinutes,
+    }),
+  })
 }

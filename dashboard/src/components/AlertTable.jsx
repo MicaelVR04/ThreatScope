@@ -1,6 +1,8 @@
 import { useState, useMemo } from 'react'
-import SeverityBadge from './SeverityBadge'
+import Button from './theme/Button'
+import Tag from './theme/Tag'
 import { ChevronUp, ChevronDown, ChevronsUpDown } from 'lucide-react'
+import { threatLabel, threatPlainEnglish } from '../utils/threatLabels'
 
 const COLUMNS = [
   { key: 'severity',  label: 'Severity' },
@@ -36,38 +38,44 @@ export default function AlertTable({ alerts = [] }) {
   }
 
   function SortIcon({ col }) {
-    if (col !== sortKey) return <ChevronsUpDown size={12} color="#475569" />
+    if (col !== sortKey) return <ChevronsUpDown size={12} className="text-ink-faint" />
     return sortDir === 'asc'
-      ? <ChevronUp size={12} color="#6366f1" />
-      : <ChevronDown size={12} color="#6366f1" />
+      ? <ChevronUp size={12} className="text-signal" />
+      : <ChevronDown size={12} className="text-signal" />
   }
 
   return (
     <div>
       {/* Filter bar */}
-      <div style={styles.filterBar}>
+      <div className="mb-3 flex items-center gap-2">
         {['ALL', 'HIGH', 'MEDIUM', 'LOW'].map(f => (
-          <button
+          <Button
             key={f}
+            variant="ghost"
+            size="sm"
             onClick={() => setFilter(f)}
-            style={{ ...styles.filterBtn, ...(filter === f ? styles.filterActive : {}) }}
+            className={filter === f ? 'bg-signal-dim text-signal' : ''}
           >
             {f}
-          </button>
+          </Button>
         ))}
-        <span style={styles.count}>{sorted.length} alert{sorted.length !== 1 ? 's' : ''}</span>
+        <span className="ml-auto text-xs text-ink-faint">{sorted.length} alert{sorted.length !== 1 ? 's' : ''}</span>
       </div>
 
       {sorted.length === 0 ? (
-        <p style={{ color: '#475569', fontStyle: 'italic', padding: '16px 0' }}>No alerts to display.</p>
+        <p className="py-4 italic text-ink-faint">No alerts to display.</p>
       ) : (
-        <div style={{ overflowX: 'auto' }}>
-          <table style={styles.table}>
+        <div className="overflow-x-auto">
+          <table className="w-full border-collapse text-[13px] text-ink">
             <thead>
               <tr>
                 {COLUMNS.map(col => (
-                  <th key={col.key} style={styles.th} onClick={() => handleSort(col.key)}>
-                    <span style={styles.thInner}>
+                  <th
+                    key={col.key}
+                    className="cursor-pointer select-none border-b border-white/[0.08] px-3.5 py-2.5 text-left font-semibold text-ink-muted transition-colors duration-150 ease-swift hover:text-ink"
+                    onClick={() => handleSort(col.key)}
+                  >
+                    <span className="inline-flex items-center gap-1">
                       {col.label}
                       <SortIcon col={col.key} />
                     </span>
@@ -77,12 +85,16 @@ export default function AlertTable({ alerts = [] }) {
             </thead>
             <tbody>
               {sorted.map((alert, i) => (
-                <tr key={alert.id ?? i} style={styles.row}>
-                  <td style={styles.td}><SeverityBadge severity={alert.severity} /></td>
-                  <td style={styles.td}>{alert.type}</td>
-                  <td style={{ ...styles.td, fontFamily: 'monospace' }}>{alert.src_ip}</td>
-                  <td style={{ ...styles.td, fontFamily: 'monospace' }}>{alert.dst_ip}</td>
-                  <td style={{ ...styles.td, color: '#475569', fontSize: 12 }}>
+                <tr key={alert.id ?? i} className="bg-surface transition-colors duration-150 ease-swift hover:bg-surface-2">
+                  <td className="border-b border-white/[0.08] px-3.5 py-2.5"><Tag severity={alert.severity}>{alert.severity}</Tag></td>
+                  <td className="border-b border-white/[0.08] px-3.5 py-2.5">
+                    <span className="block font-bold text-ink">{threatLabel(alert.type)}</span>
+                    <span className="mt-0.5 inline-block text-[11px] text-ink-faint">{alert.type}</span>
+                    <span className="mt-1 block max-w-[360px] text-xs leading-[1.4] text-ink-muted">{threatPlainEnglish(alert.type)}</span>
+                  </td>
+                  <td className="border-b border-white/[0.08] px-3.5 py-2.5 font-mono">{alert.src_ip}</td>
+                  <td className="border-b border-white/[0.08] px-3.5 py-2.5 font-mono">{alert.dst_ip}</td>
+                  <td className="border-b border-white/[0.08] px-3.5 py-2.5 text-xs text-ink-faint">
                     {new Date(alert.timestamp).toLocaleString()}
                   </td>
                 </tr>
@@ -93,16 +105,4 @@ export default function AlertTable({ alerts = [] }) {
       )}
     </div>
   )
-}
-
-const styles = {
-  filterBar:    { display: 'flex', alignItems: 'center', gap: 8, marginBottom: 12 },
-  filterBtn:    { background: '#1e293b', border: '1px solid #334155', color: '#94a3b8', padding: '4px 14px', borderRadius: 6, fontSize: 12, cursor: 'pointer', fontWeight: 600 },
-  filterActive: { background: '#6366f1', border: '1px solid #6366f1', color: '#fff' },
-  count:        { marginLeft: 'auto', fontSize: 12, color: '#475569' },
-  table:        { width: '100%', borderCollapse: 'collapse', fontSize: 13, color: '#f1f5f9' },
-  th:           { textAlign: 'left', padding: '10px 14px', color: '#94a3b8', borderBottom: '1px solid #1e293b', fontWeight: 600, cursor: 'pointer', userSelect: 'none' },
-  thInner:      { display: 'inline-flex', alignItems: 'center', gap: 4 },
-  td:           { padding: '10px 14px', borderBottom: '1px solid #1e293b' },
-  row:          { background: '#0f172a' },
 }

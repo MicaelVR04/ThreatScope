@@ -19,7 +19,8 @@ import os
 sys.path.insert(0, os.path.abspath(os.path.join(os.path.dirname(__file__), "..")))
 
 from main import app
-from database import init_db, clear_alerts
+from auth import verify_engine_key, verify_token
+from database import init_db, clear_alerts, get_alerts, insert_alert
 
 # ── Test Client ────────────────────────────────────────────────────────────
 client = TestClient(app)
@@ -32,10 +33,16 @@ def setup_and_teardown():
     Runs before and after every test.
     Initializes the DB and clears all alerts so tests don't affect each other.
     """
-    init_db()
-    clear_alerts()
-    yield
-    clear_alerts()
+    app.dependency_overrides[verify_token] = lambda: {"sub": "test-user-id"}
+    app.dependency_overrides[verify_engine_key] = lambda: None
+    try:
+        init_db()
+        clear_alerts()
+        yield
+        clear_alerts()
+    finally:
+        app.dependency_overrides.pop(verify_token, None)
+        app.dependency_overrides.pop(verify_engine_key, None)
 
 
 def make_alert(severity="HIGH", attack_type="PORT_SCAN"):
@@ -110,6 +117,19 @@ class TestReadAlerts:
         response = client.get("/alerts")
         assert response.status_code == 200
         assert response.json() == []
+
+    def test_alert_reads_are_scoped_to_authenticated_user(self):
+        owner_alert = make_alert()
+        other_alert = make_alert(attack_type="ARP_SPOOF")
+        other_alert["user_id"] = "other-user-id"
+
+        created = client.post("/alerts", json=owner_alert)
+        insert_alert(other_alert)
+        response = client.get("/alerts")
+
+        assert created.status_code == 200
+        assert response.status_code == 200
+        assert [alert["type"] for alert in response.json()] == ["PORT_SCAN"]
 
     def test_get_alerts_returns_created(self):
         """Should return alerts after they are created."""
@@ -232,3 +252,32 @@ class TestDeleteAlerts:
         client.delete("/alerts")
         data = client.get("/alerts/summary").json()
         assert data["total"] == 0
+
+    def test_authenticated_clear_only_removes_current_users_alerts(self):
+        current_user_alert = make_alert("HIGH")
+        current_user_alert["user_id"] = "test-user-id"
+        other_user_alert = make_alert("LOW")
+        other_user_alert["user_id"] = "other-user-id"
+        insert_alert(current_user_alert)
+        insert_alert(other_user_alert)
+
+        response = client.delete("/alerts/mine")
+
+        assert response.status_code == 200
+        assert get_alerts(user_id="test-user-id") == []
+        assert len(get_alerts(user_id="other-user-id")) == 1
+
+    def test_non_owner_clear_does_not_reset_sensor_status(self, monkeypatch):
+        reset_called = False
+
+        def fake_reset():
+            nonlocal reset_called
+            reset_called = True
+
+        monkeypatch.setattr("main.record_alert_history_cleared", fake_reset)
+        app.dependency_overrides[verify_token] = lambda: {"sub": "other-user-id"}
+
+        response = client.delete("/alerts/mine")
+
+        assert response.status_code == 200
+        assert reset_called is False

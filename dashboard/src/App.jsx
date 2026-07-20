@@ -4,6 +4,9 @@ import Navbar from './components/Navbar'
 import Dashboard from './pages/Dashboard'
 import AlertHistory from './pages/AlertHistory'
 import Login from './pages/Login'
+import Register from './pages/Register'
+import Landing from './pages/Landing'
+import SensorSetupGuide from './pages/SensorSetupGuide'
 import { supabase } from './supabaseClient'
 
 // ── Scroll to top on every route change ─────────────────────────────────────
@@ -50,7 +53,7 @@ function NotFound() {
     <div style={{ padding: '80px 32px', textAlign: 'center' }}>
       <h1 style={{ fontSize: 64, color: '#1e293b', margin: 0 }}>404</h1>
       <p style={{ color: '#94a3b8', margin: '12px 0 24px' }}>Page not found</p>
-      <a href="/" style={{ color: '#6366f1', fontSize: 14 }}>← Back to Dashboard</a>
+      <a href="/" style={{ color: '#6366f1', fontSize: 14 }}>← Back to home</a>
     </div>
   )
 }
@@ -62,6 +65,11 @@ function ProtectedRoute({ session, children }) {
   return children
 }
 
+function PublicOnlyRoute({ session, children }) {
+  if (session) return <Navigate to="/dashboard" replace />
+  return children
+}
+
 // ── App shell ─────────────────────────────────────────────────────────────────
 function AppShell() {
   const [connected, setConnected] = useState(false)
@@ -70,15 +78,20 @@ function AppShell() {
   const navigate = useNavigate()
 
   useEffect(() => {
+    if (!supabase) {
+      setSession(null)
+      return undefined
+    }
+
     // Check for an existing session on mount
     supabase.auth.getSession().then(({ data: { session } }) => {
       setSession(session ?? null)
     })
 
     // Listen for sign-in / sign-out events
-    const { data: { subscription } } = supabase.auth.onAuthStateChange((_event, session) => {
+    const { data: { subscription } } = supabase.auth.onAuthStateChange((event, session) => {
       setSession(session ?? null)
-      if (!session) navigate('/login', { replace: true })
+      if (!session && event === 'SIGNED_OUT') navigate('/login', { replace: true })
     })
 
     return () => subscription.unsubscribe()
@@ -103,13 +116,16 @@ function AppShell() {
   }, [navigate])
 
   return (
-    <div style={styles.shell}>
+    <div className="flex min-h-screen flex-col bg-base font-sans text-ink">
       <ErrorBoundary>
         <ScrollToTop />
         <Routes>
-          <Route path="/login" element={<Login />} />
+          <Route path="/" element={<Landing />} />
+          <Route path="/sensor-setup" element={<SensorSetupGuide />} />
+          <Route path="/login" element={<PublicOnlyRoute session={session}><Login /></PublicOnlyRoute>} />
+          <Route path="/register" element={<PublicOnlyRoute session={session}><Register /></PublicOnlyRoute>} />
           <Route
-            path="/"
+            path="/dashboard"
             element={
               <ProtectedRoute session={session}>
                 <Navbar
@@ -151,15 +167,4 @@ export default function App() {
       <AppShell />
     </BrowserRouter>
   )
-}
-
-const styles = {
-  shell: {
-    background:  '#0f172a',
-    minHeight:   '100vh',
-    color:       '#f1f5f9',
-    fontFamily:  "'Inter', 'Segoe UI', monospace",
-    display:     'flex',
-    flexDirection: 'column',
-  },
 }
