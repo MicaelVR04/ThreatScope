@@ -42,7 +42,7 @@ const BLOBS = [
 // page supplies its own form fields and actions as children.
 export default function AuthLayout({ eyebrow, subtitle, children }) {
   return (
-    <div className="relative flex min-h-screen items-center justify-center overflow-hidden bg-base px-6">
+    <div className="relative flex min-h-screen items-center justify-center overflow-hidden bg-base px-4 py-6 sm:px-6">
       <div
         aria-hidden="true"
         className="pointer-events-none absolute inset-0 opacity-[0.02]"
@@ -70,7 +70,7 @@ export default function AuthLayout({ eyebrow, subtitle, children }) {
           (flagged by the impeccable skill's polish audit); Hero's own panel
           uses shadow-only with no border for the same reason. A defined edge
           reads better here anyway, against the moving blob background. */}
-      <div className="relative z-10 w-full max-w-[380px] animate-fade-up rounded-xl border border-white/[0.08] bg-surface p-9">
+      <div className="relative z-10 w-full max-w-[380px] animate-fade-up rounded-xl border border-white/[0.08] bg-surface p-6 sm:p-9">
         <div className="mb-8 flex flex-col items-center text-center">
           <div className="mb-4 grid h-11 w-11 place-items-center rounded-lg bg-signal shadow-[0_0_0_1px_rgba(255,255,255,0.08),0_8px_22px_-4px_rgba(46,235,209,0.35)]">
             <Shield size={22} className="text-base" strokeWidth={2.4} />

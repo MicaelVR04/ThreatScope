@@ -337,10 +337,10 @@ export default function Dashboard({ onConnectionChange }) {
           -apple-system, ...); the mock's sandbox just couldn't download it
           and silently fell back to -apple-system, but our app loads it for
           real, so no override is needed here. */}
-      <div className="relative z-10 mx-auto max-w-[1320px] px-8 pb-[60px] pt-7">
+      <div className="relative z-10 mx-auto max-w-[1320px] px-4 pb-[60px] pt-5 sm:px-8 sm:pt-7">
 
       {/* Scan status hero */}
-      <section className="relative mb-[22px] overflow-hidden rounded-2xl border border-white/[0.12] bg-[linear-gradient(160deg,rgba(46,235,209,0.07),rgba(13,19,27,0.4)_55%)] px-9 pb-7 pt-[34px]">
+      <section className="relative mb-[22px] overflow-hidden rounded-2xl border border-white/[0.12] bg-[linear-gradient(160deg,rgba(46,235,209,0.07),rgba(13,19,27,0.4)_55%)] px-5 pb-6 pt-7 sm:px-9 sm:pb-7 sm:pt-[34px]">
 
         {/* Concentric rings — one static anchor at full size (0 inset) plus
             three staggered pulsing rings nested inside it (34/68/102px
@@ -371,7 +371,7 @@ export default function Dashboard({ onConnectionChange }) {
           </p>
 
           <h1
-            className={`mb-1.5 text-balance text-[clamp(40px,6vw,72px)] font-bold leading-none tracking-[-0.02em] transition-all duration-300 ease-swift ${scanHeroColorClass(scanState)} ${revealed ? 'opacity-100 translate-y-0' : 'opacity-0 translate-y-3'}`}
+            className={`mb-1.5 text-balance text-[32px] font-bold leading-none tracking-normal transition-all duration-300 ease-swift min-[360px]:text-[40px] md:text-[52px] lg:text-[64px] xl:text-[72px] ${scanHeroColorClass(scanState)} ${revealed ? 'opacity-100 translate-y-0' : 'opacity-0 translate-y-3'}`}
             style={{ transitionDelay: '60ms', fontFamily: "Futura, 'Century Gothic', 'IBM Plex Sans', sans-serif" }}
           >
             {scanHeadline(scanStatus)}
@@ -615,10 +615,16 @@ export default function Dashboard({ onConnectionChange }) {
                 <span className={`h-1.5 w-1.5 rounded-full ${connected ? 'bg-severity-low animate-live-blink' : 'bg-severity-high'}`} />
                 {connected ? 'feed connected' : 'feed offline'}
               </span>
-              <Button variant="ghost" size="sm" className="group ml-1" onClick={() => setPaused(p => !p)}>
+              <Button
+                variant="ghost"
+                size="sm"
+                className="group ml-1 px-3"
+                onClick={() => setPaused(p => !p)}
+                aria-label={paused ? 'Resume live alert feed' : 'Pause live alert feed'}
+              >
                 {paused
-                  ? <><PlayCircle  size={14} className="transition-transform duration-200 ease-swift group-hover:scale-110" /> Resume</>
-                  : <><PauseCircle size={14} className="transition-transform duration-200 ease-swift group-hover:scale-110" /> Pause</>}
+                  ? <><PlayCircle size={14} className="transition-transform duration-200 ease-swift group-hover:scale-110" /><span className="hidden min-[360px]:inline">Resume</span></>
+                  : <><PauseCircle size={14} className="transition-transform duration-200 ease-swift group-hover:scale-110" /><span className="hidden min-[360px]:inline">Pause</span></>}
               </Button>
             </div>
             <div className="feed-scroll min-h-0 flex-1 overflow-y-auto px-4 py-3.5 text-xs leading-[1.9]" style={{ scrollbarWidth: 'thin' }}>

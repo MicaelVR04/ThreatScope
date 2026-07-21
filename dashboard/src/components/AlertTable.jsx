@@ -47,7 +47,7 @@ export default function AlertTable({ alerts = [] }) {
   return (
     <div>
       {/* Filter bar */}
-      <div className="mb-3 flex items-center gap-2">
+      <div className="mb-3 flex flex-wrap items-center gap-2">
         {['ALL', 'HIGH', 'MEDIUM', 'LOW'].map(f => (
           <Button
             key={f}
@@ -59,7 +59,7 @@ export default function AlertTable({ alerts = [] }) {
             {f}
           </Button>
         ))}
-        <span className="ml-auto text-xs text-ink-faint">{sorted.length} alert{sorted.length !== 1 ? 's' : ''}</span>
+        <span className="w-full text-xs text-ink-faint sm:ml-auto sm:w-auto">{sorted.length} alert{sorted.length !== 1 ? 's' : ''}</span>
       </div>
 
       {sorted.length === 0 ? (

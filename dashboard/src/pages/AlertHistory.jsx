@@ -79,7 +79,7 @@ export default function AlertHistory() {
   }
 
   return (
-    <main className="relative px-8 py-6">
+    <main className="relative px-4 py-5 sm:px-8 sm:py-6">
 
       {/* Noise texture behind everything on this page, same treatment as
           Landing/AuthLayout/Dashboard. */}
@@ -90,25 +90,25 @@ export default function AlertHistory() {
         <h1 className="font-display text-xl font-bold text-ink">Alert History</h1>
 
         <input
-          className="w-[220px] rounded-md border border-white/[0.12] bg-surface px-3 py-[7px] text-[13px] text-ink outline-none placeholder:text-ink-faint"
+          className="w-full rounded-md border border-white/[0.12] bg-surface px-3 py-2.5 text-[13px] text-ink outline-none placeholder:text-ink-faint sm:w-[220px]"
           type="text"
           placeholder="Search by type or IP…"
           value={search}
           onChange={e => setSearch(e.target.value)}
         />
-        <label className="flex items-center gap-2 text-[13px] text-ink-muted">
+        <label className="flex w-full items-center gap-2 text-[13px] text-ink-muted sm:w-auto">
           From
           <input
-            className="rounded-md border border-white/[0.12] bg-surface px-2.5 py-1.5 text-[13px] text-ink outline-none"
+            className="min-w-0 flex-1 rounded-md border border-white/[0.12] bg-surface px-2.5 py-2 text-[13px] text-ink outline-none sm:flex-none"
             type="date"
             value={dateFrom}
             onChange={e => setDateFrom(e.target.value)}
           />
         </label>
-        <label className="flex items-center gap-2 text-[13px] text-ink-muted">
+        <label className="flex w-full items-center gap-2 text-[13px] text-ink-muted sm:w-auto">
           To
           <input
-            className="rounded-md border border-white/[0.12] bg-surface px-2.5 py-1.5 text-[13px] text-ink outline-none"
+            className="min-w-0 flex-1 rounded-md border border-white/[0.12] bg-surface px-2.5 py-2 text-[13px] text-ink outline-none sm:flex-none"
             type="date"
             value={dateTo}
             onChange={e => setDateTo(e.target.value)}
@@ -120,7 +120,7 @@ export default function AlertHistory() {
           </Button>
         )}
 
-        <div className="ml-auto flex items-center gap-2">
+        <div className="flex w-full flex-wrap items-center gap-2 sm:ml-auto sm:w-auto">
           <Button variant="secondary" size="sm" className="group" onClick={load} title="Refresh" disabled={loading}>
             <RefreshCw size={14} className={loading ? 'animate-[ts-spin_1s_linear_infinite]' : 'transition-transform duration-200 ease-swift group-hover:rotate-45'} />
             Refresh
