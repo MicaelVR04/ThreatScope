@@ -264,12 +264,21 @@ export default function Dashboard({ onConnectionChange }) {
   }
 
   const handleMonitoring = async (enabled) => {
+    const previousStatus = scanStatus
     setScanLoading(true)
     setScanError(null)
+    setScanStatus(current => current ? {
+      ...current,
+      sensor: {
+        ...current.sensor,
+        desired_monitoring: enabled,
+      },
+    } : current)
     try {
       setScanStatus(await setSensorMonitoring(enabled))
     } catch (error) {
       console.error(error)
+      setScanStatus(previousStatus)
       setScanError(error.message || 'Unable to update continuous monitoring.')
     } finally {
       setScanLoading(false)
@@ -450,15 +459,15 @@ export default function Dashboard({ onConnectionChange }) {
               variant="secondary"
               size="sm"
               onClick={handleRunScan}
-              disabled={scanLoading || apiOnline === false || scanStatus?.state === 'running' || !scanStatus?.sensor?.online || !scanStatus?.sensor?.monitoring}
+              disabled={scanLoading || apiOnline === false || scanStatus?.state === 'running' || !scanStatus?.sensor?.online || !scanStatus?.sensor?.desired_monitoring || !scanStatus?.sensor?.monitoring}
             >
               {(scanLoading || scanStatus?.state === 'running') && <Loader2 size={14} className="animate-spin" />}
               {scanStatus?.state === 'running' ? 'Assessment running...' : 'Assess now'}
             </Button>
-            <Button variant="secondary" size="sm" onClick={() => handleSchedule(true, 5)} disabled={scanLoading || apiOnline === false || !scanStatus?.sensor?.monitoring}>
+            <Button variant="secondary" size="sm" onClick={() => handleSchedule(true, 5)} disabled={scanLoading || apiOnline === false || !scanStatus?.sensor?.desired_monitoring || !scanStatus?.sensor?.monitoring}>
               Every 5 min
             </Button>
-            <Button variant="secondary" size="sm" onClick={() => handleSchedule(true, 10)} disabled={scanLoading || apiOnline === false || !scanStatus?.sensor?.monitoring}>
+            <Button variant="secondary" size="sm" onClick={() => handleSchedule(true, 10)} disabled={scanLoading || apiOnline === false || !scanStatus?.sensor?.desired_monitoring || !scanStatus?.sensor?.monitoring}>
               Every 10 min
             </Button>
             {scanStatus?.enabled && (
@@ -636,9 +645,8 @@ function riskTextClass(riskLevel) {
 function scanHeadline(scanStatus) {
   if (!scanStatus?.sensor?.online) return 'Sensor Offline'
   if (scanStatus?.sensor?.last_error) return 'Sensor Error'
-  if (!scanStatus?.sensor?.monitoring) {
-    return scanStatus?.sensor?.desired_monitoring ? 'Starting Sensor' : 'Monitoring Paused'
-  }
+  if (!scanStatus?.sensor?.desired_monitoring) return 'Monitoring Paused'
+  if (!scanStatus?.sensor?.monitoring) return 'Starting Sensor'
   if (scanStatus?.state === 'running') return 'Assessment Running'
   if (scanStatus?.state === 'threats_found') return 'Threats detected'
   if (scanStatus?.state === 'no_data') return 'No Traffic Observed'
@@ -652,11 +660,12 @@ function scanMessage(scanStatus, summary) {
     return 'ThreatScope cannot inspect this network because no sensor service is connected. Install or start the sensor before assessing network safety.'
   }
   if (scanStatus?.sensor?.last_error) return scanStatus.sensor.last_error
-  if (!scanStatus?.sensor?.monitoring) {
-    return scanStatus?.sensor?.desired_monitoring
-      ? 'The sensor is online and preparing packet capture.'
+  if (!scanStatus?.sensor?.desired_monitoring) {
+    return scanStatus?.sensor?.monitoring
+      ? 'Pause requested. The sensor will stop packet inspection on its next heartbeat.'
       : 'The sensor service is online, but packet inspection is paused. Start continuous monitoring to detect network threats.'
   }
+  if (!scanStatus?.sensor?.monitoring) return 'The sensor is online and preparing packet capture.'
   if (scanStatus?.state === 'running') {
     return 'ThreatScope is actively inspecting network packets. New alerts will appear below if suspicious traffic is found.'
   }
@@ -680,6 +689,7 @@ function scanMessage(scanStatus, summary) {
 function mapScanState(scanStatus) {
   if (!scanStatus?.sensor?.online || scanStatus?.state === 'sensor_offline') return 'offline'
   if (scanStatus?.sensor?.last_error) return 'offline'
+  if (!scanStatus?.sensor?.desired_monitoring) return 'paused'
   if (!scanStatus?.sensor?.monitoring) return 'paused'
   if (scanStatus?.state === 'running') return 'scanning'
   if (scanStatus?.state === 'threats_found') return 'alert'
