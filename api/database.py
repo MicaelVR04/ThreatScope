@@ -31,6 +31,14 @@ SUPABASE_RUNTIME_STATE_TABLE = (
     os.getenv("SUPABASE_RUNTIME_STATE_TABLE", "runtime_state").strip()
     or "runtime_state"
 )
+SUPABASE_SENSOR_ENROLLMENTS_TABLE = (
+    os.getenv("SUPABASE_SENSOR_ENROLLMENTS_TABLE", "sensor_enrollment_codes").strip()
+    or "sensor_enrollment_codes"
+)
+SUPABASE_SENSORS_TABLE = (
+    os.getenv("SUPABASE_SENSORS_TABLE", "sensors").strip()
+    or "sensors"
+)
 SUPABASE_ACTIVE = False
 
 
@@ -95,6 +103,36 @@ def init_db():
                 updated_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP
             )
         """)
+        cursor.execute("""
+            CREATE TABLE IF NOT EXISTS sensor_enrollment_codes (
+                id          TEXT PRIMARY KEY,
+                owner_id    TEXT NOT NULL,
+                code_hash   TEXT NOT NULL UNIQUE,
+                expires_at  TEXT NOT NULL,
+                used_at     TEXT,
+                created_at  TEXT NOT NULL
+            )
+        """)
+        cursor.execute("""
+            CREATE TABLE IF NOT EXISTS sensors (
+                id          TEXT PRIMARY KEY,
+                owner_id    TEXT NOT NULL,
+                name        TEXT NOT NULL,
+                platform    TEXT NOT NULL,
+                version     TEXT NOT NULL,
+                token_hash  TEXT NOT NULL UNIQUE,
+                created_at  TEXT NOT NULL,
+                last_seen_at TEXT,
+                revoked_at  TEXT
+            )
+        """)
+        cursor.execute("""
+            CREATE UNIQUE INDEX IF NOT EXISTS sensor_enrollment_one_active_per_owner
+            ON sensor_enrollment_codes (owner_id) WHERE used_at IS NULL
+        """)
+        cursor.execute(
+            "CREATE INDEX IF NOT EXISTS sensors_owner_idx ON sensors (owner_id, created_at DESC)"
+        )
         conn.commit()
         logger.info("SQLite database initialized successfully.")
     except sqlite3.Error as e:
@@ -388,5 +426,188 @@ def clear_runtime_state(key: str = None):
         else:
             conn.execute("DELETE FROM runtime_state WHERE key = ?", (key,))
         conn.commit()
+    finally:
+        conn.close()
+
+
+def create_sensor_enrollment(record: dict):
+    """Stores a hashed, short-lived enrollment code and invalidates older codes."""
+    if _use_supabase():
+        client = _get_supabase()
+        client.table(SUPABASE_SENSOR_ENROLLMENTS_TABLE).update({
+            "used_at": record["created_at"],
+        }).eq("owner_id", record["owner_id"]).is_("used_at", "null").execute()
+        client.table(SUPABASE_SENSOR_ENROLLMENTS_TABLE).insert(record).execute()
+        return
+
+    conn = get_connection()
+    try:
+        conn.execute("BEGIN IMMEDIATE")
+        conn.execute(
+            "UPDATE sensor_enrollment_codes SET used_at = ? WHERE owner_id = ? AND used_at IS NULL",
+            (record["created_at"], record["owner_id"]),
+        )
+        conn.execute(
+            """
+            INSERT INTO sensor_enrollment_codes
+                (id, owner_id, code_hash, expires_at, used_at, created_at)
+            VALUES (:id, :owner_id, :code_hash, :expires_at, :used_at, :created_at)
+            """,
+            record,
+        )
+        conn.commit()
+    finally:
+        conn.close()
+
+
+def consume_sensor_enrollment(code_hash: str, sensor: dict):
+    """Atomically consumes one enrollment code and creates a sensor credential."""
+    if _use_supabase():
+        response = _get_supabase().rpc("consume_sensor_enrollment", {
+            "p_code_hash": code_hash,
+            "p_sensor_id": sensor["id"],
+            "p_name": sensor["name"],
+            "p_platform": sensor["platform"],
+            "p_version": sensor["version"],
+            "p_token_hash": sensor["token_hash"],
+        }).execute()
+        return response.data[0] if response.data else None
+
+    conn = get_connection()
+    try:
+        conn.execute("BEGIN IMMEDIATE")
+        row = conn.execute(
+            """
+            SELECT id, owner_id FROM sensor_enrollment_codes
+            WHERE code_hash = ? AND used_at IS NULL AND datetime(expires_at) > CURRENT_TIMESTAMP
+            LIMIT 1
+            """,
+            (code_hash,),
+        ).fetchone()
+        if not row:
+            conn.rollback()
+            return None
+        updated = conn.execute(
+            "UPDATE sensor_enrollment_codes SET used_at = CURRENT_TIMESTAMP WHERE id = ? AND used_at IS NULL",
+            (row["id"],),
+        )
+        if updated.rowcount != 1:
+            conn.rollback()
+            return None
+        conn.execute(
+            """
+            INSERT INTO sensors
+                (id, owner_id, name, platform, version, token_hash, created_at, last_seen_at, revoked_at)
+            VALUES (?, ?, ?, ?, ?, ?, ?, NULL, NULL)
+            """,
+            (
+                sensor["id"], row["owner_id"], sensor["name"], sensor["platform"],
+                sensor["version"], sensor["token_hash"], sensor["created_at"],
+            ),
+        )
+        conn.commit()
+        return {"id": sensor["id"], "owner_id": row["owner_id"]}
+    finally:
+        conn.close()
+
+
+def get_sensor_credential(sensor_id: str):
+    """Returns private sensor authentication data for API-side verification."""
+    if _use_supabase():
+        response = (
+            _get_supabase().table(SUPABASE_SENSORS_TABLE)
+            .select("id,owner_id,token_hash,revoked_at")
+            .eq("id", sensor_id).limit(1).execute()
+        )
+        return response.data[0] if response.data else None
+
+    conn = get_connection()
+    try:
+        row = conn.execute(
+            "SELECT id, owner_id, token_hash, revoked_at FROM sensors WHERE id = ? LIMIT 1",
+            (sensor_id,),
+        ).fetchone()
+        return dict(row) if row else None
+    finally:
+        conn.close()
+
+
+def mark_sensor_seen(sensor_id: str, version: str = None):
+    """Updates non-secret sensor health metadata after successful authentication."""
+    if _use_supabase():
+        values = {"last_seen_at": "now()"}
+        # PostgREST does not evaluate SQL expressions in update values.
+        from datetime import datetime, timezone
+        values["last_seen_at"] = datetime.now(timezone.utc).isoformat()
+        if version:
+            values["version"] = version
+        _get_supabase().table(SUPABASE_SENSORS_TABLE).update(values).eq("id", sensor_id).execute()
+        return
+
+    conn = get_connection()
+    try:
+        if version:
+            conn.execute(
+                "UPDATE sensors SET last_seen_at = CURRENT_TIMESTAMP, version = ? WHERE id = ?",
+                (version, sensor_id),
+            )
+        else:
+            conn.execute(
+                "UPDATE sensors SET last_seen_at = CURRENT_TIMESTAMP WHERE id = ?",
+                (sensor_id,),
+            )
+        conn.commit()
+    finally:
+        conn.close()
+
+
+def list_sensors(owner_id: str):
+    """Lists only safe sensor metadata for the owning dashboard account."""
+    columns = "id,name,platform,version,created_at,last_seen_at,revoked_at"
+    if _use_supabase():
+        response = (
+            _get_supabase().table(SUPABASE_SENSORS_TABLE).select(columns)
+            .eq("owner_id", owner_id).order("created_at", desc=True).execute()
+        )
+        return response.data
+
+    conn = get_connection()
+    try:
+        rows = conn.execute(
+            f"SELECT {columns} FROM sensors WHERE owner_id = ? ORDER BY created_at DESC",
+            (owner_id,),
+        ).fetchall()
+        return [dict(row) for row in rows]
+    finally:
+        conn.close()
+
+
+def revoke_sensor(sensor_id: str, owner_id: str = None):
+    """Revokes a credential, optionally enforcing ownership in the update itself."""
+    from datetime import datetime, timezone
+    revoked_at = datetime.now(timezone.utc).isoformat()
+    if _use_supabase():
+        query = _get_supabase().table(SUPABASE_SENSORS_TABLE).update({
+            "revoked_at": revoked_at,
+        }).eq("id", sensor_id)
+        if owner_id:
+            query = query.eq("owner_id", owner_id)
+        response = query.is_("revoked_at", "null").execute()
+        return bool(response.data)
+
+    conn = get_connection()
+    try:
+        if owner_id:
+            result = conn.execute(
+                "UPDATE sensors SET revoked_at = ? WHERE id = ? AND owner_id = ? AND revoked_at IS NULL",
+                (revoked_at, sensor_id, owner_id),
+            )
+        else:
+            result = conn.execute(
+                "UPDATE sensors SET revoked_at = ? WHERE id = ? AND revoked_at IS NULL",
+                (revoked_at, sensor_id),
+            )
+        conn.commit()
+        return result.rowcount == 1
     finally:
         conn.close()

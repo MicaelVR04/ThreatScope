@@ -1,42 +1,15 @@
 import {
-  Activity,
   ArrowLeft,
   CheckCircle2,
+  Download,
   Eye,
+  KeyRound,
+  Laptop,
   Power,
   Shield,
   ShieldCheck,
-  Terminal,
 } from 'lucide-react'
 import { Link } from 'react-router-dom'
-
-const COMMANDS = [
-  {
-    label: 'Check status',
-    command: 'sudo ./scripts/control_sensor_macos.sh status',
-    detail: 'Shows whether the background service is loaded and running.',
-  },
-  {
-    label: 'Stop until the next restart',
-    command: 'sudo ./scripts/control_sensor_macos.sh stop',
-    detail: 'Stops the service now. macOS may load it again after the computer restarts.',
-  },
-  {
-    label: 'Disable until you re-enable it',
-    command: 'sudo ./scripts/control_sensor_macos.sh disable',
-    detail: 'Stops the service and prevents automatic startup after a restart.',
-  },
-  {
-    label: 'Enable and start',
-    command: 'sudo ./scripts/control_sensor_macos.sh enable',
-    detail: 'Allows automatic startup again and immediately starts the service.',
-  },
-  {
-    label: 'Remove completely',
-    command: 'sudo ./scripts/uninstall_sensor_macos.sh',
-    detail: 'Stops ThreatScope and removes its macOS background-service registration.',
-  },
-]
 
 export default function SensorSetupGuide() {
   return (
@@ -59,7 +32,7 @@ export default function SensorSetupGuide() {
 
       <main className="mx-auto max-w-5xl px-6 py-16 md:py-24">
         <p className="font-mono text-xs uppercase tracking-[0.2em] text-signal">
-          macOS developer preview
+          macOS project preview
         </p>
         <h1 className="mt-4 max-w-3xl font-display text-4xl font-bold text-ink md:text-6xl">
           Install and control the network sensor.
@@ -92,46 +65,48 @@ export default function SensorSetupGuide() {
 
         <section className="py-14">
           <div className="flex items-center gap-3">
-            <Terminal size={20} className="text-signal" />
-            <h2 className="font-display text-2xl font-semibold">Install once</h2>
+            <Download size={20} className="text-signal" />
+            <h2 className="font-display text-2xl font-semibold">Install without Terminal</h2>
           </div>
           <p className="mt-4 max-w-3xl leading-relaxed text-ink-muted">
-            Download the project, create its <code className="font-mono text-signal">.env</code> file,
-            and add the dashboard&apos;s API URL and sensor key. Then open Terminal
-            in the ThreatScope project directory and run:
+            Sign in to the dashboard and open <strong className="text-ink">Sensor installation</strong>.
+            The setup uses a short-lived code, so the installer never contains a shared password or API key.
           </p>
-          <CommandBlock command="./scripts/setup_sensor_macos.sh" />
-          <div className="mt-6 flex items-start gap-3 border-l-2 border-signal/50 pl-4">
-            <CheckCircle2 size={18} className="mt-0.5 shrink-0 text-signal" />
-            <p className="text-sm leading-relaxed text-ink-muted">
-              macOS requests an administrator password because packet capture is
-              protected system access. The setup command creates the required
-              Python environment, installs dependencies, and registers the service.
-              After installation, close Terminal and
-              confirm that the dashboard shows <strong className="text-ink">Sensor: online</strong>.
+          <div className="mt-8 grid gap-6 md:grid-cols-3">
+            <InstallStep Icon={Download} number="1" title="Download" body="Click Download for macOS in the dashboard, unzip the file, and open ThreatScope Sensor Setup." />
+            <InstallStep Icon={KeyRound} number="2" title="Connect" body="Generate an installation code in the dashboard and paste it into the setup app." />
+            <InstallStep Icon={CheckCircle2} number="3" title="Approve" body="Enter your Mac administrator password when macOS asks, then wait for the connected confirmation." />
+          </div>
+
+          <div className="mt-8 border-l-2 border-severity-medium/60 pl-4">
+            <h3 className="font-display text-sm font-semibold text-ink">Why macOS may show “Open Anyway”</h3>
+            <p className="mt-2 max-w-3xl text-sm leading-relaxed text-ink-muted">
+              This school-project build is not notarized through Apple. If macOS blocks the first launch,
+              open <strong className="text-ink">System Settings → Privacy &amp; Security</strong>, choose
+              <strong className="text-ink"> Open Anyway</strong>, and confirm. This is the only extra step;
+              no commands are required. Download the app only from the official ThreatScope dashboard.
             </p>
           </div>
         </section>
 
         <section className="border-t border-white/[0.1] py-14">
           <div className="flex items-center gap-3">
-            <Activity size={20} className="text-signal" />
-            <h2 className="font-display text-2xl font-semibold">Control the service</h2>
+            <Power size={20} className="text-signal" />
+            <h2 className="font-display text-2xl font-semibold">Pause or remove it anytime</h2>
           </div>
           <p className="mt-4 max-w-3xl leading-relaxed text-ink-muted">
             The dashboard&apos;s <strong className="text-ink">Stop monitoring</strong> button
-            pauses packet inspection while leaving the lightweight service online.
-            The commands below control the entire macOS service.
+            pauses packet inspection while leaving the lightweight service connected.
+            To remove it completely, reopen <strong className="text-ink">ThreatScope Sensor Setup</strong>,
+            choose <strong className="text-ink">Remove Sensor</strong>, and approve the macOS prompt.
           </p>
-
-          <div className="mt-8 border-t border-white/[0.1]">
-            {COMMANDS.map(({ label, command, detail }) => (
-              <div key={command} className="border-b border-white/[0.1] py-6">
-                <h3 className="font-display text-base font-semibold">{label}</h3>
-                <p className="mt-1 text-sm text-ink-muted">{detail}</p>
-                <CommandBlock command={command} compact />
-              </div>
-            ))}
+          <div className="mt-6 flex max-w-3xl items-start gap-3 border-l-2 border-signal/50 pl-4">
+            <Laptop size={18} className="mt-0.5 shrink-0 text-signal" />
+            <p className="text-sm leading-relaxed text-ink-muted">
+              Removing the local app stops the background service and deletes its root-only credential.
+              You can also use <strong className="text-ink">Remove access</strong> in the dashboard to revoke
+              a lost or unavailable Mac immediately.
+            </p>
           </div>
         </section>
 
@@ -159,10 +134,17 @@ function GuideFact({ Icon, title, body }) {
   )
 }
 
-function CommandBlock({ command, compact = false }) {
+function InstallStep({ Icon, number, title, body }) {
   return (
-    <pre className={`${compact ? 'mt-4' : 'mt-6'} overflow-x-auto rounded-md border border-white/[0.1] bg-surface px-4 py-3 font-mono text-xs text-signal sm:text-sm`}>
-      <code>{command}</code>
-    </pre>
+    <div className="border-t border-white/[0.1] pt-5">
+      <div className="flex items-center gap-3">
+        <div className="grid h-9 w-9 place-items-center rounded-full border border-signal/30 bg-signal-dim text-signal">
+          <Icon size={16} />
+        </div>
+        <span className="font-mono text-xs text-ink-faint">STEP {number}</span>
+      </div>
+      <h3 className="mt-4 font-display text-base font-semibold text-ink">{title}</h3>
+      <p className="mt-2 text-sm leading-relaxed text-ink-muted">{body}</p>
+    </div>
   )
 }

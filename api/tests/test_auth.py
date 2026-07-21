@@ -119,6 +119,16 @@ def test_sensor_owner_rejects_another_authenticated_user(monkeypatch):
     assert exc.value.status_code == 403
 
 
+def test_sensor_owner_fails_closed_when_owner_is_not_configured(monkeypatch):
+    monkeypatch.delenv("SENSOR_OWNER_USER_ID", raising=False)
+    monkeypatch.setenv("ALLOW_INSECURE_LOCAL_DEV", "false")
+
+    with pytest.raises(HTTPException) as exc:
+        auth.verify_sensor_owner({"sub": "any-user"})
+
+    assert exc.value.status_code == 503
+
+
 def test_secure_ingestion_requires_configured_owner(monkeypatch):
     monkeypatch.setenv("ENGINE_API_KEY", "expected-key")
     monkeypatch.delenv("SENSOR_OWNER_USER_ID", raising=False)

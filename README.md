@@ -189,18 +189,26 @@ Only the person responsible for the monitored network installs the sensor.
 Regular dashboard users do not need it. Administrator access is requested once
 because macOS protects packet-capture access.
 
-From the configured ThreatScope project directory, run:
+End-user setup does not require Terminal:
 
-```bash
-./scripts/setup_sensor_macos.sh
-```
+1. Sign in and open **Sensor installation** in the dashboard.
+2. Download and unzip **ThreatScope Sensor Setup**.
+3. Generate a one-time installation code and paste it into the setup app.
+4. Approve the normal macOS administrator prompt.
+5. Wait for **Sensor connected**, then return to the dashboard.
 
-The guided command creates the Python environment, installs the sensor
-dependencies, and then requests administrator access to register the root-owned
-`launchd` service. Afterward the sensor starts at boot, reconnects
-automatically, and is controlled from the dashboard.
+The school-project build is ad-hoc signed, but it is not signed with an Apple
+Developer ID or notarized. On first launch, macOS may require **System Settings
+→ Privacy & Security → Open Anyway**. No command is needed.
+The setup app installs a self-contained sensor and registers the root-owned
+`launchd` service. It starts at boot, reconnects automatically, and is
+controlled from the dashboard.
 
-Useful service commands:
+To remove it, reopen **ThreatScope Sensor Setup**, choose **Remove Sensor**, and
+approve the macOS prompt. The dashboard's **Remove access** action immediately
+revokes a missing or unavailable Mac.
+
+The command-line scripts remain available for project developers and recovery:
 
 ```bash
 sudo ./scripts/control_sensor_macos.sh status
@@ -223,6 +231,13 @@ temporarily becomes unavailable, the sensor keeps its last monitoring setting
 and reconnects automatically.
 
 Set `NETWORK_INTERFACE` in `.env` if the active interface is not `en0`.
+
+### Building the Project Installer
+
+The installer is built by the project team, not by end users. See
+`installer/macos/README.md`. The generated ZIP is intentionally ignored by Git
+and should be published as a GitHub Release asset. Set
+`VITE_SENSOR_INSTALLER_URL` to that asset URL before deploying the dashboard.
 
 ## Free Holberton Staging Deployment
 
@@ -346,8 +361,10 @@ Dashboard API requests require a valid Supabase access token. For legacy HS256 S
 
 The API assigns sensor alerts to `SENSOR_OWNER_USER_ID`. Supabase RLS limits
 browser reads to that UUID, and the API limits AI and sensor controls to the
-same owner. This supports one securely scoped staging sensor; public multi-user
-deployment will require per-sensor enrollment credentials.
+same owner. This staging design uses one-time enrollment and per-sensor
+revocable credentials for the configured owner. A commercial multi-tenant
+release would still need organization-level ownership, Developer ID signing and
+notarization, and production monitoring infrastructure.
 
 ## Tests
 

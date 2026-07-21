@@ -4,6 +4,7 @@ import Button from '../components/theme/Button'
 import AlertCard from '../components/AlertCard'
 import AttackTypeChart from '../components/AttackTypeChart'
 import NetworkPulse from '../components/NetworkPulse'
+import SensorEnrollmentPanel from '../components/SensorEnrollmentPanel'
 import useWebSocket from '../hooks/useWebSocket'
 import {
   analyzeRecentAlerts,
@@ -478,6 +479,8 @@ export default function Dashboard({ onConnectionChange }) {
           </div>
         </div>
       </section>
+
+      <SensorEnrollmentPanel sensorOnline={Boolean(scanStatus?.sensor?.online)} />
 
       {/* Two-column body: charts + AI (left) / live feed (right) — 340px
           sidebar, 18px gaps. Default flex cross-axis is `stretch`, so the
