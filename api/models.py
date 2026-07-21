@@ -7,7 +7,7 @@ Responsibilities:
 - Used by the database, API endpoints, and WebSocket
 """
 
-from pydantic import BaseModel, field_validator
+from pydantic import BaseModel, Field, field_validator
 from typing import Optional
 
 
@@ -69,3 +69,18 @@ class SensorHeartbeat(BaseModel):
 
 class MonitoringRequest(BaseModel):
     enabled: bool
+
+
+class SensorEnrollmentExchange(BaseModel):
+    code: str = Field(min_length=32, max_length=64, pattern=r"^[A-Za-z0-9_-]+$")
+    name: str = Field(min_length=1, max_length=64)
+    platform: str = Field(default="macOS", min_length=1, max_length=32)
+    version: str = Field(default="1.0.0", min_length=1, max_length=32)
+
+    @field_validator("name", "platform", "version")
+    @classmethod
+    def normalize_text(cls, value):
+        normalized = " ".join(value.strip().split())
+        if not normalized:
+            raise ValueError("value is required")
+        return normalized

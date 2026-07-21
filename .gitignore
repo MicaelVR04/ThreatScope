@@ -10,6 +10,7 @@ build/
 venv/
 .venv/
 .venv
+.venv-installer/
 env/
 
 # Environment variables - NEVER commit this

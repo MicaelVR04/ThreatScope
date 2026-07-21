@@ -4,6 +4,7 @@ import Button from '../components/theme/Button'
 import AlertCard from '../components/AlertCard'
 import AttackTypeChart from '../components/AttackTypeChart'
 import NetworkPulse from '../components/NetworkPulse'
+import SensorEnrollmentPanel from '../components/SensorEnrollmentPanel'
 import useWebSocket from '../hooks/useWebSocket'
 import {
   analyzeRecentAlerts,
@@ -264,12 +265,21 @@ export default function Dashboard({ onConnectionChange }) {
   }
 
   const handleMonitoring = async (enabled) => {
+    const previousStatus = scanStatus
     setScanLoading(true)
     setScanError(null)
+    setScanStatus(current => current ? {
+      ...current,
+      sensor: {
+        ...current.sensor,
+        desired_monitoring: enabled,
+      },
+    } : current)
     try {
       setScanStatus(await setSensorMonitoring(enabled))
     } catch (error) {
       console.error(error)
+      setScanStatus(previousStatus)
       setScanError(error.message || 'Unable to update continuous monitoring.')
     } finally {
       setScanLoading(false)
@@ -328,10 +338,10 @@ export default function Dashboard({ onConnectionChange }) {
           -apple-system, ...); the mock's sandbox just couldn't download it
           and silently fell back to -apple-system, but our app loads it for
           real, so no override is needed here. */}
-      <div className="relative z-10 mx-auto max-w-[1320px] px-8 pb-[60px] pt-7">
+      <div className="relative z-10 mx-auto max-w-[1320px] px-4 pb-[60px] pt-5 sm:px-8 sm:pt-7">
 
       {/* Scan status hero */}
-      <section className="relative mb-[22px] overflow-hidden rounded-2xl border border-white/[0.12] bg-[linear-gradient(160deg,rgba(46,235,209,0.07),rgba(13,19,27,0.4)_55%)] px-9 pb-7 pt-[34px]">
+      <section className="relative mb-[22px] overflow-hidden rounded-2xl border border-white/[0.12] bg-[linear-gradient(160deg,rgba(46,235,209,0.07),rgba(13,19,27,0.4)_55%)] px-5 pb-6 pt-7 sm:px-9 sm:pb-7 sm:pt-[34px]">
 
         {/* Concentric rings — one static anchor at full size (0 inset) plus
             three staggered pulsing rings nested inside it (34/68/102px
@@ -362,7 +372,7 @@ export default function Dashboard({ onConnectionChange }) {
           </p>
 
           <h1
-            className={`mb-1.5 text-balance text-[clamp(40px,6vw,72px)] font-bold leading-none tracking-[-0.02em] transition-all duration-300 ease-swift ${scanHeroColorClass(scanState)} ${revealed ? 'opacity-100 translate-y-0' : 'opacity-0 translate-y-3'}`}
+            className={`mb-1.5 text-balance text-[32px] font-bold leading-none tracking-normal transition-all duration-300 ease-swift min-[360px]:text-[40px] md:text-[52px] lg:text-[64px] xl:text-[72px] ${scanHeroColorClass(scanState)} ${revealed ? 'opacity-100 translate-y-0' : 'opacity-0 translate-y-3'}`}
             style={{ transitionDelay: '60ms', fontFamily: "Futura, 'Century Gothic', 'IBM Plex Sans', sans-serif" }}
           >
             {scanHeadline(scanStatus)}
@@ -450,15 +460,15 @@ export default function Dashboard({ onConnectionChange }) {
               variant="secondary"
               size="sm"
               onClick={handleRunScan}
-              disabled={scanLoading || apiOnline === false || scanStatus?.state === 'running' || !scanStatus?.sensor?.online || !scanStatus?.sensor?.monitoring}
+              disabled={scanLoading || apiOnline === false || scanStatus?.state === 'running' || !scanStatus?.sensor?.online || !scanStatus?.sensor?.desired_monitoring || !scanStatus?.sensor?.monitoring}
             >
               {(scanLoading || scanStatus?.state === 'running') && <Loader2 size={14} className="animate-spin" />}
               {scanStatus?.state === 'running' ? 'Assessment running...' : 'Assess now'}
             </Button>
-            <Button variant="secondary" size="sm" onClick={() => handleSchedule(true, 5)} disabled={scanLoading || apiOnline === false || !scanStatus?.sensor?.monitoring}>
+            <Button variant="secondary" size="sm" onClick={() => handleSchedule(true, 5)} disabled={scanLoading || apiOnline === false || !scanStatus?.sensor?.desired_monitoring || !scanStatus?.sensor?.monitoring}>
               Every 5 min
             </Button>
-            <Button variant="secondary" size="sm" onClick={() => handleSchedule(true, 10)} disabled={scanLoading || apiOnline === false || !scanStatus?.sensor?.monitoring}>
+            <Button variant="secondary" size="sm" onClick={() => handleSchedule(true, 10)} disabled={scanLoading || apiOnline === false || !scanStatus?.sensor?.desired_monitoring || !scanStatus?.sensor?.monitoring}>
               Every 10 min
             </Button>
             {scanStatus?.enabled && (
@@ -469,6 +479,8 @@ export default function Dashboard({ onConnectionChange }) {
           </div>
         </div>
       </section>
+
+      <SensorEnrollmentPanel sensorOnline={Boolean(scanStatus?.sensor?.online)} />
 
       {/* Two-column body: charts + AI (left) / live feed (right) — 340px
           sidebar, 18px gaps. Default flex cross-axis is `stretch`, so the
@@ -606,10 +618,16 @@ export default function Dashboard({ onConnectionChange }) {
                 <span className={`h-1.5 w-1.5 rounded-full ${connected ? 'bg-severity-low animate-live-blink' : 'bg-severity-high'}`} />
                 {connected ? 'feed connected' : 'feed offline'}
               </span>
-              <Button variant="ghost" size="sm" className="group ml-1" onClick={() => setPaused(p => !p)}>
+              <Button
+                variant="ghost"
+                size="sm"
+                className="group ml-1 px-3"
+                onClick={() => setPaused(p => !p)}
+                aria-label={paused ? 'Resume live alert feed' : 'Pause live alert feed'}
+              >
                 {paused
-                  ? <><PlayCircle  size={14} className="transition-transform duration-200 ease-swift group-hover:scale-110" /> Resume</>
-                  : <><PauseCircle size={14} className="transition-transform duration-200 ease-swift group-hover:scale-110" /> Pause</>}
+                  ? <><PlayCircle size={14} className="transition-transform duration-200 ease-swift group-hover:scale-110" /><span className="hidden min-[360px]:inline">Resume</span></>
+                  : <><PauseCircle size={14} className="transition-transform duration-200 ease-swift group-hover:scale-110" /><span className="hidden min-[360px]:inline">Pause</span></>}
               </Button>
             </div>
             <div className="feed-scroll min-h-0 flex-1 overflow-y-auto px-4 py-3.5 text-xs leading-[1.9]" style={{ scrollbarWidth: 'thin' }}>
@@ -636,9 +654,8 @@ function riskTextClass(riskLevel) {
 function scanHeadline(scanStatus) {
   if (!scanStatus?.sensor?.online) return 'Sensor Offline'
   if (scanStatus?.sensor?.last_error) return 'Sensor Error'
-  if (!scanStatus?.sensor?.monitoring) {
-    return scanStatus?.sensor?.desired_monitoring ? 'Starting Sensor' : 'Monitoring Paused'
-  }
+  if (!scanStatus?.sensor?.desired_monitoring) return 'Monitoring Paused'
+  if (!scanStatus?.sensor?.monitoring) return 'Starting Sensor'
   if (scanStatus?.state === 'running') return 'Assessment Running'
   if (scanStatus?.state === 'threats_found') return 'Threats detected'
   if (scanStatus?.state === 'no_data') return 'No Traffic Observed'
@@ -652,11 +669,12 @@ function scanMessage(scanStatus, summary) {
     return 'ThreatScope cannot inspect this network because no sensor service is connected. Install or start the sensor before assessing network safety.'
   }
   if (scanStatus?.sensor?.last_error) return scanStatus.sensor.last_error
-  if (!scanStatus?.sensor?.monitoring) {
-    return scanStatus?.sensor?.desired_monitoring
-      ? 'The sensor is online and preparing packet capture.'
+  if (!scanStatus?.sensor?.desired_monitoring) {
+    return scanStatus?.sensor?.monitoring
+      ? 'Pause requested. The sensor will stop packet inspection on its next heartbeat.'
       : 'The sensor service is online, but packet inspection is paused. Start continuous monitoring to detect network threats.'
   }
+  if (!scanStatus?.sensor?.monitoring) return 'The sensor is online and preparing packet capture.'
   if (scanStatus?.state === 'running') {
     return 'ThreatScope is actively inspecting network packets. New alerts will appear below if suspicious traffic is found.'
   }
@@ -680,6 +698,7 @@ function scanMessage(scanStatus, summary) {
 function mapScanState(scanStatus) {
   if (!scanStatus?.sensor?.online || scanStatus?.state === 'sensor_offline') return 'offline'
   if (scanStatus?.sensor?.last_error) return 'offline'
+  if (!scanStatus?.sensor?.desired_monitoring) return 'paused'
   if (!scanStatus?.sensor?.monitoring) return 'paused'
   if (scanStatus?.state === 'running') return 'scanning'
   if (scanStatus?.state === 'threats_found') return 'alert'

@@ -18,10 +18,18 @@ from fastapi import FastAPI, WebSocket, WebSocketDisconnect, Query, HTTPExceptio
 from fastapi.middleware.cors import CORSMiddleware
 from contextlib import asynccontextmanager
 from datetime import datetime, timezone
+from uuid import UUID
 from slowapi import Limiter
 from slowapi.util import get_remote_address
 from slowapi.middleware import SlowAPIMiddleware
-from models import Alert, AlertSummary, MonitoringRequest, ScanScheduleRequest, SensorHeartbeat
+from models import (
+    Alert,
+    AlertSummary,
+    MonitoringRequest,
+    ScanScheduleRequest,
+    SensorEnrollmentExchange,
+    SensorHeartbeat,
+)
 from database import init_db, insert_alert, get_alerts, get_summary, get_stats, clear_alerts
 from websocket import manager
 from auth import decode_dashboard_token, verify_engine_key, verify_sensor_owner, verify_token
@@ -37,6 +45,16 @@ from scan_manager import (
     start_scan,
 )
 from sensor_manager import record_heartbeat, restore_sensor_state, set_monitoring
+from sensor_enrollment import (
+    create_code,
+    exchange_code,
+    record_sensor_seen,
+    revoke_current_sensor,
+    revoke_owned_sensor,
+    sensors_for_owner,
+    verify_sensor_or_engine,
+    verify_sensor_request,
+)
 
 
 # ── Logging ────────────────────────────────────────────────────────────────
@@ -112,7 +130,11 @@ app.add_middleware(
 # ── REST Endpoints ─────────────────────────────────────────────────────────
 @app.post("/alerts", response_model=Alert)
 @limiter.limit("60/minute")
-async def create_alert(request: Request, alert: Alert, _engine=Depends(verify_engine_key)):
+async def create_alert(
+    request: Request,
+    alert: Alert,
+    principal=Depends(verify_sensor_or_engine),
+):
     """
     Receives a new alert from the engine.
     Validates severity, saves to DB, and broadcasts to all dashboards.
@@ -121,13 +143,7 @@ async def create_alert(request: Request, alert: Alert, _engine=Depends(verify_en
         raise HTTPException(status_code=400, detail="severity must be LOW, MEDIUM, or HIGH")
 
     alert_dict = alert.model_dump()
-    owner_id = os.getenv("SENSOR_OWNER_USER_ID", "").strip()
-    if not owner_id and os.getenv("ALLOW_INSECURE_LOCAL_DEV", "false").lower() != "true":
-        raise HTTPException(
-            status_code=503,
-            detail="SENSOR_OWNER_USER_ID is required for secure alert ingestion",
-        )
-    alert_dict["user_id"] = owner_id or None
+    alert_dict["user_id"] = principal.get("owner_id")
 
     if not alert_dict.get("timestamp"):
         alert_dict["timestamp"] = datetime.now(timezone.utc).isoformat()
@@ -136,6 +152,7 @@ async def create_alert(request: Request, alert: Alert, _engine=Depends(verify_en
     alert_dict["id"] = alert_id
 
     record_detected_alert()
+    record_sensor_seen(principal)
     await manager.broadcast(alert_dict)
 
     return alert_dict
@@ -245,9 +262,59 @@ def analyze_recent_alerts(user=Depends(verify_sensor_owner)):
 
 
 @app.post("/sensor/heartbeat")
-def sensor_heartbeat(heartbeat: SensorHeartbeat, _engine=Depends(verify_engine_key)):
+def sensor_heartbeat(
+    heartbeat: SensorHeartbeat,
+    principal=Depends(verify_sensor_or_engine),
+):
     """Records sensor health and returns the requested monitoring state."""
+    if principal.get("sensor_id") and heartbeat.sensor_id != principal["sensor_id"]:
+        raise HTTPException(status_code=403, detail="Sensor identity does not match credential")
+    record_sensor_seen(principal, version=heartbeat.version)
     return record_heartbeat(heartbeat)
+
+
+@app.post("/sensors/enrollment")
+@limiter.limit("5/minute")
+def create_sensor_enrollment_code(
+    request: Request,
+    user=Depends(verify_sensor_owner),
+):
+    """Creates one short-lived installation code for the signed-in sensor owner."""
+    return create_code(user.get("sub"))
+
+
+@app.post("/sensors/enroll")
+@limiter.limit("5/minute")
+def enroll_sensor(request: Request, enrollment: SensorEnrollmentExchange):
+    """Exchanges a one-time code for a unique revocable sensor credential."""
+    return exchange_code(
+        enrollment.code,
+        enrollment.name,
+        enrollment.platform,
+        enrollment.version,
+    )
+
+
+@app.get("/sensors")
+def read_sensors(user=Depends(verify_sensor_owner)):
+    """Lists enrolled sensors without returning credential hashes or tokens."""
+    return sensors_for_owner(user.get("sub"))
+
+
+@app.delete("/sensors/self")
+def delete_current_sensor(principal=Depends(verify_sensor_request)):
+    """Lets a valid local sensor revoke its own credential during removal."""
+    if not revoke_current_sensor(principal):
+        raise HTTPException(status_code=404, detail="Sensor not found")
+    return {"message": "Sensor access revoked"}
+
+
+@app.delete("/sensors/{sensor_id}")
+def delete_sensor(sensor_id: UUID, user=Depends(verify_sensor_owner)):
+    """Revokes one sensor owned by the signed-in account."""
+    if not revoke_owned_sensor(str(sensor_id), user.get("sub")):
+        raise HTTPException(status_code=404, detail="Sensor not found")
+    return {"message": "Sensor access revoked"}
 
 
 @app.post("/sensor/monitoring")

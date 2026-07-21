@@ -25,7 +25,7 @@ export default function Navbar({ connected, userEmail, signingOut, onLogout }) {
           to="/dashboard"
           end
           className={({ isActive }) =>
-            `flex items-center gap-1.5 py-1 font-sans text-sm no-underline transition-colors duration-150 ease-swift ${
+            `flex min-h-11 items-center gap-1.5 py-1 font-sans text-sm no-underline transition-colors duration-150 ease-swift sm:min-h-0 ${
               isActive ? 'font-semibold text-signal' : 'text-ink-muted'
             }`
           }
@@ -36,7 +36,7 @@ export default function Navbar({ connected, userEmail, signingOut, onLogout }) {
         <NavLink
           to="/history"
           className={({ isActive }) =>
-            `flex items-center gap-1.5 py-1 font-sans text-sm no-underline transition-colors duration-150 ease-swift ${
+            `flex min-h-11 items-center gap-1.5 py-1 font-sans text-sm no-underline transition-colors duration-150 ease-swift sm:min-h-0 ${
               isActive ? 'font-semibold text-signal' : 'text-ink-muted'
             }`
           }

@@ -20,6 +20,7 @@ sys.path.insert(0, os.path.abspath(os.path.join(os.path.dirname(__file__), "..")
 
 from main import app
 from auth import verify_engine_key, verify_token
+from sensor_enrollment import verify_sensor_or_engine
 from database import init_db, clear_alerts, get_alerts, insert_alert
 
 # ── Test Client ────────────────────────────────────────────────────────────
@@ -35,6 +36,11 @@ def setup_and_teardown():
     """
     app.dependency_overrides[verify_token] = lambda: {"sub": "test-user-id"}
     app.dependency_overrides[verify_engine_key] = lambda: None
+    app.dependency_overrides[verify_sensor_or_engine] = lambda: {
+        "sensor_id": None,
+        "owner_id": "test-user-id",
+        "auth_type": "engine",
+    }
     try:
         init_db()
         clear_alerts()
@@ -43,6 +49,7 @@ def setup_and_teardown():
     finally:
         app.dependency_overrides.pop(verify_token, None)
         app.dependency_overrides.pop(verify_engine_key, None)
+        app.dependency_overrides.pop(verify_sensor_or_engine, None)
 
 
 def make_alert(severity="HIGH", attack_type="PORT_SCAN"):

@@ -114,6 +114,11 @@ def verify_sensor_owner(user=Security(verify_token)):
     owner_id = os.getenv("SENSOR_OWNER_USER_ID", "").strip()
     if _allow_insecure_local_dev() and not user.get("sub"):
         return user
+    if not owner_id:
+        raise HTTPException(
+            status_code=503,
+            detail="Sensor ownership is not configured on this server.",
+        )
     if owner_id and user.get("sub") != owner_id:
         raise HTTPException(
             status_code=403,

@@ -7,26 +7,28 @@ API, and starts or pauses packet capture based on the dashboard command.
 
 import logging
 import os
+import re
 import signal
 import socket
 import threading
 import time
-from pathlib import Path
+from uuid import UUID
 
 import requests
-from dotenv import load_dotenv
 from scapy.all import sniff
 
+from sensor_config import (
+    load_sensor_environment,
+    persist_sensor_credential,
+    require_secure_api_url,
+    sensor_auth_headers,
+)
 
-load_dotenv(Path(__file__).resolve().parents[1] / ".env")
-
-from capture import handle_packet  # noqa: E402
+load_sensor_environment()
 
 
-VERSION = "1.0.0"
+VERSION = "1.1.0"
 INTERFACE = os.getenv("NETWORK_INTERFACE", "en0")
-SENSOR_ID = os.getenv("SENSOR_ID", socket.gethostname())
-ENGINE_API_KEY = os.getenv("ENGINE_API_KEY", "").strip()
 HEARTBEAT_INTERVAL_SECONDS = int(os.getenv("SENSOR_HEARTBEAT_INTERVAL_SECONDS", "5"))
 CAPTURE_RETRY_SECONDS = int(os.getenv("SENSOR_CAPTURE_RETRY_SECONDS", "30"))
 DEFAULT_MONITORING_ENABLED = (
@@ -36,12 +38,62 @@ DEFAULT_MONITORING_ENABLED = (
 _alerts_url = os.getenv("API_URL", "http://localhost:8000/alerts").rstrip("/")
 API_BASE_URL = os.getenv("API_BASE_URL", _alerts_url.removesuffix("/alerts")).rstrip("/")
 HEARTBEAT_URL = f"{API_BASE_URL}/sensor/heartbeat"
+ENROLLMENT_URL = f"{API_BASE_URL}/sensors/enroll"
 
 logging.basicConfig(
     level=logging.INFO,
     format="%(asctime)s [%(levelname)s] %(message)s",
 )
 log = logging.getLogger("threatscope.sensor")
+
+
+def ensure_enrolled():
+    """Exchanges an installation code before packet capture modules are loaded."""
+    require_secure_api_url(API_BASE_URL)
+    if os.getenv("SENSOR_TOKEN", "").strip() or os.getenv("ENGINE_API_KEY", "").strip():
+        return
+
+    code = os.getenv("SENSOR_ENROLLMENT_CODE", "").strip()
+    if not code:
+        raise RuntimeError("Sensor is not enrolled. Run the ThreatScope Sensor installer again.")
+    response = requests.post(
+        ENROLLMENT_URL,
+        json={
+            "code": code,
+            "name": socket.gethostname(),
+            "platform": "macOS",
+            "version": VERSION,
+        },
+        timeout=15,
+    )
+    if response.status_code != 200:
+        try:
+            detail = response.json().get("detail")
+        except ValueError:
+            detail = None
+        raise RuntimeError(detail or "ThreatScope could not enroll this sensor.")
+    payload = response.json()
+    sensor_id = str(payload.get("sensor_id", ""))
+    sensor_token = str(payload.get("sensor_token", ""))
+    try:
+        sensor_id = str(UUID(sensor_id))
+    except ValueError as exc:
+        raise RuntimeError("ThreatScope returned an invalid enrollment response.") from exc
+    token_parts = sensor_token.split(".")
+    if (
+        len(token_parts) != 3
+        or token_parts[0] != "ts1"
+        or token_parts[1] != sensor_id
+        or not re.fullmatch(r"[A-Za-z0-9_-]{32,64}", token_parts[2])
+    ):
+        raise RuntimeError("ThreatScope returned an invalid enrollment response.")
+    persist_sensor_credential(sensor_id, sensor_token)
+
+
+ensure_enrolled()
+SENSOR_ID = os.getenv("SENSOR_ID", socket.gethostname())
+
+from capture import handle_packet  # noqa: E402
 
 
 class NetworkSensor:
@@ -130,12 +182,11 @@ class NetworkSensor:
             capture_thread.join(timeout=3)
 
     def send_heartbeat(self):
-        headers = {"X-Engine-Key": ENGINE_API_KEY} if ENGINE_API_KEY else {}
         try:
             response = self._session.post(
                 HEARTBEAT_URL,
                 json=self.snapshot(),
-                headers=headers,
+                headers=sensor_auth_headers(),
                 timeout=10,
             )
             response.raise_for_status()

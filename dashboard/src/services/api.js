@@ -133,3 +133,15 @@ export async function setScanSchedule(enabled, intervalMinutes) {
     }),
   })
 }
+
+export async function createSensorEnrollment() {
+  return apiFetch('/sensors/enrollment', { method: 'POST' })
+}
+
+export async function getSensors() {
+  return apiFetch('/sensors')
+}
+
+export async function revokeSensor(sensorId) {
+  return apiFetch(`/sensors/${encodeURIComponent(sensorId)}`, { method: 'DELETE' })
+}

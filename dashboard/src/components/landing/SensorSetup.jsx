@@ -53,11 +53,11 @@ export default function SensorSetup() {
             <div className="mt-8 border-l-2 border-signal/50 pl-5">
               <div className="flex items-center gap-2 text-ink">
                 <ShieldCheck size={18} className="text-signal" />
-                <p className="font-display text-sm font-semibold">No terminal after setup</p>
+                <p className="font-display text-sm font-semibold">No Terminal required</p>
               </div>
               <p className="mt-2 text-sm leading-relaxed text-ink-muted">
-                Once installed, the sensor runs quietly in the background. Monitoring,
-                assessments, and status checks are controlled from the dashboard.
+                Download the setup app, paste a one-time code, and approve macOS access.
+                Monitoring, assessments, and access removal stay in the dashboard.
               </p>
             </div>
           </div>
@@ -93,13 +93,13 @@ export default function SensorSetup() {
                   Current preview: macOS
                 </h3>
                 <span className="rounded-full border border-severity-medium/30 px-2.5 py-1 font-mono text-[10px] uppercase tracking-wide text-severity-medium">
-                  Developer setup
+                  Project preview
                 </span>
               </div>
               <p className="mt-2 text-sm leading-relaxed text-ink-muted">
-                Today&apos;s version uses a one-time setup command after the project is
-                configured. A signed, guided installer and secure enrollment codes are
-                required before public release.
+                The project build uses a graphical installer and secure one-time enrollment
+                codes. Because it is not Apple-notarized, macOS may require one Open Anyway
+                approval in Privacy &amp; Security on first launch.
               </p>
             </div>
           </div>
