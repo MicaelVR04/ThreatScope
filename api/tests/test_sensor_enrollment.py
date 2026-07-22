@@ -229,6 +229,28 @@ def test_sensor_can_revoke_itself():
     assert exc.value.status_code == 401
 
 
+def test_sensor_is_ready_only_after_its_first_heartbeat():
+    _, credential = create_and_exchange()
+    headers = {"X-Sensor-Token": credential["sensor_token"]}
+
+    pending = client.get("/sensors/self/ready", headers=headers)
+    heartbeat = client.post("/sensor/heartbeat", headers=headers, json={
+        "sensor_id": credential["sensor_id"],
+        "interface": "en0",
+        "monitoring": True,
+        "packet_count": 5,
+        "version": "1.2.0",
+    })
+    ready = client.get("/sensors/self/ready", headers=headers)
+
+    assert pending.status_code == 409
+    assert pending.json()["detail"] == "Sensor heartbeat is pending"
+    assert heartbeat.status_code == 200
+    assert ready.status_code == 200
+    assert ready.json()["sensor_id"] == credential["sensor_id"]
+    assert ready.json()["version"] == "1.2.0"
+
+
 def test_invalid_token_returns_same_generic_error():
     response = client.post("/sensor/heartbeat", headers={
         "X-Sensor-Token": "ts1.00000000-0000-0000-0000-000000000000.not-a-secret",

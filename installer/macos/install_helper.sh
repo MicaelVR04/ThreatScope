@@ -10,6 +10,8 @@ ACTION="${1:-}"
 SOURCE_SENSOR="${2:-}"
 API_BASE_URL="${3:-}"
 CODE_FILE="${4:-}"
+OLD_API_BASE_URL=""
+OLD_SENSOR_TOKEN=""
 
 fail() {
   printf '%s\n' "$1" >&2
@@ -25,19 +27,49 @@ remove_local_sensor() {
   rm -rf "${INSTALL_DIR}"
 }
 
+valid_credential() {
+  printf '%s' "$1" | grep -Eq '^https://[A-Za-z0-9.-]+(:[0-9]+)?(/[A-Za-z0-9._~/-]*)?$' \
+    && printf '%s' "$2" | grep -Eq '^ts1\.[0-9a-fA-F-]{36}\.[A-Za-z0-9_-]{32,64}$'
+}
+
+remember_local_sensor() {
+  [ -f "${CONFIG_PATH}" ] || return 0
+  OLD_API_BASE_URL="$(awk -F= '$1 == "API_BASE_URL" {print substr($0, index($0, "=") + 1); exit}' "${CONFIG_PATH}")"
+  OLD_SENSOR_TOKEN="$(awk -F= '$1 == "SENSOR_TOKEN" {print substr($0, index($0, "=") + 1); exit}' "${CONFIG_PATH}")"
+  if ! valid_credential "${OLD_API_BASE_URL}" "${OLD_SENSOR_TOKEN}"; then
+    OLD_API_BASE_URL=""
+    OLD_SENSOR_TOKEN=""
+  fi
+}
+
+revoke_credential() {
+  STORED_API="$1"
+  STORED_TOKEN="$2"
+  valid_credential "${STORED_API}" "${STORED_TOKEN}" || return 1
+  if printf 'header = "X-Sensor-Token: %s"\n' "${STORED_TOKEN}" \
+    | /usr/bin/curl --config - --silent --show-error --fail --max-time 10 \
+    -X DELETE "${STORED_API}/sensors/self" >/dev/null 2>&1; then
+    return 0
+  fi
+  return 1
+}
+
 revoke_local_sensor() {
   [ -f "${CONFIG_PATH}" ] || return 0
   STORED_API="$(awk -F= '$1 == "API_BASE_URL" {print substr($0, index($0, "=") + 1); exit}' "${CONFIG_PATH}")"
   STORED_TOKEN="$(awk -F= '$1 == "SENSOR_TOKEN" {print substr($0, index($0, "=") + 1); exit}' "${CONFIG_PATH}")"
-  if printf '%s' "${STORED_API}" | grep -Eq '^https://[A-Za-z0-9.-]+(:[0-9]+)?(/[A-Za-z0-9._~/-]*)?$' \
-    && printf '%s' "${STORED_TOKEN}" | grep -Eq '^ts1\.[0-9a-fA-F-]{36}\.[A-Za-z0-9_-]{32,64}$'; then
-    CURL_CONFIG="$(mktemp -t threatscope-revoke)" || return 0
-    chmod 600 "${CURL_CONFIG}"
-    printf 'header = "X-Sensor-Token: %s"\n' "${STORED_TOKEN}" > "${CURL_CONFIG}"
-    /usr/bin/curl --config "${CURL_CONFIG}" --silent --show-error --fail --max-time 10 \
-      -X DELETE "${STORED_API}/sensors/self" >/dev/null 2>&1 || true
-    rm -f "${CURL_CONFIG}"
+  revoke_credential "${STORED_API}" "${STORED_TOKEN}" || true
+}
+
+sensor_is_ready() {
+  READY_TOKEN="$1"
+  valid_credential "${API_BASE_URL}" "${READY_TOKEN}" || return 1
+  if printf 'header = "X-Sensor-Token: %s"\n' "${READY_TOKEN}" \
+    | /usr/bin/curl --config - --silent --show-error --fail --max-time 5 \
+    "${API_BASE_URL}/sensors/self/ready" >/dev/null 2>&1; then
+    return 0
   fi
+  return 1
 }
 
 cleanup_failed_install() {
@@ -71,6 +103,7 @@ case "${ACTION}" in
     trap cleanup_failed_install EXIT
     trap 'exit 1' HUP INT TERM
     umask 077
+    remember_local_sensor
     launchctl bootout system "${PLIST_PATH}" >/dev/null 2>&1 || true
     mkdir -p "${INSTALL_DIR}"
     chown root:wheel "${INSTALL_DIR}"
@@ -121,10 +154,21 @@ PLIST
     attempts=0
     while [ "${attempts}" -lt 45 ]; do
       if grep -Eq '^SENSOR_TOKEN=ts1\.' "${CONFIG_PATH}"; then
-        INSTALL_COMPLETE=1
-        trap - EXIT HUP INT TERM
-        printf 'Sensor connected successfully. Return to the dashboard to confirm live monitoring.\n'
-        exit 0
+        NEW_SENSOR_TOKEN="$(awk -F= '$1 == "SENSOR_TOKEN" {print substr($0, index($0, "=") + 1); exit}' "${CONFIG_PATH}")"
+        if sensor_is_ready "${NEW_SENSOR_TOKEN}"; then
+          INSTALL_COMPLETE=1
+          trap - EXIT HUP INT TERM
+          if [ -n "${OLD_SENSOR_TOKEN}" ] && [ "${OLD_SENSOR_TOKEN}" != "${NEW_SENSOR_TOKEN}" ]; then
+            if revoke_credential "${OLD_API_BASE_URL}" "${OLD_SENSOR_TOKEN}"; then
+              printf 'Sensor connected successfully. The previous registration was removed automatically.\n'
+            else
+              printf 'Sensor connected successfully. Remove the older device entry from the dashboard if it remains visible.\n'
+            fi
+          else
+            printf 'Sensor connected successfully. Return to the dashboard to confirm live monitoring.\n'
+          fi
+          exit 0
+        fi
       fi
       attempts=$((attempts + 1))
       sleep 1
