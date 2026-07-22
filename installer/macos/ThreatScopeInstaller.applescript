@@ -1,19 +1,22 @@
+use scripting additions
+
 property apiBaseURL : "__API_BASE_URL__"
 property dashboardURL : "__DASHBOARD_URL__"
 property allowedCodeCharacters : "ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789_-"
 
 on run
     try
-        set choice to button returned of (display dialog ¬
+        set actionDialog to display dialog ¬
             "Install the ThreatScope network sensor on this Mac. No Terminal is required." ¬
             with title "ThreatScope Sensor" ¬
             buttons {"Cancel", "Remove Sensor", "Install Sensor"} ¬
             default button "Install Sensor" cancel button "Cancel" ¬
-            with icon note)
+            with icon note
+        set selectedAction to button returned of actionDialog
 
-        if choice is "Remove Sensor" then
+        if selectedAction is "Remove Sensor" then
             my runHelper("remove", "")
-        else if choice is "Install Sensor" then
+        else if selectedAction is "Install Sensor" then
             my requestCodeAndInstall()
         end if
     on error messageText number errorNumber
@@ -71,10 +74,11 @@ on runHelper(actionName, enrollmentCode)
         if codeFile is not "" then do shell script "/bin/rm -f " & quoted form of codeFile
 
         if actionName is "install" then
-            set finishChoice to button returned of (display dialog resultMessage ¬
+            set finishDialog to display dialog resultMessage ¬
                 with title "ThreatScope is connected" ¬
                 buttons {"Done", "Open Dashboard"} default button "Open Dashboard" ¬
-                with icon note)
+                with icon note
+            set finishChoice to button returned of finishDialog
             if finishChoice is "Open Dashboard" then open location dashboardURL
         else
             display dialog resultMessage with title "ThreatScope Sensor" buttons {"Done"} default button "Done" with icon note
