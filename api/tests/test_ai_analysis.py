@@ -68,6 +68,14 @@ def test_prompt_includes_current_time_for_timestamp_interpretation():
     assert "Do not call an alert timestamp future-dated" in prompt
 
 
+def test_prompt_forbids_unsupported_compromise_claims():
+    prompt = build_prompt([make_alert()])
+
+    assert "heuristic rule matches" in prompt
+    assert "Never claim a device is compromised" in prompt
+    assert "peer-to-peer or torrent clients" in prompt
+
+
 def test_analyze_alerts_with_mocked_ollama(monkeypatch):
     monkeypatch.setenv("OLLAMA_MODEL", "qwen2.5:7b")
 

@@ -43,6 +43,13 @@ Working features:
 
 The ARP spoof rule is a real rule in the engine, not only a simulated dashboard event. It watches for repeated conflicting ARP replies where multiple MAC addresses claim the same IP address.
 
+TCP and ping detections use short, bounded time windows instead of lifetime
+packet totals. Port scans require initial SYN attempts across multiple ports on
+the same target. SYN floods require many unresolved connection attempts toward
+the same target, while completed or reset connections are removed from flood
+state. This reduces false positives from legitimate high-connection software,
+including peer-to-peer clients, without weakening the deterministic demo cases.
+
 ## Tech Stack
 
 | Layer | Technology |
@@ -102,6 +109,10 @@ DEMO_MODE=true
 ALERT_COOLDOWN_SECONDS=60
 ARP_ENTRY_TTL_SECONDS=300
 ARP_SPOOF_CONFIRMATION_THRESHOLD=2
+PORT_SCAN_WINDOW_SECONDS=10
+SYN_FLOOD_WINDOW_SECONDS=5
+PING_SWEEP_WINDOW_SECONDS=10
+TRACKER_CLEANUP_INTERVAL_SECONDS=30
 # ALLOWED_SUBNETS=192.168.12.0/24
 ```
 
@@ -219,6 +230,13 @@ controlled from the dashboard.
 To remove it, reopen **ThreatScope Sensor Setup**, choose **Remove Sensor**, and
 approve the macOS prompt. The dashboard's **Remove access** action immediately
 revokes a missing or unavailable Mac.
+
+Installed sensors do not update themselves. When the dashboard reports an
+update, download the newest setup package, generate a new one-time code, and run
+the setup app again. Confirm that the new device reports the current version,
+then use **Remove access** on the older device entry. Sensor version `1.2.0`
+adds time-windowed, per-target TCP detection to reduce false positives from
+legitimate peer-to-peer applications.
 
 The command-line scripts remain available for project developers and recovery:
 

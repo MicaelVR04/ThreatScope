@@ -19,7 +19,10 @@ from dotenv import load_dotenv
 
 load_dotenv(Path(__file__).resolve().parents[1] / ".env")
 
-DISCLAIMER = "AI analysis is advisory. Rule-based detections remain the source of truth."
+DISCLAIMER = (
+    "AI analysis is advisory. Alerts are heuristic rule matches, not confirmed compromises. "
+    "Rule-based detections remain the source of truth."
+)
 logger = logging.getLogger(__name__)
 
 
@@ -60,6 +63,14 @@ def build_prompt(alerts: List[dict], current_time: datetime = None) -> str:
         "You are helping developers evaluate a rule-based network intrusion "
         "detection demo called ThreatScope. The rule engine already generated "
         "these alerts, so do not claim you detected attacks yourself.\n"
+        "The input contains heuristic rule matches, not packet captures, process names, "
+        "malware evidence, or confirmed incidents. Alert severity describes the matched "
+        "rule, not confidence that a compromise occurred. Never claim a device is "
+        "compromised, participating in a botnet, or deliberately attacking another host "
+        "unless the supplied fields contain independent evidence for that conclusion. "
+        "Consider legitimate high-connection applications such as peer-to-peer or torrent "
+        "clients when alerts show many public peers. Use cautious terms such as possible, "
+        "may, and warrants verification.\n"
         f"The current API time is {now.isoformat()}. Use it when interpreting "
         "alert timestamps. Do not call an alert timestamp future-dated unless "
         "it is later than this value.\n\n"

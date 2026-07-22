@@ -40,15 +40,22 @@ from rules import (
     PORT_SCAN_THRESHOLD,
     SYN_FLOOD_THRESHOLD,
     PING_SWEEP_THRESHOLD,
+    PORT_SCAN_WINDOW_SECONDS,
+    SYN_FLOOD_WINDOW_SECONDS,
+    PING_SWEEP_WINDOW_SECONDS,
 )
 from severity import score_severity, is_higher_severity
 
 
 # ── Helpers ────────────────────────────────────────────────────────────────
 
-def make_tcp_packet(src_ip, dst_ip, dst_port, flags=0x02):
+def make_tcp_packet(src_ip, dst_ip, dst_port, flags=0x02, src_port=40000):
     """Creates a TCP packet with the given parameters."""
-    return IP(src=src_ip, dst=dst_ip) / TCP(dport=dst_port, flags=flags)
+    return IP(src=src_ip, dst=dst_ip) / TCP(
+        sport=src_port,
+        dport=dst_port,
+        flags=flags,
+    )
 
 def make_icmp_packet(src_ip, dst_ip, icmp_type=8):
     """Creates an ICMP packet with the given parameters."""
@@ -72,6 +79,7 @@ def clear_trackers():
     syn_flood_tracker.clear()
     ping_sweep_tracker.clear()
     alert_cooldowns.clear()
+    rules._last_tracker_cleanup = 0.0
 
 
 # ── Fixtures ───────────────────────────────────────────────────────────────
@@ -148,6 +156,40 @@ class TestPortScan:
             alert = detect_port_scan(packet)
         assert alert is None
 
+    def test_normal_tcp_data_does_not_count_as_port_scan(self):
+        src_ip = "192.168.1.10"
+        for port in range(1, PORT_SCAN_THRESHOLD + 5):
+            alert = detect_port_scan(
+                make_tcp_packet(src_ip, "10.0.0.1", port, flags=0x10)
+            )
+            assert alert is None
+
+    def test_peer_connections_to_different_hosts_do_not_look_like_scan(self):
+        src_ip = "192.168.1.10"
+        for host in range(1, PORT_SCAN_THRESHOLD + 20):
+            alert = detect_port_scan(
+                make_tcp_packet(
+                    src_ip,
+                    f"203.0.113.{host}",
+                    50000 + host,
+                    src_port=40000 + host,
+                )
+            )
+            assert alert is None
+
+    def test_ports_outside_window_do_not_accumulate(self, monkeypatch):
+        src_ip = "192.168.1.10"
+        observed_times = iter(
+            [0.0] * (PORT_SCAN_THRESHOLD - 1)
+            + [PORT_SCAN_WINDOW_SECONDS + 1.0]
+        )
+        monkeypatch.setattr(rules, "time", lambda: next(observed_times))
+
+        alert = None
+        for port in range(1, PORT_SCAN_THRESHOLD + 1):
+            alert = detect_port_scan(make_tcp_packet(src_ip, "10.0.0.1", port))
+        assert alert is None
+
 
 # ── SYN Flood Tests ────────────────────────────────────────────────────────
 
@@ -156,8 +198,14 @@ class TestSynFlood:
     def test_no_alert_below_threshold(self):
         """Should NOT alert when SYN count is below the threshold."""
         src_ip = "10.0.0.5"
-        for _ in range(SYN_FLOOD_THRESHOLD - 1):
-            packet = make_tcp_packet(src_ip, "192.168.1.1", 80, flags=0x02)
+        for index in range(SYN_FLOOD_THRESHOLD - 1):
+            packet = make_tcp_packet(
+                src_ip,
+                "192.168.1.1",
+                80,
+                flags=0x02,
+                src_port=40000 + index,
+            )
             alert = detect_syn_flood(packet)
         assert alert is None
 
@@ -165,8 +213,14 @@ class TestSynFlood:
         """SHOULD alert when SYN packets hit the threshold."""
         src_ip = "10.0.0.5"
         alert = None
-        for _ in range(SYN_FLOOD_THRESHOLD):
-            packet = make_tcp_packet(src_ip, "192.168.1.1", 80, flags=0x02)
+        for index in range(SYN_FLOOD_THRESHOLD):
+            packet = make_tcp_packet(
+                src_ip,
+                "192.168.1.1",
+                80,
+                flags=0x02,
+                src_port=40000 + index,
+            )
             alert = detect_syn_flood(packet)
         assert alert is not None, "Expected SYN_FLOOD alert but got None"
 
@@ -174,8 +228,14 @@ class TestSynFlood:
         """Alert type should be SYN_FLOOD."""
         src_ip = "10.0.0.5"
         alert = None
-        for _ in range(SYN_FLOOD_THRESHOLD):
-            packet = make_tcp_packet(src_ip, "192.168.1.1", 80, flags=0x02)
+        for index in range(SYN_FLOOD_THRESHOLD):
+            packet = make_tcp_packet(
+                src_ip,
+                "192.168.1.1",
+                80,
+                flags=0x02,
+                src_port=40000 + index,
+            )
             alert = detect_syn_flood(packet)
         assert alert["type"] == "SYN_FLOOD"
 
@@ -183,8 +243,14 @@ class TestSynFlood:
         """SYN flood severity should be HIGH."""
         src_ip = "10.0.0.5"
         alert = None
-        for _ in range(SYN_FLOOD_THRESHOLD):
-            packet = make_tcp_packet(src_ip, "192.168.1.1", 80, flags=0x02)
+        for index in range(SYN_FLOOD_THRESHOLD):
+            packet = make_tcp_packet(
+                src_ip,
+                "192.168.1.1",
+                80,
+                flags=0x02,
+                src_port=40000 + index,
+            )
             alert = detect_syn_flood(packet)
         assert alert["severity"] == "HIGH"
 
@@ -194,6 +260,61 @@ class TestSynFlood:
         for _ in range(SYN_FLOOD_THRESHOLD + 10):
             packet = make_tcp_packet(src_ip, "192.168.1.1", 80, flags=0x10)  # ACK flag
             alert = detect_syn_flood(packet)
+        assert alert is None
+
+    def test_completed_connections_do_not_accumulate_as_flood(self):
+        client_ip = "10.0.0.5"
+        server_ip = "192.168.1.1"
+        for index in range(SYN_FLOOD_THRESHOLD + 20):
+            source_port = 40000 + index
+            syn = make_tcp_packet(
+                client_ip,
+                server_ip,
+                80,
+                flags=0x02,
+                src_port=source_port,
+            )
+            syn_ack = make_tcp_packet(
+                server_ip,
+                client_ip,
+                source_port,
+                flags=0x12,
+                src_port=80,
+            )
+            assert detect_syn_flood(syn) is None
+            assert detect_syn_flood(syn_ack) is None
+
+    def test_peer_connections_to_different_hosts_do_not_look_like_flood(self):
+        src_ip = "192.168.1.10"
+        for host in range(1, SYN_FLOOD_THRESHOLD + 20):
+            alert = detect_syn_flood(
+                make_tcp_packet(
+                    src_ip,
+                    f"203.0.113.{(host % 250) + 1}",
+                    50000 + host,
+                    src_port=40000 + host,
+                )
+            )
+            assert alert is None
+
+    def test_syn_flows_outside_window_do_not_accumulate(self, monkeypatch):
+        src_ip = "10.0.0.5"
+        observed_times = iter(
+            [0.0] * (SYN_FLOOD_THRESHOLD - 1)
+            + [SYN_FLOOD_WINDOW_SECONDS + 1.0]
+        )
+        monkeypatch.setattr(rules, "time", lambda: next(observed_times))
+
+        alert = None
+        for index in range(SYN_FLOOD_THRESHOLD):
+            alert = detect_syn_flood(
+                make_tcp_packet(
+                    src_ip,
+                    "192.168.1.1",
+                    80,
+                    src_port=40000 + index,
+                )
+            )
         assert alert is None
 
 
@@ -250,6 +371,21 @@ class TestPingSweep:
         for i in range(1, PING_SWEEP_THRESHOLD + 1):
             packet = make_icmp_packet(src_ip, f"192.168.1.{i}", icmp_type=0)
             alert = detect_ping_sweep(packet)
+        assert alert is None
+
+    def test_hosts_outside_window_do_not_accumulate(self, monkeypatch):
+        src_ip = "172.16.0.1"
+        observed_times = iter(
+            [0.0] * (PING_SWEEP_THRESHOLD - 1)
+            + [PING_SWEEP_WINDOW_SECONDS + 1.0]
+        )
+        monkeypatch.setattr(rules, "time", lambda: next(observed_times))
+
+        alert = None
+        for host in range(1, PING_SWEEP_THRESHOLD + 1):
+            alert = detect_ping_sweep(
+                make_icmp_packet(src_ip, f"192.168.1.{host}")
+            )
         assert alert is None
 
 
