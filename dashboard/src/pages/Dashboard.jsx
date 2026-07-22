@@ -636,7 +636,15 @@ export default function Dashboard({ onConnectionChange }) {
                 {aiResult && (
                   <div className="flex flex-col gap-1.5 text-ink-muted">
                     <p><span className="text-signal">&gt;</span> model: {aiResult.model} · {aiResult.alert_count} alerts analyzed</p>
-                    <p><span className="text-signal">&gt;</span> pattern: {aiResult.pattern}</p>
+                    {aiResult.recorded_alert_sequence?.length > 0 && (
+                      <p>
+                        <span className="text-signal">&gt;</span> evidence: {aiResult.recorded_alert_sequence.join(' → ')}
+                        {aiResult.observed_alert_span_seconds != null && (
+                          <> · {aiResult.observed_alert_span_seconds}s between first and last recorded alert</>
+                        )}
+                      </p>
+                    )}
+                    <p><span className="text-signal">&gt;</span> AI pattern: {aiResult.pattern}</p>
                     <p><span className="text-signal">&gt;</span> summary: {aiResult.summary}</p>
                     <p><span className="text-signal">&gt;</span> risk_level: <b className={riskTextClass(aiResult.risk_level)}>{aiResult.risk_level}</b></p>
                     {aiResult.rule_tuning_suggestions?.length > 0 && (
