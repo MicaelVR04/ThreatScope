@@ -17,6 +17,10 @@ Create a Supabase project and run the SQL in:
 
 `supabase/alerts_schema.sql`
 
+Then apply `supabase/runtime_state_schema.sql`,
+`supabase/sensor_enrollment_schema.sql`, and
+`supabase/multi_user_sensor_schema.sql` in that order.
+
 This creates:
 
 - `public.alerts`
@@ -54,6 +58,7 @@ SUPABASE_SERVICE_ROLE_KEY=your-service-role-key
 VITE_SUPABASE_URL=https://your-project.supabase.co
 VITE_SUPABASE_ANON_KEY=your-publishable-or-anon-key
 SUPABASE_ALERTS_TABLE=alerts
+SUPABASE_SCAN_STATE_TABLE=sensor_scan_state
 ```
 
 ## Security Notes

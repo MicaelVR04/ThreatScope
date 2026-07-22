@@ -56,6 +56,7 @@ the dashboard's `VITE_SENSOR_INSTALLER_URL` to the asset's direct URL.
 
 ## Required Supabase migration
 
-Run `supabase/sensor_enrollment_schema.sql` once in the project Supabase SQL
-Editor. The tables and enrollment function are private to the API service role;
-`anon` and `authenticated` receive no direct table or function access.
+Run `supabase/sensor_enrollment_schema.sql`, then
+`supabase/multi_user_sensor_schema.sql`, in the project Supabase SQL Editor. The
+tables and enrollment function are private to the API service role; `anon` and
+`authenticated` receive no direct table or function access.

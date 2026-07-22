@@ -191,14 +191,17 @@ def test_groq_qwen_uses_non_reasoning_json_mode(monkeypatch):
 
 def test_secure_assessment_does_not_send_historical_alerts_to_ai(monkeypatch):
     captured = {}
-    main.app.dependency_overrides[main.verify_sensor_owner] = lambda: {
-        "sub": "test-user-id"
+    owner_id = "98a345c1-6b65-4d93-96d6-59bec63fb4cf"
+    sensor_id = "00000000-0000-4000-8000-000000000002"
+    main.app.dependency_overrides[main.verify_token] = lambda: {
+        "sub": owner_id
     }
+    monkeypatch.setattr(main, "_owned_sensor_id", lambda *args, **kwargs: sensor_id)
     monkeypatch.setattr(main, "get_alerts", lambda **kwargs: [make_alert()])
     monkeypatch.setattr(
         main,
         "get_scan_status",
-        lambda: {
+        lambda owner, sensor: {
             "state": "secure",
             "last_started_at": "2026-07-20T12:00:00+00:00",
         },
@@ -210,9 +213,9 @@ def test_secure_assessment_does_not_send_historical_alerts_to_ai(monkeypatch):
 
     monkeypatch.setattr(main, "analyze_alerts", fake_analyze)
     try:
-        response = client.post("/ai/analyze-alerts")
+        response = client.post("/ai/analyze-alerts", json={"sensor_id": sensor_id})
     finally:
-        main.app.dependency_overrides.pop(main.verify_sensor_owner, None)
+        main.app.dependency_overrides.pop(main.verify_token, None)
 
     assert response.status_code == 200
     assert captured["alerts"] == []

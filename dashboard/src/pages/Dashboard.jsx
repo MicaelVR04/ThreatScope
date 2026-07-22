@@ -13,6 +13,7 @@ import {
   getAlertsSummary,
   getAttackTypeStats,
   getScanStatus,
+  getSensors,
   runScanNow,
   setScanSchedule,
   setSensorMonitoring,
@@ -135,6 +136,9 @@ export default function Dashboard({ onConnectionChange }) {
   const [scanError, setScanError] = useState(null)
   const [apiOnline, setApiOnline] = useState(null)
   const [apiError, setApiError] = useState(null)
+  const [sensors, setSensors] = useState([])
+  const [selectedSensorId, setSelectedSensorId] = useState(null)
+  const selectedSensorRef = useRef(null)
   const [revealed, setRevealed] = useState(false)
   const frozenRef = useRef([])
   const leftColRef = useRef(null)
@@ -180,9 +184,9 @@ export default function Dashboard({ onConnectionChange }) {
   const refreshDashboardData = useCallback(async () => {
     try {
       const [nextSummary, nextChartData, nextTypeStats] = await Promise.all([
-        getAlertsSummary(),
-        getAlertStats(),
-        getAttackTypeStats(),
+        getAlertsSummary(selectedSensorId),
+        getAlertStats(selectedSensorId),
+        getAttackTypeStats(selectedSensorId),
       ])
       setSummary(nextSummary)
       setChartData(formatChartData(nextChartData))
@@ -190,17 +194,51 @@ export default function Dashboard({ onConnectionChange }) {
     } catch (error) {
       console.error(error)
     }
+  }, [selectedSensorId])
+
+  const refreshSensors = useCallback(async () => {
+    try {
+      const nextSensors = (await getSensors()).filter(sensor => !sensor.revoked_at)
+      setSensors(nextSensors)
+      setSelectedSensorId(current => {
+        if (current && nextSensors.some(sensor => sensor.sensor_id === current || sensor.id === current)) {
+          return current
+        }
+        const preferred = nextSensors.find(sensor => sensor.online) || nextSensors[0]
+        return preferred?.sensor_id || preferred?.id || null
+      })
+    } catch (error) {
+      console.error(error)
+      setApiError(error.message || 'Unable to load registered sensors.')
+    }
   }, [])
 
   useEffect(() => { onConnectionChange?.(connected) }, [connected, onConnectionChange])
 
   useEffect(() => {
+    selectedSensorRef.current = selectedSensorId
+    setAiResult(null)
+    setAiError(null)
+    setAiLoading(false)
+  }, [selectedSensorId])
+
+  useEffect(() => {
     refreshDashboardData()
   }, [refreshDashboardData])
 
+  useEffect(() => {
+    refreshSensors()
+    const id = setInterval(refreshSensors, 10000)
+    return () => clearInterval(id)
+  }, [refreshSensors])
+
   const refreshScanStatus = useCallback(async () => {
+    if (!selectedSensorId) {
+      setScanStatus(null)
+      return
+    }
     try {
-      setScanStatus(await getScanStatus())
+      setScanStatus(await getScanStatus(selectedSensorId))
       setApiOnline(true)
       setApiError(null)
     } catch (error) {
@@ -208,7 +246,7 @@ export default function Dashboard({ onConnectionChange }) {
       setApiOnline(false)
       setApiError(error.message || 'ThreatScope API is unavailable.')
     }
-  }, [])
+  }, [selectedSensorId])
 
   useEffect(() => {
     refreshScanStatus()
@@ -239,16 +277,20 @@ export default function Dashboard({ onConnectionChange }) {
   }, [wsAlerts.length, refreshDashboardData])
 
   const handleAnalyzeAlerts = async () => {
+    const analysisSensorId = selectedSensorId
     setAiLoading(true)
     setAiError(null)
     try {
-      const result = await analyzeRecentAlerts()
-      setAiResult(result)
+      if (!analysisSensorId) throw new Error('Register a sensor before requesting AI analysis.')
+      const result = await analyzeRecentAlerts(analysisSensorId)
+      if (selectedSensorRef.current === analysisSensorId) setAiResult(result)
     } catch (error) {
       console.error(error)
-      setAiError(error.message || 'AI analysis failed. Check the configured provider and try again.')
+      if (selectedSensorRef.current === analysisSensorId) {
+        setAiError(error.message || 'AI analysis failed. Check the configured provider and try again.')
+      }
     } finally {
-      setAiLoading(false)
+      if (selectedSensorRef.current === analysisSensorId) setAiLoading(false)
     }
   }
 
@@ -256,7 +298,8 @@ export default function Dashboard({ onConnectionChange }) {
     setScanLoading(true)
     setScanError(null)
     try {
-      setScanStatus(await runScanNow())
+      if (!selectedSensorId) throw new Error('Select a sensor before starting an assessment.')
+      setScanStatus(await runScanNow(selectedSensorId))
     } catch (error) {
       console.error(error)
       setScanError(error.message || 'Unable to start the network assessment.')
@@ -277,7 +320,8 @@ export default function Dashboard({ onConnectionChange }) {
       },
     } : current)
     try {
-      setScanStatus(await setSensorMonitoring(enabled))
+      if (!selectedSensorId) throw new Error('Select a sensor before changing monitoring.')
+      setScanStatus(await setSensorMonitoring(selectedSensorId, enabled))
     } catch (error) {
       console.error(error)
       setScanStatus(previousStatus)
@@ -291,7 +335,8 @@ export default function Dashboard({ onConnectionChange }) {
     setScanLoading(true)
     setScanError(null)
     try {
-      setScanStatus(await setScanSchedule(enabled, intervalMinutes))
+      if (!selectedSensorId) throw new Error('Select a sensor before changing the schedule.')
+      setScanStatus(await setScanSchedule(selectedSensorId, enabled, intervalMinutes))
     } catch (error) {
       console.error(error)
       setScanError(error.message || 'Unable to update the assessment schedule.')
@@ -300,7 +345,10 @@ export default function Dashboard({ onConnectionChange }) {
     }
   }
 
-  const displayAlerts = paused ? frozenRef.current : wsAlerts.slice(0, FEED_LIMIT)
+  const selectedAlerts = selectedSensorId
+    ? wsAlerts.filter(alert => alert.sensor_id === selectedSensorId)
+    : []
+  const displayAlerts = paused ? frozenRef.current : selectedAlerts.slice(0, FEED_LIMIT)
   if (!paused) frozenRef.current = displayAlerts
 
   const totalDisplay  = useCountUp(summary.total)
@@ -385,6 +433,26 @@ export default function Dashboard({ onConnectionChange }) {
           >
             {scanMessage(scanStatus, summary)}
           </p>
+
+          <label className="mb-5 flex max-w-sm flex-col gap-2 font-mono text-[11px] uppercase tracking-[0.08em] text-ink-faint">
+            Monitoring device
+            <select
+              value={selectedSensorId || ''}
+              onChange={(event) => {
+                setSelectedSensorId(event.target.value || null)
+              }}
+              className="h-10 w-full rounded-md border border-white/[0.12] bg-surface-2 px-3 font-sans text-sm normal-case tracking-normal text-ink outline-none transition-colors focus:border-signal"
+              disabled={sensors.length === 0}
+            >
+              {sensors.length === 0 ? (
+                <option value="">No registered sensors</option>
+              ) : sensors.map(sensor => (
+                <option key={sensor.sensor_id || sensor.id} value={sensor.sensor_id || sensor.id}>
+                  {sensor.name || 'Unnamed sensor'} · {sensor.online ? 'online' : 'offline'}
+                </option>
+              ))}
+            </select>
+          </label>
 
           {scanError && (
             <p className="mb-4 flex max-w-[70ch] items-center gap-2 text-sm text-severity-high">
@@ -533,7 +601,7 @@ export default function Dashboard({ onConnectionChange }) {
                 <h2 className={PANEL_H2}>AI Analysis</h2>
                 <p className="text-[11px] leading-[normal] text-ink-faint">Advisory diagnostics from the configured AI provider, rendered as a live readout.</p>
               </div>
-              <Button variant="secondary" size="sm" onClick={handleAnalyzeAlerts} disabled={aiLoading || apiOnline === false}>
+              <Button variant="secondary" size="sm" onClick={handleAnalyzeAlerts} disabled={aiLoading || apiOnline === false || !selectedSensorId}>
                 {aiLoading ? <Loader2 size={14} className="animate-spin" /> : <Activity size={14} />}
                 {aiLoading ? 'Analyzing...' : 'Analyze recent alerts'}
               </Button>
@@ -686,7 +754,8 @@ function scanMessage(scanStatus, summary) {
     const scheduleClause = scanStatus?.enabled
       ? `assessments continue every ${scanStatus.interval_minutes} minutes`
       : 'scheduled assessments are currently off'
-    return `${scanStatus.message} ${summary.total} alerts stored this session; ${scheduleClause}.`
+    const alertLabel = summary.total === 1 ? 'alert' : 'alerts'
+    return `${scanStatus.message} ${summary.total} ${alertLabel} stored this session; ${scheduleClause}.`
   }
   return 'The sensor is continuously inspecting traffic. Run an assessment to produce a verified safety result for a measured packet window.'
 }

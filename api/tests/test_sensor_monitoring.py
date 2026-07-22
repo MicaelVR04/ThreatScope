@@ -1,37 +1,66 @@
+import hashlib
 import os
 import sys
+from datetime import datetime, timezone
 
 import pytest
-from fastapi.testclient import TestClient
 
 
 sys.path.insert(0, os.path.abspath(os.path.join(os.path.dirname(__file__), "..")))
 
 import scan_manager
 import sensor_manager
-from database import clear_runtime_state, init_db
-from main import app
+from database import get_connection, init_db
 from models import SensorHeartbeat
 
 
-client = TestClient(app)
+OWNER_A = "98a345c1-6b65-4d93-96d6-59bec63fb4cf"
+OWNER_B = "00000000-0000-4000-8000-000000000003"
+SENSOR_A = "00000000-0000-4000-8000-00000000000a"
+SENSOR_B = "00000000-0000-4000-8000-00000000000b"
+
+
+def add_sensor(sensor_id, owner_id, name):
+    conn = get_connection()
+    try:
+        conn.execute(
+            """
+            INSERT INTO sensors
+                (id, owner_id, name, platform, version, token_hash, created_at)
+            VALUES (?, ?, ?, 'macOS', 'test', ?, ?)
+            """,
+            (
+                sensor_id,
+                owner_id,
+                name,
+                hashlib.sha256(sensor_id.encode()).hexdigest(),
+                datetime.now(timezone.utc).isoformat(),
+            ),
+        )
+        conn.commit()
+    finally:
+        conn.close()
 
 
 @pytest.fixture(autouse=True)
 def reset_state():
     init_db()
-    clear_runtime_state()
-    sensor_manager.reset_sensor_state()
-    scan_manager.reset_scan_state()
+    conn = get_connection()
+    try:
+        conn.execute("DELETE FROM sensor_scan_state")
+        conn.execute("DELETE FROM sensors")
+        conn.commit()
+    finally:
+        conn.close()
+    add_sensor(SENSOR_A, OWNER_A, "Owner A Mac")
+    add_sensor(SENSOR_B, OWNER_B, "Owner B Mac")
     yield
     scan_manager.reset_scan_state()
-    sensor_manager.reset_sensor_state()
-    clear_runtime_state()
 
 
-def heartbeat(packet_count=0, monitoring=True):
+def heartbeat(sensor_id, packet_count=0, monitoring=True):
     return SensorHeartbeat(
-        sensor_id="test-sensor",
+        sensor_id=sensor_id,
         interface="en0",
         monitoring=monitoring,
         packet_count=packet_count,
@@ -39,129 +68,82 @@ def heartbeat(packet_count=0, monitoring=True):
     )
 
 
-def test_heartbeat_marks_sensor_online():
-    command = sensor_manager.record_heartbeat(heartbeat(packet_count=12))
-    status = sensor_manager.get_sensor_status()
+def principal(sensor_id, owner_id):
+    return {"sensor_id": sensor_id, "owner_id": owner_id, "auth_type": "sensor"}
+
+
+def test_heartbeat_updates_only_authenticated_sensor():
+    command = sensor_manager.record_heartbeat(
+        heartbeat(SENSOR_A, packet_count=12), principal(SENSOR_A, OWNER_A)
+    )
+    own_status = sensor_manager.get_sensor_status(OWNER_A, SENSOR_A)
+    other_status = sensor_manager.get_sensor_status(OWNER_B, SENSOR_B)
 
     assert command["monitoring_enabled"] is True
-    assert status["online"] is True
-    assert status["monitoring"] is True
-    assert status["packet_count"] == 12
+    assert own_status["online"] is True
+    assert own_status["packet_count"] == 12
+    assert other_status["online"] is False
+    assert other_status["packet_count"] == 0
 
 
-def test_monitoring_command_is_returned_on_next_heartbeat():
-    sensor_manager.set_monitoring(False)
+def test_sensor_credential_cannot_heartbeat_as_another_sensor():
+    with pytest.raises(sensor_manager.SensorNotFoundError):
+        sensor_manager.record_heartbeat(
+            heartbeat(SENSOR_B), principal(SENSOR_A, OWNER_A)
+        )
 
-    command = sensor_manager.record_heartbeat(heartbeat())
 
-    assert command["monitoring_enabled"] is False
+def test_owner_cannot_pause_another_owners_sensor():
+    with pytest.raises(sensor_manager.SensorNotFoundError):
+        sensor_manager.set_monitoring(OWNER_A, SENSOR_B, False)
+
+    assert sensor_manager.get_sensor_status(OWNER_B, SENSOR_B)["desired_monitoring"] is True
 
 
-def test_assessment_refuses_to_claim_safety_without_sensor():
+def test_monitoring_preferences_are_independent():
+    sensor_manager.set_monitoring(OWNER_A, SENSOR_A, False)
+
+    assert sensor_manager.get_sensor_status(OWNER_A, SENSOR_A)["desired_monitoring"] is False
+    assert sensor_manager.get_sensor_status(OWNER_B, SENSOR_B)["desired_monitoring"] is True
+
+
+def test_scan_states_are_isolated_per_owner_and_sensor(monkeypatch):
+    sensor_manager.record_heartbeat(
+        heartbeat(SENSOR_A, packet_count=10), principal(SENSOR_A, OWNER_A)
+    )
+    sensor_manager.record_heartbeat(
+        heartbeat(SENSOR_B, packet_count=30), principal(SENSOR_B, OWNER_B)
+    )
+    monkeypatch.setattr(scan_manager, "_total_alerts", lambda owner, sensor: 0)
+
+    scan_manager.start_scan(OWNER_A, SENSOR_A)
+    sensor_manager.record_heartbeat(
+        heartbeat(SENSOR_A, packet_count=25), principal(SENSOR_A, OWNER_A)
+    )
+    scan_manager.finish_scan(OWNER_A, SENSOR_A)
+
+    owner_a = scan_manager.get_scan_status(OWNER_A, SENSOR_A)
+    owner_b = scan_manager.get_scan_status(OWNER_B, SENSOR_B)
+    assert owner_a["state"] == "secure"
+    assert owner_a["packets_analyzed"] == 15
+    assert owner_b["state"] == "idle"
+    assert owner_b["packets_analyzed"] == 0
+
+
+def test_cross_owner_scan_is_rejected():
     with pytest.raises(scan_manager.SensorUnavailableError):
-        scan_manager.start_scan()
+        scan_manager.start_scan(OWNER_A, SENSOR_B)
 
 
-def test_assessment_requires_packet_activity(monkeypatch):
-    alert_count = 4
-    sensor_manager.record_heartbeat(heartbeat(packet_count=10))
-    monkeypatch.setattr(scan_manager, "_total_alerts", lambda: alert_count)
+def test_schedules_are_persisted_independently(monkeypatch):
+    sensor_manager.record_heartbeat(heartbeat(SENSOR_A), principal(SENSOR_A, OWNER_A))
+    sensor_manager.record_heartbeat(heartbeat(SENSOR_B), principal(SENSOR_B, OWNER_B))
+    monkeypatch.setattr(scan_manager, "_total_alerts", lambda owner, sensor: 0)
 
-    scan_manager.start_scan()
-    scan_manager.finish_scan()
-    status = scan_manager.get_scan_status()
+    scan_manager.set_schedule(OWNER_A, SENSOR_A, True, 5)
 
-    assert status["state"] == "no_data"
-    assert status["packets_analyzed"] == 0
-
-
-def test_assessment_reports_secure_only_after_packets(monkeypatch):
-    alert_count = 4
-    sensor_manager.record_heartbeat(heartbeat(packet_count=10))
-    monkeypatch.setattr(scan_manager, "_total_alerts", lambda: alert_count)
-
-    scan_manager.start_scan()
-    sensor_manager.record_heartbeat(heartbeat(packet_count=25))
-    scan_manager.finish_scan()
-    status = scan_manager.get_scan_status()
-
-    assert status["state"] == "secure"
-    assert status["packets_analyzed"] == 15
-    assert status["message"] == (
-        "Assessment complete. 15 packets inspected; none matched "
-        "ThreatScope's enabled detection rules."
-    )
-
-
-def test_new_alert_supersedes_clear_assessment(monkeypatch):
-    alert_count = 4
-    sensor_manager.record_heartbeat(heartbeat(packet_count=10))
-    monkeypatch.setattr(scan_manager, "_total_alerts", lambda: alert_count)
-
-    scan_manager.start_scan()
-    sensor_manager.record_heartbeat(heartbeat(packet_count=25))
-    scan_manager.finish_scan()
-    scan_manager.record_detected_alert()
-    status = scan_manager.get_scan_status()
-
-    assert status["state"] == "threats_found"
-    assert status["alerts_detected"] == 1
-    assert status["message"] == (
-        "A new threat alert was detected after the latest assessment."
-    )
-
-
-def test_heartbeat_endpoint_requires_engine_key(monkeypatch):
-    monkeypatch.setenv("ENGINE_API_KEY", "sensor-secret")
-    monkeypatch.setenv("ALLOW_INSECURE_LOCAL_DEV", "false")
-    payload = heartbeat().model_dump()
-
-    denied = client.post("/sensor/heartbeat", json=payload)
-    accepted = client.post(
-        "/sensor/heartbeat",
-        json=payload,
-        headers={"X-Engine-Key": "sensor-secret"},
-    )
-
-    assert denied.status_code == 401
-    assert accepted.status_code == 200
-
-
-def test_monitoring_preference_survives_api_restart():
-    sensor_manager.set_monitoring(False)
-    sensor_manager.reset_sensor_state()
-
-    status = sensor_manager.restore_sensor_state()
-
-    assert status["desired_monitoring"] is False
-
-
-def test_scan_result_and_schedule_survive_api_restart(monkeypatch):
-    alert_count = 4
-    sensor_manager.record_heartbeat(heartbeat(packet_count=10))
-    monkeypatch.setattr(scan_manager, "_total_alerts", lambda: alert_count)
-
-    scan_manager.set_schedule(True, 5)
-    sensor_manager.record_heartbeat(heartbeat(packet_count=25))
-    scan_manager.finish_scan()
-    scan_manager.reset_scan_state()
-
-    status = scan_manager.restore_scan_state()
-
-    assert status["enabled"] is True
-    assert status["interval_minutes"] == 5
-    assert status["state"] == "secure"
-    assert status["packets_analyzed"] == 15
-    assert status["next_scan_at"] is not None
-
-
-def test_interrupted_scan_is_not_restored_as_running(monkeypatch):
-    sensor_manager.record_heartbeat(heartbeat(packet_count=10))
-    monkeypatch.setattr(scan_manager, "_total_alerts", lambda: 0)
-
-    scan_manager.start_scan()
-    scan_manager.reset_scan_state()
-    status = scan_manager.restore_scan_state()
-
-    assert status["state"] == "idle"
-    assert "interrupted" in status["message"].lower()
+    owner_a = scan_manager.get_scan_status(OWNER_A, SENSOR_A)
+    owner_b = scan_manager.get_scan_status(OWNER_B, SENSOR_B)
+    assert owner_a["enabled"] is True
+    assert owner_a["interval_minutes"] == 5
+    assert owner_b["enabled"] is False

@@ -1,62 +1,61 @@
 import { useState, useEffect } from 'react'
 import { supabase } from '../supabaseClient'
-import { API_URL, WS_URL } from '../services/config'
 
 export default function useWebSocket() {
   const [alerts, setAlerts] = useState([])
   const [connected, setConnected] = useState(false)
 
   useEffect(() => {
+    let cancelled = false
     if (supabase) {
       // --- Supabase path ---
-      const fetchInitialAlerts = async () => {
+      let channel
+      const connectSupabase = async () => {
+        const { data: { session } } = await supabase.auth.getSession()
+        const userId = session?.user?.id
+        if (!userId || cancelled) return
         const { data, error } = await supabase
           .from('alerts')
           .select('*')
+          .eq('user_id', userId)
           .order('timestamp', { ascending: false })
-          .limit(20)
-        if (!error) {
+          .limit(200)
+        if (!error && !cancelled) {
           setAlerts(data)
           setConnected(true)
         }
+
+        channel = supabase
+          .channel(`alerts:${userId}`)
+          .on(
+            'postgres_changes',
+            {
+              event: 'INSERT',
+              schema: 'public',
+              table: 'alerts',
+              filter: `user_id=eq.${userId}`,
+            },
+            (payload) => {
+              setAlerts(prev => [payload.new, ...prev].slice(0, 200))
+            }
+          )
+          .subscribe((status) => {
+            if (!cancelled) setConnected(status === 'SUBSCRIBED')
+          })
       }
-      fetchInitialAlerts()
+      connectSupabase().catch(() => {
+        if (!cancelled) setConnected(false)
+      })
 
-      const channel = supabase
-        .channel('alerts-channel')
-        .on(
-          'postgres_changes',
-          { event: 'INSERT', schema: 'public', table: 'alerts' },
-          (payload) => {
-            setAlerts(prev => [payload.new, ...prev])
-          }
-        )
-        .subscribe((status) => {
-          setConnected(status === 'SUBSCRIBED')
-        })
-
-      return () => { supabase.removeChannel(channel) }
-    }
-
-    // --- Local API / WebSocket path ---
-    fetch(`${API_URL}/alerts`)
-      .then(r => r.json())
-      .then(data => setAlerts(data))
-      .catch(() => {})
-
-    const ws = new WebSocket(WS_URL)
-    ws.onopen  = () => setConnected(true)
-    ws.onclose = () => setConnected(false)
-    ws.onmessage = (e) => {
-      try {
-        const alert = JSON.parse(e.data)
-        setAlerts(prev => [alert, ...prev])
-      } catch (err) {
-        console.warn('Failed to parse WebSocket alert message:', err)
+      return () => {
+        cancelled = true
+        if (channel) supabase.removeChannel(channel)
       }
     }
 
-    return () => { ws.close() }
+    return () => {
+      cancelled = true
+    }
   }, [])
 
   return { alerts, connected }

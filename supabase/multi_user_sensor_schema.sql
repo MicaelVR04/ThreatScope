@@ -1,34 +1,6 @@
--- ThreatScope private sensor enrollment tables.
--- Run once in the Supabase SQL Editor before enabling graphical enrollment.
+-- ThreatScope multi-user sensor migration.
+-- Run once after alerts_schema.sql and sensor_enrollment_schema.sql.
 
-create table if not exists public.sensor_enrollment_codes (
-    id uuid primary key,
-    owner_id uuid not null references auth.users(id) on delete cascade,
-    code_hash text not null unique check (length(code_hash) = 64),
-    expires_at timestamptz not null,
-    used_at timestamptz,
-    created_at timestamptz not null default timezone('utc', now())
-);
-
-create table if not exists public.sensors (
-    id uuid primary key,
-    owner_id uuid not null references auth.users(id) on delete cascade,
-    name text not null check (char_length(name) between 1 and 64),
-    platform text not null check (char_length(platform) between 1 and 32),
-    version text not null check (char_length(version) between 1 and 32),
-    token_hash text not null unique check (length(token_hash) = 64),
-    created_at timestamptz not null default timezone('utc', now()),
-    last_seen_at timestamptz,
-    revoked_at timestamptz,
-    desired_monitoring boolean not null default true,
-    monitoring boolean not null default false,
-    interface text check (interface is null or char_length(interface) between 1 and 64),
-    packet_count bigint not null default 0 check (packet_count >= 0),
-    last_error text check (last_error is null or char_length(last_error) <= 512),
-    constraint sensors_id_owner_unique unique (id, owner_id)
-);
-
--- Keep this schema safe to rerun against an earlier ThreatScope installation.
 alter table public.sensors
     add column if not exists desired_monitoring boolean not null default true,
     add column if not exists monitoring boolean not null default false,
@@ -41,12 +13,59 @@ begin
     if not exists (
         select 1 from pg_constraint
         where conrelid = 'public.sensors'::regclass
+          and conname = 'sensors_packet_count_check'
+    ) then
+        alter table public.sensors
+            add constraint sensors_packet_count_check check (packet_count >= 0);
+    end if;
+    if not exists (
+        select 1 from pg_constraint
+        where conrelid = 'public.sensors'::regclass
+          and conname = 'sensors_interface_length_check'
+    ) then
+        alter table public.sensors
+            add constraint sensors_interface_length_check
+            check (interface is null or char_length(interface) between 1 and 64);
+    end if;
+    if not exists (
+        select 1 from pg_constraint
+        where conrelid = 'public.sensors'::regclass
+          and conname = 'sensors_last_error_length_check'
+    ) then
+        alter table public.sensors
+            add constraint sensors_last_error_length_check
+            check (last_error is null or char_length(last_error) <= 512);
+    end if;
+    if not exists (
+        select 1 from pg_constraint
+        where conrelid = 'public.sensors'::regclass
           and conname = 'sensors_id_owner_unique'
     ) then
         alter table public.sensors
             add constraint sensors_id_owner_unique unique (id, owner_id);
     end if;
 end $$;
+
+alter table public.alerts
+    add column if not exists sensor_id uuid;
+
+do $$
+begin
+    if not exists (
+        select 1 from pg_constraint
+        where conrelid = 'public.alerts'::regclass
+          and conname = 'alerts_sensor_owner_fk'
+    ) then
+        alter table public.alerts
+            add constraint alerts_sensor_owner_fk
+            foreign key (sensor_id, user_id)
+            references public.sensors (id, owner_id)
+            on delete set null (sensor_id);
+    end if;
+end $$;
+
+create index if not exists alerts_sensor_id_idx
+    on public.alerts (sensor_id, timestamp desc);
 
 create table if not exists public.sensor_scan_state (
     sensor_id uuid primary key,
@@ -69,27 +88,20 @@ create table if not exists public.sensor_scan_state (
         references public.sensors (id, owner_id) on delete cascade
 );
 
-create index if not exists sensor_enrollment_owner_idx
-    on public.sensor_enrollment_codes (owner_id, created_at desc);
-create unique index if not exists sensor_enrollment_one_active_per_owner
-    on public.sensor_enrollment_codes (owner_id) where used_at is null;
-create index if not exists sensors_owner_idx
-    on public.sensors (owner_id, created_at desc);
 create index if not exists sensor_scan_state_owner_idx
     on public.sensor_scan_state (owner_id);
 
-alter table public.sensor_enrollment_codes enable row level security;
-alter table public.sensors enable row level security;
 alter table public.sensor_scan_state enable row level security;
-
-revoke all on public.sensor_enrollment_codes from anon, authenticated, public;
-revoke all on public.sensors from anon, authenticated, public;
 revoke all on public.sensor_scan_state from anon, authenticated, public;
-grant all on public.sensor_enrollment_codes to service_role;
-grant all on public.sensors to service_role;
 grant all on public.sensor_scan_state to service_role;
 
--- The service-role-only function performs the one-time exchange atomically.
+-- Sensors remain private API-only records. Browser accounts cannot read or mutate
+-- credentials, heartbeat metadata, or scan controls directly through PostgREST.
+alter table public.sensors enable row level security;
+revoke all on public.sensors from anon, authenticated, public;
+grant all on public.sensors to service_role;
+
+-- Replace the enrollment exchange with an owner-serialized, quota-aware version.
 drop function if exists public.consume_sensor_enrollment(text, uuid, text, text, text, text);
 create or replace function public.consume_sensor_enrollment(
     p_code_hash text,
@@ -119,7 +131,6 @@ begin
         return;
     end if;
 
-    -- Serialize enrollment per owner so concurrent exchanges cannot bypass quota.
     perform pg_catalog.pg_advisory_xact_lock(
         pg_catalog.hashtextextended(claimed.owner_id::text, 0)
     );

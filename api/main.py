@@ -14,6 +14,9 @@ Endpoints:
 
 import logging
 import os
+import asyncio
+import json
+from typing import Optional
 from fastapi import FastAPI, WebSocket, WebSocketDisconnect, Query, HTTPException, Request, Depends
 from fastapi.middleware.cors import CORSMiddleware
 from contextlib import asynccontextmanager
@@ -29,10 +32,11 @@ from models import (
     ScanScheduleRequest,
     SensorEnrollmentExchange,
     SensorHeartbeat,
+    SensorTargetRequest,
 )
 from database import init_db, insert_alert, get_alerts, get_summary, get_stats, clear_alerts
 from websocket import manager
-from auth import decode_dashboard_token, verify_engine_key, verify_sensor_owner, verify_token
+from auth import decode_dashboard_token, verify_engine_key, verify_token
 from ai_analysis import analyze_alerts, get_ai_config
 from scan_manager import (
     SensorUnavailableError,
@@ -44,7 +48,14 @@ from scan_manager import (
     shutdown_scan_manager,
     start_scan,
 )
-from sensor_manager import record_heartbeat, restore_sensor_state, set_monitoring
+from sensor_manager import (
+    SensorNotFoundError,
+    get_sensor_status,
+    record_heartbeat,
+    resolve_owned_sensor,
+    restore_sensor_state,
+    set_monitoring,
+)
 from sensor_enrollment import (
     create_code,
     exchange_code,
@@ -67,6 +78,22 @@ logging.basicConfig(
     ]
 )
 logger = logging.getLogger(__name__)
+
+
+def _owner_id(user: dict) -> str:
+    """Returns the already-validated JWT subject used as every ownership root."""
+    try:
+        return str(UUID(str(user.get("sub", ""))))
+    except ValueError as exc:
+        raise HTTPException(status_code=401, detail="Invalid authorization subject") from exc
+
+
+def _owned_sensor_id(owner_id: str, sensor_id, required: bool = False):
+    requested = str(sensor_id) if sensor_id else None
+    sensor = resolve_owned_sensor(owner_id, requested)
+    if required and not sensor:
+        raise HTTPException(status_code=404, detail="Sensor not found")
+    return sensor["id"] if sensor else None
 
 
 def _dashboard_origins():
@@ -122,8 +149,8 @@ app.add_middleware(SlowAPIMiddleware)
 app.add_middleware(
     CORSMiddleware,
     allow_origins=_dashboard_origins(),
-    allow_methods=["*"],
-    allow_headers=["*"],
+    allow_methods=["GET", "POST", "DELETE", "OPTIONS"],
+    allow_headers=["Authorization", "Content-Type"],
 )
 
 
@@ -142,8 +169,15 @@ async def create_alert(
     if alert.severity not in ["LOW", "MEDIUM", "HIGH"]:
         raise HTTPException(status_code=400, detail="severity must be LOW, MEDIUM, or HIGH")
 
+    owner_id = principal.get("owner_id")
+    sensor_id = principal.get("sensor_id")
+    if principal.get("auth_type") == "engine" and not sensor_id:
+        sensor = resolve_owned_sensor(owner_id)
+        sensor_id = sensor["id"] if sensor else None
+
     alert_dict = alert.model_dump()
-    alert_dict["user_id"] = principal.get("owner_id")
+    alert_dict["user_id"] = owner_id
+    alert_dict["sensor_id"] = sensor_id
 
     if not alert_dict.get("timestamp"):
         alert_dict["timestamp"] = datetime.now(timezone.utc).isoformat()
@@ -151,9 +185,10 @@ async def create_alert(
     alert_id = insert_alert(alert_dict)
     alert_dict["id"] = alert_id
 
-    record_detected_alert()
-    record_sensor_seen(principal)
-    await manager.broadcast(alert_dict)
+    record_detected_alert(owner_id, sensor_id)
+    if principal.get("auth_type") == "sensor":
+        record_sensor_seen(principal)
+    await manager.broadcast(alert_dict, owner_id)
 
     return alert_dict
 
@@ -163,6 +198,7 @@ def read_alerts(
     severity: str = Query(default=None, description="Filter by severity: LOW, MEDIUM, HIGH"),
     limit: int = Query(default=50, le=200, description="Max number of alerts to return"),
     offset: int = Query(default=0, ge=0, description="Number of alerts to skip"),
+    sensor_id: Optional[UUID] = Query(default=None),
     user=Depends(verify_token)
 ):
     """
@@ -172,26 +208,32 @@ def read_alerts(
     if severity and severity not in ["LOW", "MEDIUM", "HIGH"]:
         raise HTTPException(status_code=400, detail="severity must be LOW, MEDIUM, or HIGH")
 
+    owner_id = _owner_id(user)
+    resolved_sensor_id = _owned_sensor_id(owner_id, sensor_id, required=bool(sensor_id))
     return get_alerts(
         severity=severity,
         limit=limit,
         offset=offset,
-        user_id=user.get("sub"),
+        user_id=owner_id,
+        sensor_id=resolved_sensor_id,
     )
 
 
 @app.get("/alerts/summary", response_model=AlertSummary)
-def read_summary(user=Depends(verify_token)):
+def read_summary(sensor_id: Optional[UUID] = Query(default=None), user=Depends(verify_token)):
     """
     Returns alert counts grouped by severity.
     Used for the dashboard summary cards.
     """
-    return get_summary(user_id=user.get("sub"))
+    owner_id = _owner_id(user)
+    resolved_sensor_id = _owned_sensor_id(owner_id, sensor_id, required=bool(sensor_id))
+    return get_summary(user_id=owner_id, sensor_id=resolved_sensor_id)
 
 
 @app.get("/alerts/stats")
 def read_stats(
     group_by: str = Query(default=None, description='Use "type" for attack-type counts'),
+    sensor_id: Optional[UUID] = Query(default=None),
     user=Depends(verify_token)
 ):
     """
@@ -202,43 +244,63 @@ def read_stats(
     if group_by and group_by != "type":
         raise HTTPException(status_code=400, detail='group_by must be "type"')
 
-    return get_stats(group_by=group_by, user_id=user.get("sub"))
+    owner_id = _owner_id(user)
+    resolved_sensor_id = _owned_sensor_id(owner_id, sensor_id, required=bool(sensor_id))
+    return get_stats(
+        group_by=group_by,
+        user_id=owner_id,
+        sensor_id=resolved_sensor_id,
+    )
 
 
 @app.delete("/alerts")
 def delete_alerts(_engine=Depends(verify_engine_key)):
     """
-    Clears all alerts from the database.
-    Useful for resetting between demos.
+    Clears alerts owned by the configured demo account only.
     """
-    clear_alerts()
-    return {"message": "All alerts cleared"}
+    owner_id = os.getenv("SENSOR_OWNER_USER_ID", "").strip()
+    if not owner_id:
+        raise HTTPException(status_code=503, detail="Demo alert ownership is not configured")
+    clear_alerts(user_id=owner_id)
+    record_alert_history_cleared(owner_id)
+    return {"message": "Demo account alerts cleared"}
 
 
 @app.delete("/alerts/mine")
-def delete_my_alerts(user=Depends(verify_token)):
+@limiter.limit("10/minute")
+def delete_my_alerts(request: Request, user=Depends(verify_token)):
     """Clears only the signed-in user's alert history."""
-    user_id = user.get("sub")
+    user_id = _owner_id(user)
     clear_alerts(user_id=user_id)
-    owner_id = os.getenv("SENSOR_OWNER_USER_ID", "").strip()
-    if user_id == owner_id:
-        record_alert_history_cleared()
+    record_alert_history_cleared(user_id)
     return {"message": "Your alert history was cleared"}
 
 
 @app.post("/ai/analyze-alerts")
-def analyze_recent_alerts(user=Depends(verify_sensor_owner)):
+@limiter.limit("6/minute")
+def analyze_recent_alerts(
+    request: Request,
+    target: Optional[SensorTargetRequest] = None,
+    user=Depends(verify_token),
+):
     """
     Runs advisory diagnostics with the configured local or cloud AI provider.
     AI output is advisory; rule-based detections remain the source of truth.
     """
     config = get_ai_config()
+    owner_id = _owner_id(user)
+    sensor_id = _owned_sensor_id(
+        owner_id,
+        target.sensor_id if target else None,
+        required=bool(target),
+    )
     alerts = get_alerts(
         limit=config["alert_limit"],
         offset=0,
-        user_id=user.get("sub"),
+        user_id=owner_id,
+        sensor_id=sensor_id,
     )
-    scan_status = get_scan_status()
+    scan_status = get_scan_status(owner_id, sensor_id)
     assessment_started_at = scan_status.get("last_started_at")
     if scan_status.get("state") == "secure":
         alerts = []
@@ -262,25 +324,27 @@ def analyze_recent_alerts(user=Depends(verify_sensor_owner)):
 
 
 @app.post("/sensor/heartbeat")
+@limiter.limit("120/minute")
 def sensor_heartbeat(
+    request: Request,
     heartbeat: SensorHeartbeat,
-    principal=Depends(verify_sensor_or_engine),
+    principal=Depends(verify_sensor_request),
 ):
     """Records sensor health and returns the requested monitoring state."""
-    if principal.get("sensor_id") and heartbeat.sensor_id != principal["sensor_id"]:
-        raise HTTPException(status_code=403, detail="Sensor identity does not match credential")
-    record_sensor_seen(principal, version=heartbeat.version)
-    return record_heartbeat(heartbeat)
+    try:
+        return record_heartbeat(heartbeat, principal)
+    except SensorNotFoundError as exc:
+        raise HTTPException(status_code=403, detail=str(exc)) from exc
 
 
 @app.post("/sensors/enrollment")
 @limiter.limit("5/minute")
 def create_sensor_enrollment_code(
     request: Request,
-    user=Depends(verify_sensor_owner),
+    user=Depends(verify_token),
 ):
     """Creates one short-lived installation code for the signed-in sensor owner."""
-    return create_code(user.get("sub"))
+    return create_code(_owner_id(user))
 
 
 @app.post("/sensors/enroll")
@@ -296,9 +360,9 @@ def enroll_sensor(request: Request, enrollment: SensorEnrollmentExchange):
 
 
 @app.get("/sensors")
-def read_sensors(user=Depends(verify_sensor_owner)):
+def read_sensors(user=Depends(verify_token)):
     """Lists enrolled sensors without returning credential hashes or tokens."""
-    return sensors_for_owner(user.get("sub"))
+    return sensors_for_owner(_owner_id(user))
 
 
 @app.delete("/sensors/self")
@@ -310,42 +374,72 @@ def delete_current_sensor(principal=Depends(verify_sensor_request)):
 
 
 @app.delete("/sensors/{sensor_id}")
-def delete_sensor(sensor_id: UUID, user=Depends(verify_sensor_owner)):
+def delete_sensor(sensor_id: UUID, user=Depends(verify_token)):
     """Revokes one sensor owned by the signed-in account."""
-    if not revoke_owned_sensor(str(sensor_id), user.get("sub")):
+    if not revoke_owned_sensor(str(sensor_id), _owner_id(user)):
         raise HTTPException(status_code=404, detail="Sensor not found")
     return {"message": "Sensor access revoked"}
 
 
 @app.post("/sensor/monitoring")
-def update_sensor_monitoring(request: MonitoringRequest, user=Depends(verify_sensor_owner)):
+@limiter.limit("30/minute")
+def update_sensor_monitoring(
+    request: Request,
+    command: MonitoringRequest,
+    user=Depends(verify_token),
+):
     """Starts or pauses packet capture on the connected sensor."""
-    set_monitoring(request.enabled)
-    return get_scan_status()
+    owner_id = _owner_id(user)
+    try:
+        set_monitoring(owner_id, str(command.sensor_id), command.enabled)
+    except SensorNotFoundError as exc:
+        raise HTTPException(status_code=404, detail="Sensor not found") from exc
+    return get_scan_status(owner_id, str(command.sensor_id))
 
 
 @app.get("/scan/status")
-def scan_status(user=Depends(verify_sensor_owner)):
+def scan_status(sensor_id: Optional[UUID] = Query(default=None), user=Depends(verify_token)):
     """Returns current scan and scheduled scan state."""
-    return get_scan_status()
+    owner_id = _owner_id(user)
+    resolved = _owned_sensor_id(owner_id, sensor_id, required=bool(sensor_id))
+    return get_scan_status(owner_id, resolved)
 
 
 @app.post("/scan/run")
-def run_scan_now(user=Depends(verify_sensor_owner)):
+@limiter.limit("30/minute")
+def run_scan_now(
+    request: Request,
+    target: SensorTargetRequest,
+    user=Depends(verify_token),
+):
     """
     Starts a verified assessment window on a connected monitoring sensor.
     """
     try:
-        return start_scan()
+        owner_id = _owner_id(user)
+        sensor_id = _owned_sensor_id(owner_id, target.sensor_id, required=True)
+        return start_scan(owner_id, sensor_id)
     except SensorUnavailableError as exc:
         raise HTTPException(status_code=409, detail=str(exc)) from exc
 
 
 @app.post("/scan/schedule")
-def update_scan_schedule(request: ScanScheduleRequest, user=Depends(verify_sensor_owner)):
+@limiter.limit("30/minute")
+def update_scan_schedule(
+    request: Request,
+    command: ScanScheduleRequest,
+    user=Depends(verify_token),
+):
     """Turns scheduled scan windows on or off at a 5 or 10 minute interval."""
     try:
-        return set_schedule(request.enabled, request.interval_minutes)
+        owner_id = _owner_id(user)
+        sensor_id = _owned_sensor_id(owner_id, command.sensor_id, required=True)
+        return set_schedule(
+            owner_id,
+            sensor_id,
+            command.enabled,
+            command.interval_minutes,
+        )
     except (ValueError, SensorUnavailableError) as e:
         raise HTTPException(status_code=400, detail=str(e))
 
@@ -363,19 +457,30 @@ async def websocket_endpoint(websocket: WebSocket):
     Dashboard connects here to receive real-time alerts.
     Stays open until the client disconnects.
     """
-    token = websocket.query_params.get("access_token", "")
+    origin = websocket.headers.get("origin", "").rstrip("/")
+    if origin not in _dashboard_origins():
+        await websocket.close(code=1008)
+        return
+    await websocket.accept()
     try:
-        user = decode_dashboard_token(token)
-        owner_id = os.getenv("SENSOR_OWNER_USER_ID", "").strip()
-        if owner_id and user.get("sub") != owner_id:
-            raise HTTPException(status_code=403, detail="Sensor owner access required")
-    except HTTPException:
+        auth_text = await asyncio.wait_for(websocket.receive_text(), timeout=5)
+        if len(auth_text) > 4096:
+            raise ValueError("Authentication message is too large")
+        auth_message = json.loads(auth_text)
+        user = decode_dashboard_token(auth_message.get("access_token", ""))
+        owner_id = _owner_id(user)
+    except (HTTPException, ValueError, TypeError, json.JSONDecodeError, asyncio.TimeoutError):
         await websocket.close(code=1008)
         return
 
-    await manager.connect(websocket)
+    if not manager.connect(websocket, owner_id):
+        await websocket.close(code=1013)
+        return
     try:
-        while True:
-            await websocket.receive_text()
+        # This channel is server-push only; reject post-auth client traffic.
+        await websocket.receive_text()
+        await websocket.close(code=1008)
     except WebSocketDisconnect:
+        pass
+    finally:
         manager.disconnect(websocket)

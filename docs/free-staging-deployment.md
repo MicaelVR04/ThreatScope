@@ -21,6 +21,8 @@ release.
 ```text
 supabase/alerts_schema.sql
 supabase/runtime_state_schema.sql
+supabase/sensor_enrollment_schema.sql
+supabase/multi_user_sensor_schema.sql
 ```
 
 3. Keep these values ready. Do not paste them into Git:
@@ -64,9 +66,10 @@ from Render's generated hostnames. No Groq or service-role secret is included in
 the browser build. The API also refuses to start if configured Supabase storage
 is unavailable, preventing a hidden fallback to temporary cloud files.
 
-The sensor owner setting keeps registered users from reading or controlling
-another user's sensor. Existing alerts created before this migration have no
-owner and will no longer appear. To keep old demo rows, assign them once in the
+`SENSOR_OWNER_USER_ID` applies only to traffic sent with the shared demo engine
+key. Every graphical installer uses a unique credential bound to the account
+that generated its one-time code. Existing alerts created before ownership was
+added have no owner and will no longer appear. To keep old demo rows, assign them once in the
 Supabase SQL Editor:
 
 ```sql
@@ -92,7 +95,7 @@ production mail provider. The demo may keep its existing test-user behavior.
 
 ## Point The Sensor At The Cloud API
 
-On the Mac that monitors the demo network, update the local `.env`:
+For the older command-line demo engine, update the monitoring Mac's `.env`:
 
 ```bash
 API_BASE_URL=https://YOUR-API.onrender.com
@@ -101,7 +104,9 @@ ENGINE_API_KEY=the_same_value_entered_in_Render
 SENSOR_HEARTBEAT_INTERVAL_SECONDS=15
 ```
 
-Then restart the installed sensor:
+The graphical installer does not need either shared value. It enrolls from the
+dashboard and receives its own revocable token. If the old command-line service
+is still installed, restart it after changing `.env`:
 
 ```bash
 sudo ./scripts/control_sensor_macos.sh restart
@@ -148,7 +153,8 @@ for the Holberton staging demo.
 
 ## Security Boundary
 
-This staging setup uses one shared `ENGINE_API_KEY` for the team's sensor. Do
-not distribute it publicly. A commercial release must replace it with
-revocable, per-sensor enrollment credentials and scope alerts by organization
-or user.
+The normal sensor path uses one-time enrollment and unique revocable credentials
+with per-user database isolation. The shared `ENGINE_API_KEY` exists only for
+deterministic team demo traffic; do not distribute it publicly. Organization
+roles, billing boundaries, audit retention, signed/notarized installers, and
+always-on infrastructure remain commercial-release work.
