@@ -250,7 +250,12 @@ The installer is built by the project team, not by end users. See
 `installer/macos/README.md`. The verified project build is published with the
 dashboard at `/downloads/ThreatScope-Sensor-macOS.zip`, so the download button
 works without extra Render configuration. `VITE_SENSOR_INSTALLER_URL` remains
-an optional override for a future CDN or notarized release asset.
+an optional override for a future CDN or notarized release asset. Because the
+project build is ad-hoc signed rather than Apple-notarized, Gatekeeper requires
+the supported **Privacy & Security → Open Anyway** approval after the first
+launch attempt. Do not instruct users to disable Gatekeeper or remove quarantine
+attributes. A warning-free public download requires Developer ID signing and
+Apple notarization.
 
 ## Free Holberton Staging Deployment
 

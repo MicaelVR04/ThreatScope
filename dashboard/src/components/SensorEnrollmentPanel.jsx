@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useMemo, useState } from 'react'
-import { CheckCircle2, ChevronDown, ChevronUp, Clipboard, Download, KeyRound, Laptop, Loader2, ShieldCheck, Trash2 } from 'lucide-react'
+import { AlertTriangle, CheckCircle2, ChevronDown, ChevronUp, Clipboard, Download, ExternalLink, KeyRound, Laptop, Loader2, ShieldCheck, Trash2 } from 'lucide-react'
 import Button from './theme/Button'
 import { createSensorEnrollment, getSensors, revokeSensor } from '../services/api'
 
@@ -105,6 +105,35 @@ export default function SensorEnrollmentPanel({ sensorOnline }) {
           {enrollment ? 'Generate a new code' : 'Generate installation code'}
         </Button>
       </div>
+
+      <details className="mt-5 rounded-md border border-severity-medium/25 bg-severity-medium/5 px-4 py-3">
+        <summary className="flex cursor-pointer list-none items-center gap-2 font-display text-sm font-semibold text-ink marker:content-none">
+          <AlertTriangle size={16} className="shrink-0 text-severity-medium" />
+          Did macOS block the setup app?
+        </summary>
+        <div className="mt-3 border-t border-white/[0.08] pt-3 text-sm leading-relaxed text-ink-muted">
+          <p>
+            This school-project build is integrity-signed but not yet notarized by Apple. Do not disable
+            macOS security. After trying to open the app once:
+          </p>
+          <ol className="mt-3 list-decimal space-y-1.5 pl-5">
+            <li>Dismiss the warning with <strong className="text-ink">Done</strong>.</li>
+            <li>Open <strong className="text-ink">System Settings → Privacy &amp; Security</strong> and scroll to Security.</li>
+            <li>Click <strong className="text-ink">Open Anyway</strong>, approve with your password, then click Open.</li>
+          </ol>
+          <p className="mt-3 text-xs text-ink-faint">
+            Apple makes Open Anyway available for about one hour after the blocked launch.
+          </p>
+          <a
+            href="https://support.apple.com/en-us/102445"
+            target="_blank"
+            rel="noreferrer"
+            className="mt-3 inline-flex items-center gap-1.5 font-display text-xs font-semibold text-signal hover:text-signal/80 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-signal"
+          >
+            Read Apple&apos;s instructions <ExternalLink size={13} />
+          </a>
+        </div>
+      </details>
 
       {enrollment && (
         <div className="mt-5 rounded-md border border-signal/25 bg-signal-dim px-4 py-4">

@@ -81,11 +81,21 @@ export default function SensorSetupGuide() {
           <div className="mt-8 border-l-2 border-severity-medium/60 pl-4">
             <h3 className="font-display text-sm font-semibold text-ink">Why macOS may show “Open Anyway”</h3>
             <p className="mt-2 max-w-3xl text-sm leading-relaxed text-ink-muted">
-              This school-project build is not notarized through Apple. If macOS blocks the first launch,
-              open <strong className="text-ink">System Settings → Privacy &amp; Security</strong>, choose
-              <strong className="text-ink"> Open Anyway</strong>, and confirm. This is the only extra step;
-              no commands are required. Download the app only from the official ThreatScope dashboard.
+              This school-project build is integrity-signed but not notarized through Apple. Try opening it
+              once and dismiss the warning with <strong className="text-ink">Done</strong>. Then open
+              <strong className="text-ink"> System Settings → Privacy &amp; Security</strong>, scroll to Security,
+              choose <strong className="text-ink">Open Anyway</strong>, enter your password, and confirm Open.
+              Apple shows that option for about one hour after the blocked launch. Do not disable Gatekeeper
+              or run quarantine-removal commands. Download the app only from the official ThreatScope dashboard.
             </p>
+            <a
+              href="https://support.apple.com/en-us/102445"
+              target="_blank"
+              rel="noreferrer"
+              className="mt-3 inline-flex font-display text-xs font-semibold text-signal hover:text-signal/80 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-signal"
+            >
+              Apple: Safely open apps on your Mac
+            </a>
           </div>
         </section>
 
