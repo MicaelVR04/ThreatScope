@@ -1,27 +1,33 @@
-import { useEffect, useRef } from 'react'
+import { useEffect, useRef, useState } from 'react'
 
 const MAX_SAMPLES = 24
 
-// Visualizes real packet-count deltas reported by the sensor. The moving
-// highlight is decorative; the shape changes only when the sensor reports
-// additional captured packets.
-export default function NetworkPulse({ packetCount = 0, active = false }) {
+// Visualizes packet-count deltas between distinct sensor heartbeats. A sample
+// is added even when no packets arrived, so the timeline advances honestly.
+export default function NetworkPulse({ packetCount = 0, sampleTimestamp = null, active = false }) {
   const canvasRef = useRef(null)
-  const samplesRef = useRef([0, 0])
+  const [samples, setSamples] = useState([0, 0])
+  const [latestDelta, setLatestDelta] = useState(0)
   const previousCountRef = useRef(null)
-  const activeRef = useRef(active)
-  activeRef.current = active
+  const previousTimestampRef = useRef(null)
 
   useEffect(() => {
     const current = Number(packetCount) || 0
     const previous = previousCountRef.current
+    const timestamp = sampleTimestamp || null
+
+    if (timestamp && timestamp === previousTimestampRef.current) return
+    if (!timestamp && previous !== null && current === previous) return
+
     previousCountRef.current = current
+    previousTimestampRef.current = timestamp
 
     if (previous === null) return
 
     const delta = current >= previous ? current - previous : 0
-    samplesRef.current = [...samplesRef.current, delta].slice(-MAX_SAMPLES)
-  }, [packetCount])
+    setLatestDelta(delta)
+    setSamples(currentSamples => [...currentSamples, delta].slice(-MAX_SAMPLES))
+  }, [packetCount, sampleTimestamp])
 
   useEffect(() => {
     const canvas = canvasRef.current
@@ -36,11 +42,11 @@ export default function NetworkPulse({ packetCount = 0, active = false }) {
     }
 
     function pointsFor(width, height) {
-      const samples = samplesRef.current.length >= 2 ? samplesRef.current : [0, 0]
-      const max = Math.max(1, ...samples)
-      const step = width / Math.max(1, samples.length - 1)
+      const values = samples.length >= 2 ? samples : [0, 0]
+      const max = Math.max(1, ...values)
+      const step = width / Math.max(1, values.length - 1)
 
-      return samples.map((value, index) => ({
+      return values.map((value, index) => ({
         x: index * step,
         y: height - (value / max) * height * 0.68 - height * 0.16,
       }))
@@ -52,7 +58,7 @@ export default function NetworkPulse({ packetCount = 0, active = false }) {
       const width = canvas.width
       const height = canvas.height
       const points = pointsFor(width, height)
-      const monitoring = activeRef.current
+      const monitoring = active
 
       ctx.clearRect(0, 0, width, height)
 
@@ -101,18 +107,23 @@ export default function NetworkPulse({ packetCount = 0, active = false }) {
       if (raf) cancelAnimationFrame(raf)
       observer.disconnect()
     }
-  }, [])
+  }, [active, samples])
 
   return (
-    <canvas
-      ref={canvasRef}
-      className="block h-full w-full"
-      role="img"
-      aria-label={
-        active
-          ? 'Live packet activity from the connected network sensor'
-          : 'Packet activity unavailable because monitoring is paused or offline'
-      }
-    />
+    <div className="relative h-full w-full">
+      <canvas
+        ref={canvasRef}
+        className="block h-full w-full"
+        role="img"
+        aria-label={
+          active
+            ? `Live packet activity from the connected network sensor. ${latestDelta} packets in the latest sample.`
+            : 'Packet activity unavailable because monitoring is paused or offline'
+        }
+      />
+      <span className="pointer-events-none absolute bottom-2 right-2 rounded bg-base/80 px-2 py-1 font-mono text-[10px] text-ink-muted">
+        {active ? `${latestDelta.toLocaleString()} packets / latest sample` : 'Pulse unavailable'}
+      </span>
+    </div>
   )
 }
