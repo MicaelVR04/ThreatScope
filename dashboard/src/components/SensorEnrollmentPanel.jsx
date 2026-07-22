@@ -5,6 +5,20 @@ import { createSensorEnrollment, getSensors, revokeSensor } from '../services/ap
 
 const INSTALLER_URL = import.meta.env.VITE_SENSOR_INSTALLER_URL?.trim()
   || '/downloads/ThreatScope-Sensor-macOS.zip'
+const CURRENT_SENSOR_VERSION = '1.2.0'
+
+function isOlderSensorVersion(version) {
+  const installed = String(version || '').split('.').map(Number)
+  const current = CURRENT_SENSOR_VERSION.split('.').map(Number)
+
+  if (installed.length < 2 || installed.some(Number.isNaN)) return false
+
+  for (let index = 0; index < current.length; index += 1) {
+    const installedPart = installed[index] || 0
+    if (installedPart !== current[index]) return installedPart < current[index]
+  }
+  return false
+}
 
 export default function SensorEnrollmentPanel({ sensorOnline }) {
   const [sensors, setSensors] = useState([])
@@ -29,6 +43,10 @@ export default function SensorEnrollmentPanel({ sensorOnline }) {
   const activeSensors = useMemo(
     () => sensors.filter(sensor => !sensor.revoked_at),
     [sensors],
+  )
+  const outdatedSensors = useMemo(
+    () => activeSensors.filter(sensor => isOlderSensorVersion(sensor.version)),
+    [activeSensors],
   )
 
   async function generateCode() {
@@ -106,6 +124,22 @@ export default function SensorEnrollmentPanel({ sensorOnline }) {
         </Button>
       </div>
 
+      {outdatedSensors.length > 0 && (
+        <div className="mt-5 rounded-md border border-severity-medium/25 bg-severity-medium/5 px-4 py-4">
+          <div className="flex gap-3">
+            <AlertTriangle size={18} className="mt-0.5 shrink-0 text-severity-medium" />
+            <div>
+              <p className="font-display text-sm font-semibold text-ink">Sensor update available</p>
+              <p className="mt-1 text-sm leading-relaxed text-ink-muted">
+                Version {CURRENT_SENSOR_VERSION} improves live-traffic accuracy and reduces false alerts from
+                peer-to-peer apps. Download the latest setup, generate a new code, and run it again. After the
+                new sensor connects, remove the older device entry below.
+              </p>
+            </div>
+          </div>
+        </div>
+      )}
+
       <details className="mt-5 rounded-md border border-severity-medium/25 bg-severity-medium/5 px-4 py-3">
         <summary className="flex cursor-pointer list-none items-center gap-2 font-display text-sm font-semibold text-ink marker:content-none">
           <AlertTriangle size={16} className="shrink-0 text-severity-medium" />
@@ -182,9 +216,14 @@ export default function SensorEnrollmentPanel({ sensorOnline }) {
                   <div className="min-w-0 flex-1">
                     <p className="truncate text-sm font-medium text-ink">{sensor.name}</p>
                     <p className="mt-0.5 text-xs text-ink-faint">
-                      {sensor.platform} · {sensor.last_seen_at ? `Last connected ${new Date(sensor.last_seen_at).toLocaleString()}` : 'Waiting for first connection'}
+                      {sensor.platform} · Version {sensor.version || 'unknown'} · {sensor.last_seen_at ? `Last connected ${new Date(sensor.last_seen_at).toLocaleString()}` : 'Waiting for first connection'}
                     </p>
                   </div>
+                  {isOlderSensorVersion(sensor.version) && (
+                    <span className="rounded-full border border-severity-medium/30 bg-severity-medium/10 px-2.5 py-1 font-mono text-[10px] font-semibold uppercase text-severity-medium">
+                      Update available
+                    </span>
+                  )}
                   <Button variant="danger" size="sm" onClick={() => removeSensor(sensor)} disabled={loading}>
                     <Trash2 size={14} /> Remove access
                   </Button>

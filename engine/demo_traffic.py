@@ -35,8 +35,11 @@ def trigger_ping_sweep(src_ip: str, dst_prefix: str):
 
 
 def trigger_syn_flood(src_ip: str, dst_ip: str):
-    for _ in range(100):
-        handle_packet(IP(src=src_ip, dst=dst_ip) / TCP(dport=80, flags=0x02))
+    for source_port in range(40000, 40100):
+        handle_packet(
+            IP(src=src_ip, dst=dst_ip) /
+            TCP(sport=source_port, dport=80, flags=0x02)
+        )
 
 
 def trigger_arp_spoof(claimed_ip: str, target_ip: str, target_mac: str):

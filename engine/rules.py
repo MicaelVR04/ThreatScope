@@ -26,17 +26,17 @@ from severity import score_severity
 load_dotenv()
 
 # ── State tracking ─────────────────────────────────────────────────────────
-# These dicts track packet counts per source IP over time
-# They reset when the engine restarts (in-memory only for now)
+# These dicts track recent activity in bounded time windows.
+# They reset when the engine restarts (in-memory only for now).
 
-# { src_ip: set of destination ports seen }
-port_scan_tracker = defaultdict(set)
+# { (src_ip, dst_ip): {destination_port: last_syn_time} }
+port_scan_tracker = defaultdict(dict)
 
-# { src_ip: count of SYN packets seen }
-syn_flood_tracker = defaultdict(int)
+# { (src_ip, dst_ip): {(src_port, dst_port): last_syn_time} }
+syn_flood_tracker = defaultdict(dict)
 
-# { src_ip: set of destination IPs pinged }
-ping_sweep_tracker = defaultdict(set)
+# { src_ip: {destination_ip: last_ping_time} }
+ping_sweep_tracker = defaultdict(dict)
 
 # { claimed_ip: {"mac": observed_mac, "last_seen": unix_time} }
 arp_claim_tracker = {}
@@ -49,9 +49,14 @@ alert_cooldowns = {}
 
 # ── Thresholds ─────────────────────────────────────────────────────────────
 # Tune these values to reduce false positives
-PORT_SCAN_THRESHOLD = 10     # unique ports hit by one IP before alerting
-SYN_FLOOD_THRESHOLD = 100    # SYN packets from one IP before alerting
+PORT_SCAN_THRESHOLD = 10     # unique ports hit on one target before alerting
+SYN_FLOOD_THRESHOLD = 100    # unresolved SYN flows to one target before alerting
 PING_SWEEP_THRESHOLD = 5     # unique IPs pinged by one IP before alerting
+PORT_SCAN_WINDOW_SECONDS = int(os.getenv("PORT_SCAN_WINDOW_SECONDS", "10"))
+SYN_FLOOD_WINDOW_SECONDS = int(os.getenv("SYN_FLOOD_WINDOW_SECONDS", "5"))
+PING_SWEEP_WINDOW_SECONDS = int(os.getenv("PING_SWEEP_WINDOW_SECONDS", "10"))
+TRACKER_CLEANUP_INTERVAL_SECONDS = int(os.getenv("TRACKER_CLEANUP_INTERVAL_SECONDS", "30"))
+_last_tracker_cleanup = 0.0
 
 # ── Demo stability controls ────────────────────────────────────────────────
 DEMO_MODE = os.getenv("DEMO_MODE", "false").lower() == "true"
@@ -70,6 +75,37 @@ def _parse_ip(value):
         return ipaddress.ip_address(value)
     except ValueError:
         return None
+
+
+def _is_initial_syn(tcp_layer):
+    flags = int(tcp_layer.flags)
+    return bool(flags & 0x02) and not bool(flags & 0x10)
+
+
+def _prune_timestamp_map(entries, cutoff):
+    for item, observed_at in list(entries.items()):
+        if observed_at < cutoff:
+            entries.pop(item, None)
+
+
+def _cleanup_stale_trackers(now):
+    """Bounds detector memory without scanning every tracker for every packet."""
+    global _last_tracker_cleanup
+    if now - _last_tracker_cleanup < TRACKER_CLEANUP_INTERVAL_SECONDS:
+        return
+
+    tracker_windows = (
+        (port_scan_tracker, PORT_SCAN_WINDOW_SECONDS),
+        (syn_flood_tracker, SYN_FLOOD_WINDOW_SECONDS),
+        (ping_sweep_tracker, PING_SWEEP_WINDOW_SECONDS),
+    )
+    for tracker, window in tracker_windows:
+        cutoff = now - window
+        for key, entries in list(tracker.items()):
+            _prune_timestamp_map(entries, cutoff)
+            if not entries:
+                tracker.pop(key, None)
+    _last_tracker_cleanup = now
 
 
 def packet_allowed(packet):
@@ -153,18 +189,31 @@ def detect_port_scan(packet):
     if not (packet.haslayer(IP) and packet.haslayer(TCP)):
         return None
 
+    tcp_layer = packet[TCP]
+    if not _is_initial_syn(tcp_layer):
+        return None
+
     src_ip = packet[IP].src
-    dst_port = packet[TCP].dport
+    dst_ip = packet[IP].dst
+    dst_port = int(tcp_layer.dport)
+    now = time()
+    _cleanup_stale_trackers(now)
 
-    port_scan_tracker[src_ip].add(dst_port)
+    key = (src_ip, dst_ip)
+    recent_ports = port_scan_tracker[key]
+    _prune_timestamp_map(recent_ports, now - PORT_SCAN_WINDOW_SECONDS)
+    recent_ports[dst_port] = now
 
-    if len(port_scan_tracker[src_ip]) >= PORT_SCAN_THRESHOLD:
-        port_scan_tracker[src_ip].clear()  # reset after alerting
+    if len(recent_ports) >= PORT_SCAN_THRESHOLD:
+        recent_ports.clear()
         return build_alert(
             alert_type="PORT_SCAN",
             src_ip=src_ip,
-            dst_ip=packet[IP].dst,
-            message=f"{src_ip} scanned {PORT_SCAN_THRESHOLD}+ ports — possible port scan"
+            dst_ip=dst_ip,
+            message=(
+                f"{src_ip} attempted {PORT_SCAN_THRESHOLD}+ ports on {dst_ip} "
+                f"within {PORT_SCAN_WINDOW_SECONDS}s — possible port scan"
+            ),
         )
 
     return None
@@ -179,20 +228,43 @@ def detect_syn_flood(packet):
     if not (packet.haslayer(IP) and packet.haslayer(TCP)):
         return None
 
-    # SYN flag is set when TCP flags == 0x02
-    if packet[TCP].flags != 0x02:
+    tcp_layer = packet[TCP]
+    src_ip = packet[IP].src
+    dst_ip = packet[IP].dst
+    src_port = int(tcp_layer.sport)
+    dst_port = int(tcp_layer.dport)
+    now = time()
+    _cleanup_stale_trackers(now)
+
+    if not _is_initial_syn(tcp_layer):
+        # A response or later packet proves the corresponding connection is not
+        # an unresolved SYN attempt. Remove both possible packet directions.
+        for flow_key, flow in (
+            ((src_ip, dst_ip), (src_port, dst_port)),
+            ((dst_ip, src_ip), (dst_port, src_port)),
+        ):
+            recent_flows = syn_flood_tracker.get(flow_key)
+            if recent_flows is not None:
+                recent_flows.pop(flow, None)
+                if not recent_flows:
+                    syn_flood_tracker.pop(flow_key, None)
         return None
 
-    src_ip = packet[IP].src
-    syn_flood_tracker[src_ip] += 1
+    key = (src_ip, dst_ip)
+    recent_flows = syn_flood_tracker[key]
+    _prune_timestamp_map(recent_flows, now - SYN_FLOOD_WINDOW_SECONDS)
+    recent_flows[(src_port, dst_port)] = now
 
-    if syn_flood_tracker[src_ip] >= SYN_FLOOD_THRESHOLD:
-        syn_flood_tracker[src_ip] = 0  # reset after alerting
+    if len(recent_flows) >= SYN_FLOOD_THRESHOLD:
+        recent_flows.clear()
         return build_alert(
             alert_type="SYN_FLOOD",
             src_ip=src_ip,
-            dst_ip=packet[IP].dst,
-            message=f"{src_ip} sent {SYN_FLOOD_THRESHOLD}+ SYN packets — possible SYN flood"
+            dst_ip=dst_ip,
+            message=(
+                f"{src_ip} opened {SYN_FLOOD_THRESHOLD}+ unresolved SYN flows to {dst_ip} "
+                f"within {SYN_FLOOD_WINDOW_SECONDS}s — possible SYN flood"
+            ),
         )
 
     return None
@@ -213,16 +285,23 @@ def detect_ping_sweep(packet):
 
     src_ip = packet[IP].src
     dst_ip = packet[IP].dst
+    now = time()
+    _cleanup_stale_trackers(now)
 
-    ping_sweep_tracker[src_ip].add(dst_ip)
+    recent_hosts = ping_sweep_tracker[src_ip]
+    _prune_timestamp_map(recent_hosts, now - PING_SWEEP_WINDOW_SECONDS)
+    recent_hosts[dst_ip] = now
 
-    if len(ping_sweep_tracker[src_ip]) >= PING_SWEEP_THRESHOLD:
-        ping_sweep_tracker[src_ip].clear()  # reset after alerting
+    if len(recent_hosts) >= PING_SWEEP_THRESHOLD:
+        recent_hosts.clear()
         return build_alert(
             alert_type="PING_SWEEP",
             src_ip=src_ip,
             dst_ip=dst_ip,
-            message=f"{src_ip} pinged {PING_SWEEP_THRESHOLD}+ hosts — possible ping sweep"
+            message=(
+                f"{src_ip} pinged {PING_SWEEP_THRESHOLD}+ hosts within "
+                f"{PING_SWEEP_WINDOW_SECONDS}s — possible ping sweep"
+            ),
         )
 
     return None

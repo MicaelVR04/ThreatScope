@@ -27,7 +27,7 @@ from sensor_config import (
 load_sensor_environment()
 
 
-VERSION = "1.1.0"
+VERSION = "1.2.0"
 INTERFACE = os.getenv("NETWORK_INTERFACE", "en0")
 HEARTBEAT_INTERVAL_SECONDS = int(os.getenv("SENSOR_HEARTBEAT_INTERVAL_SECONDS", "5"))
 CAPTURE_RETRY_SECONDS = int(os.getenv("SENSOR_CAPTURE_RETRY_SECONDS", "30"))
