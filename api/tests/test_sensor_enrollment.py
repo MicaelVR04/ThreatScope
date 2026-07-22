@@ -170,6 +170,41 @@ def test_owner_list_omits_credentials_and_revoke_blocks_token():
     assert exc.value.status_code == 401
 
 
+def test_owner_cannot_list_or_revoke_another_owners_sensor():
+    _, owned_credential = create_and_exchange()
+    other_sensor_id = "00000000-0000-4000-8000-000000000002"
+    conn = get_connection()
+    try:
+        conn.execute(
+            """
+            INSERT INTO sensors
+                (id, owner_id, name, platform, version, token_hash, created_at)
+            VALUES (?, ?, ?, ?, ?, ?, ?)
+            """,
+            (
+                other_sensor_id,
+                "00000000-0000-4000-8000-000000000003",
+                "Another owner's Mac",
+                "macOS",
+                "1.1.0",
+                "a" * 64,
+                datetime.now(timezone.utc).isoformat(),
+            ),
+        )
+        conn.commit()
+    finally:
+        conn.close()
+
+    listed = client.get("/sensors")
+    rejected = client.delete(f"/sensors/{other_sensor_id}")
+    other_sensor = get_sensor_credential(other_sensor_id)
+
+    assert listed.status_code == 200
+    assert [sensor["id"] for sensor in listed.json()] == [owned_credential["sensor_id"]]
+    assert rejected.status_code == 404
+    assert other_sensor["revoked_at"] is None
+
+
 def test_sensor_can_revoke_itself():
     _, credential = create_and_exchange()
 

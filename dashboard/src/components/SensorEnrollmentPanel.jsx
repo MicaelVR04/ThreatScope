@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useMemo, useState } from 'react'
-import { CheckCircle2, Clipboard, Download, KeyRound, Laptop, Loader2, ShieldCheck, Trash2 } from 'lucide-react'
+import { CheckCircle2, ChevronDown, ChevronUp, Clipboard, Download, KeyRound, Laptop, Loader2, ShieldCheck, Trash2 } from 'lucide-react'
 import Button from './theme/Button'
 import { createSensorEnrollment, getSensors, revokeSensor } from '../services/api'
 
@@ -11,6 +11,7 @@ export default function SensorEnrollmentPanel({ sensorOnline }) {
   const [loading, setLoading] = useState(false)
   const [error, setError] = useState(null)
   const [copied, setCopied] = useState(false)
+  const [devicesExpanded, setDevicesExpanded] = useState(true)
 
   const loadSensors = useCallback(async () => {
     try {
@@ -130,23 +131,42 @@ export default function SensorEnrollmentPanel({ sensorOnline }) {
 
       {activeSensors.length > 0 && (
         <div className="mt-6">
-          <h3 className="font-display text-sm font-semibold text-ink">Registered sensors</h3>
-          <div className="mt-2 divide-y divide-white/[0.08] border-y border-white/[0.08]">
-            {activeSensors.map(sensor => (
-              <div key={sensor.id} className="flex flex-wrap items-center gap-3 py-3">
-                <Laptop size={16} className="shrink-0 text-signal" />
-                <div className="min-w-0 flex-1">
-                  <p className="truncate text-sm font-medium text-ink">{sensor.name}</p>
-                  <p className="mt-0.5 text-xs text-ink-faint">
-                    {sensor.platform} · {sensor.last_seen_at ? `Last connected ${new Date(sensor.last_seen_at).toLocaleString()}` : 'Waiting for first connection'}
-                  </p>
-                </div>
-                <Button variant="danger" size="sm" onClick={() => removeSensor(sensor)} disabled={loading}>
-                  <Trash2 size={14} /> Remove access
-                </Button>
-              </div>
-            ))}
+          <div className="flex items-center justify-between gap-3 border-y border-white/[0.08] py-2">
+            <div>
+              <h3 className="font-display text-sm font-semibold text-ink">Registered sensors</h3>
+              <p className="mt-0.5 text-xs text-ink-faint">
+                {activeSensors.length} {activeSensors.length === 1 ? 'device' : 'devices'} connected to this account
+              </p>
+            </div>
+            <Button
+              variant="ghost"
+              size="sm"
+              onClick={() => setDevicesExpanded(current => !current)}
+              aria-expanded={devicesExpanded}
+              aria-controls="registered-sensor-list"
+            >
+              {devicesExpanded ? <ChevronUp size={15} /> : <ChevronDown size={15} />}
+              {devicesExpanded ? 'Hide devices' : 'Show devices'}
+            </Button>
           </div>
+          {devicesExpanded && (
+            <div id="registered-sensor-list" className="divide-y divide-white/[0.08] border-b border-white/[0.08]">
+              {activeSensors.map(sensor => (
+                <div key={sensor.id} className="flex flex-wrap items-center gap-3 py-3">
+                  <Laptop size={16} className="shrink-0 text-signal" />
+                  <div className="min-w-0 flex-1">
+                    <p className="truncate text-sm font-medium text-ink">{sensor.name}</p>
+                    <p className="mt-0.5 text-xs text-ink-faint">
+                      {sensor.platform} · {sensor.last_seen_at ? `Last connected ${new Date(sensor.last_seen_at).toLocaleString()}` : 'Waiting for first connection'}
+                    </p>
+                  </div>
+                  <Button variant="danger" size="sm" onClick={() => removeSensor(sensor)} disabled={loading}>
+                    <Trash2 size={14} /> Remove access
+                  </Button>
+                </div>
+              ))}
+            </div>
+          )}
         </div>
       )}
     </section>
