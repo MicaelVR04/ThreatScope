@@ -101,8 +101,9 @@ function TypeRow({ rank, type, high, medium, low, total, maxTotal, delayMs, isTo
             <span className={`w-2.5 shrink-0 text-[10px] leading-none ${SEV_TEXT_CLASS[dominant]}`} title={`Dominant severity: ${dominant}`}>
               {SEV_GLYPH[dominant]}
             </span>
-            <span className="truncate text-[12.5px] font-medium text-ink" title={threatPlainEnglish(type)}>
-              {threatLabel(type)}
+            <span className="min-w-0" title={threatPlainEnglish(type)}>
+              <span className="block truncate font-mono text-[12px] font-semibold text-ink">{type}</span>
+              <span className="block truncate text-[10px] text-ink-faint">{threatLabel(type)}</span>
             </span>
           </span>
           <span className="shrink-0 font-mono text-[11px] tabular-nums text-ink-faint">{displayTotal}</span>
