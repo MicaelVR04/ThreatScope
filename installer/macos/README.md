@@ -51,8 +51,11 @@ THREATSCOPE_DASHBOARD_URL=https://dashboard.example.com/dashboard \
 ./installer/macos/build_installer.sh
 ```
 
-Both URLs must use HTTPS. Publish the ZIP as a GitHub Release asset, then set
-the dashboard's `VITE_SENSOR_INSTALLER_URL` to the asset's direct URL.
+Both URLs must use HTTPS. After verification, copy the ZIP to
+`dashboard/public/downloads/ThreatScope-Sensor-macOS.zip` and update the
+adjacent `.sha256` file. The deployed dashboard serves that file directly.
+`VITE_SENSOR_INSTALLER_URL` may optionally point to a CDN or notarized release
+asset instead.
 
 ## Required Supabase migration
 

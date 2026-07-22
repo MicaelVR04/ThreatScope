@@ -85,9 +85,10 @@ services:
         sync: false
       - key: VITE_SUPABASE_ANON_KEY
         sync: false
-      - key: VITE_SENSOR_INSTALLER_URL
-        sync: false
     headers:
+      - path: /downloads/ThreatScope-Sensor-macOS.zip
+        name: Cache-Control
+        value: public, max-age=300
       - path: /*
         name: X-Content-Type-Options
         value: nosniff

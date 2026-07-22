@@ -3,7 +3,8 @@ import { CheckCircle2, ChevronDown, ChevronUp, Clipboard, Download, KeyRound, La
 import Button from './theme/Button'
 import { createSensorEnrollment, getSensors, revokeSensor } from '../services/api'
 
-const INSTALLER_URL = import.meta.env.VITE_SENSOR_INSTALLER_URL?.trim() || ''
+const INSTALLER_URL = import.meta.env.VITE_SENSOR_INSTALLER_URL?.trim()
+  || '/downloads/ThreatScope-Sensor-macOS.zip'
 
 export default function SensorEnrollmentPanel({ sensorOnline }) {
   const [sensors, setSensors] = useState([])
@@ -92,18 +93,13 @@ export default function SensorEnrollmentPanel({ sensorOnline }) {
       </div>
 
       <div className="mt-5 flex flex-wrap items-center gap-3">
-        {INSTALLER_URL ? (
-          <a
-            href={INSTALLER_URL}
-            className="inline-flex min-h-11 items-center justify-center gap-2 rounded-md bg-signal px-5 font-display text-sm font-semibold text-base transition-colors hover:bg-signal/90 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-signal focus-visible:ring-offset-2 focus-visible:ring-offset-base"
-          >
-            <Download size={16} /> Download for macOS
-          </a>
-        ) : (
-          <Button variant="secondary" size="sm" disabled title="The project team has not published the installer build yet">
-            <Download size={16} /> Installer build pending
-          </Button>
-        )}
+        <a
+          href={INSTALLER_URL}
+          download="ThreatScope-Sensor-macOS.zip"
+          className="inline-flex min-h-11 items-center justify-center gap-2 rounded-md bg-signal px-5 font-display text-sm font-semibold text-base transition-colors hover:bg-signal/90 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-signal focus-visible:ring-offset-2 focus-visible:ring-offset-base"
+        >
+          <Download size={16} /> Download for macOS
+        </a>
         <Button variant="secondary" size="sm" onClick={generateCode} disabled={loading}>
           {loading ? <Loader2 size={15} className="animate-spin" /> : <KeyRound size={15} />}
           {enrollment ? 'Generate a new code' : 'Generate installation code'}

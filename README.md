@@ -247,9 +247,10 @@ Set `NETWORK_INTERFACE` in `.env` if the active interface is not `en0`.
 ### Building the Project Installer
 
 The installer is built by the project team, not by end users. See
-`installer/macos/README.md`. The generated ZIP is intentionally ignored by Git
-and should be published as a GitHub Release asset. Set
-`VITE_SENSOR_INSTALLER_URL` to that asset URL before deploying the dashboard.
+`installer/macos/README.md`. The verified project build is published with the
+dashboard at `/downloads/ThreatScope-Sensor-macOS.zip`, so the download button
+works without extra Render configuration. `VITE_SENSOR_INSTALLER_URL` remains
+an optional override for a future CDN or notarized release asset.
 
 ## Free Holberton Staging Deployment
 
