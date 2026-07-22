@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useMemo, useState } from 'react'
-import { AlertTriangle, CheckCircle2, ChevronDown, ChevronUp, Clipboard, Download, ExternalLink, KeyRound, Laptop, Loader2, ShieldCheck, Trash2 } from 'lucide-react'
+import { AlertTriangle, CheckCircle2, ChevronDown, ChevronUp, CircleHelp, Clipboard, Download, ExternalLink, KeyRound, Laptop, Loader2, ShieldCheck, Trash2 } from 'lucide-react'
 import Button from './theme/Button'
 import { createSensorEnrollment, getSensors, revokeSensor } from '../services/api'
 
@@ -158,12 +158,22 @@ export default function SensorEnrollmentPanel({ sensorOnline }) {
         </Button>
       </div>
 
-      <details className="mt-5 rounded-md border border-severity-medium/25 bg-severity-medium/5 px-4 py-3">
-        <summary className="flex cursor-pointer list-none items-center gap-2 font-display text-sm font-semibold text-ink marker:content-none">
-          <AlertTriangle size={16} className="shrink-0 text-severity-medium" />
-          Did macOS block the setup app?
+      <details className="group mt-5 rounded-md border border-severity-medium/35 bg-severity-medium/5">
+        <summary className="flex min-h-16 cursor-pointer list-none items-center justify-between gap-4 px-4 py-3 marker:content-none hover:bg-severity-medium/[0.07] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-signal">
+          <span className="flex min-w-0 items-start gap-3">
+            <CircleHelp size={19} className="mt-0.5 shrink-0 text-severity-medium" />
+            <span className="min-w-0">
+              <span className="block font-mono text-[10px] uppercase tracking-[0.12em] text-severity-medium">Setup help</span>
+              <span className="mt-0.5 block font-display text-sm font-semibold text-ink">Setup app blocked by macOS?</span>
+              <span className="mt-0.5 block text-xs font-normal leading-relaxed text-ink-muted">Open the recovery instructions to finish installing the sensor.</span>
+            </span>
+          </span>
+          <span className="flex shrink-0 items-center gap-1.5 font-display text-xs font-semibold text-signal">
+            <span className="hidden sm:inline">View steps</span>
+            <ChevronDown size={16} className="transition-transform duration-200 group-open:rotate-180" />
+          </span>
         </summary>
-        <div className="mt-3 border-t border-white/[0.08] pt-3 text-sm leading-relaxed text-ink-muted">
+        <div className="border-t border-white/[0.08] px-4 py-4 text-sm leading-relaxed text-ink-muted">
           <p>
             This school-project build is integrity-signed but not yet notarized by Apple. Do not disable
             macOS security. After trying to open the app once:

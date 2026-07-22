@@ -587,6 +587,7 @@ export default function Dashboard({ onConnectionChange }) {
             <div className="h-[120px] overflow-hidden rounded-lg bg-gradient-to-b from-signal/[0.05] to-transparent">
               <NetworkPulse
                 packetCount={scanStatus?.sensor?.packet_count}
+                sampleTimestamp={scanStatus?.sensor?.last_heartbeat_at}
                 active={Boolean(scanStatus?.sensor?.online && scanStatus?.sensor?.monitoring)}
               />
             </div>
