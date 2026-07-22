@@ -13,7 +13,13 @@ from fastapi.testclient import TestClient
 
 sys.path.insert(0, os.path.abspath(os.path.join(os.path.dirname(__file__), "..")))
 
-from ai_analysis import analyze_alerts, analyze_alerts_with_ollama, build_prompt, compact_alerts
+from ai_analysis import (
+    analyze_alerts,
+    analyze_alerts_with_ollama,
+    build_evidence,
+    build_prompt,
+    compact_alerts,
+)
 import main
 
 
@@ -59,6 +65,29 @@ def test_compact_alerts_removes_extra_fields():
     }]
 
 
+def test_compact_alerts_orders_alerts_oldest_to_newest():
+    newest = {**make_alert(), "type": "ARP_SPOOF", "timestamp": "2026-07-04T21:56:55+00:00"}
+    oldest = {**make_alert(), "type": "PORT_SCAN", "timestamp": "2026-07-04T21:56:42+00:00"}
+
+    compacted = compact_alerts([newest, oldest])
+
+    assert [alert["type"] for alert in compacted] == ["PORT_SCAN", "ARP_SPOOF"]
+
+
+def test_build_evidence_calculates_recorded_alert_span():
+    alerts = [
+        {**make_alert(), "type": "ARP_SPOOF", "timestamp": "2026-07-04T21:56:55.125+00:00"},
+        {**make_alert(), "type": "PORT_SCAN", "timestamp": "2026-07-04T21:56:42.000+00:00"},
+        {**make_alert(), "type": "SYN_FLOOD", "timestamp": "2026-07-04T21:56:50.000+00:00"},
+    ]
+
+    evidence = build_evidence(alerts)
+
+    assert evidence["recorded_alert_sequence"] == ["PORT_SCAN", "SYN_FLOOD", "ARP_SPOOF"]
+    assert evidence["observed_alert_span_seconds"] == 13.125
+    assert "not attack duration" in evidence["span_definition"]
+
+
 def test_prompt_includes_current_time_for_timestamp_interpretation():
     current_time = datetime(2026, 7, 20, 12, 0, tzinfo=timezone.utc)
 
@@ -75,6 +104,10 @@ def test_prompt_forbids_unsupported_compromise_claims():
     assert "Never claim a device is compromised" in prompt
     assert "peer-to-peer or torrent clients" in prompt
     assert "Do not invent packet counts, thresholds, ports" in prompt
+    assert "preserve recorded_alert_sequence exactly" in prompt
+    assert "Do not describe rule matches as lateral movement" in prompt
+    assert "default deterministic ThreatScope demo" in prompt
+    assert "Any allowlist suggestion" in prompt
 
 
 def test_analyze_alerts_with_mocked_ollama(monkeypatch):
@@ -101,6 +134,8 @@ def test_analyze_alerts_with_mocked_ollama(monkeypatch):
 
     assert result["model"] == "qwen2.5:7b"
     assert result["alert_count"] == 1
+    assert result["recorded_alert_sequence"] == ["SYN_FLOOD"]
+    assert result["observed_alert_span_seconds"] is None
     assert result["risk_level"] == "HIGH"
     assert "SYN flood" in result["summary"]
     assert len(result["rule_tuning_suggestions"]) == 2
@@ -129,6 +164,8 @@ def test_analyze_alerts_empty_short_circuits(monkeypatch):
     result = analyze_alerts_with_ollama([])
 
     assert result["alert_count"] == 0
+    assert result["recorded_alert_sequence"] == []
+    assert result["observed_alert_span_seconds"] is None
     assert result["risk_level"] == "LOW"
 
 
@@ -176,6 +213,7 @@ def test_groq_qwen_uses_non_reasoning_json_mode(monkeypatch):
         assert json["reasoning_effort"] == "none"
         assert json["reasoning_format"] == "hidden"
         assert json["response_format"] == {"type": "json_object"}
+        assert json["temperature"] == 0.2
         return FakeResponse({
             "choices": [{
                 "message": {
