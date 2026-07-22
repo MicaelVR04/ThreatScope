@@ -448,7 +448,7 @@ export default function Dashboard({ onConnectionChange }) {
                 <option value="">No registered sensors</option>
               ) : sensors.map(sensor => (
                 <option key={sensor.sensor_id || sensor.id} value={sensor.sensor_id || sensor.id}>
-                  {sensor.name || 'Unnamed sensor'} · {sensor.online ? 'online' : 'offline'}
+                  {sensor.name || 'Unnamed sensor'} · v{sensor.version || 'unknown'} · {sensor.online ? 'online' : 'offline'}
                 </option>
               ))}
             </select>
