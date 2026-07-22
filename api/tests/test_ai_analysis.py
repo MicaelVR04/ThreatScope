@@ -74,6 +74,7 @@ def test_prompt_forbids_unsupported_compromise_claims():
     assert "heuristic rule matches" in prompt
     assert "Never claim a device is compromised" in prompt
     assert "peer-to-peer or torrent clients" in prompt
+    assert "Do not invent packet counts, thresholds, ports" in prompt
 
 
 def test_analyze_alerts_with_mocked_ollama(monkeypatch):

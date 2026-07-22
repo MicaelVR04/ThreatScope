@@ -130,8 +130,8 @@ export default function SensorEnrollmentPanel({ sensorOnline }) {
               <p className="font-display text-sm font-semibold text-ink">Update your sensor to {CURRENT_SENSOR_VERSION}</p>
               <p className="mt-1 text-sm leading-relaxed text-ink-muted">
                 Your installed sensor uses older detection rules. Download the latest setup, generate a new
-                code, and run it again. Wait for version {CURRENT_SENSOR_VERSION} to connect before removing
-                the older device entry below.
+                code, and run it again. After version {CURRENT_SENSOR_VERSION} reports healthy, setup securely
+                removes the previous registration from this Mac. If it remains visible, use Remove access below.
               </p>
             </div>
           </div>
