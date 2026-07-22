@@ -18,6 +18,7 @@ from database import (
     mark_sensor_seen,
     revoke_sensor,
 )
+from sensor_manager import list_sensor_statuses
 
 
 TOKEN_PREFIX = "ts1"
@@ -36,8 +37,21 @@ def _ttl_seconds() -> int:
     return max(300, min(configured, 1800))
 
 
+def _max_sensors_per_user() -> int:
+    configured = int(os.getenv("SENSOR_MAX_PER_USER", "10"))
+    return max(1, min(configured, 50))
+
+
 def create_code(owner_id: str) -> dict:
     """Creates a high-entropy enrollment code that is returned only once."""
+    active_count = sum(
+        1 for sensor in list_sensors(owner_id) if not sensor.get("revoked_at")
+    )
+    if active_count >= _max_sensors_per_user():
+        raise HTTPException(
+            status_code=409,
+            detail="This account has reached its active sensor limit.",
+        )
     now = _now()
     code = secrets.token_urlsafe(24)
     expires_at = now + timedelta(seconds=_ttl_seconds())
@@ -70,7 +84,11 @@ def exchange_code(code: str, name: str, platform: str, version: str) -> dict:
         "token_hash": _digest(token),
         "created_at": now,
     }
-    consumed = consume_sensor_enrollment(_digest(code), sensor)
+    consumed = consume_sensor_enrollment(
+        _digest(code),
+        sensor,
+        max_sensors=_max_sensors_per_user(),
+    )
     if not consumed:
         raise HTTPException(
             status_code=400,
@@ -140,7 +158,7 @@ def record_sensor_seen(principal: dict, version: str = None):
 
 
 def sensors_for_owner(owner_id: str):
-    return list_sensors(owner_id)
+    return list_sensor_statuses(owner_id)
 
 
 def revoke_owned_sensor(sensor_id: str, owner_id: str) -> bool:

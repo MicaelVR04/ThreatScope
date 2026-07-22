@@ -2,7 +2,8 @@
 
 This checklist tracks the work required before ThreatScope is presented as a
 publicly deployable network security product. The current implementation is a
-working single-sensor developer preview.
+multi-user, multi-sensor project release; unchecked items remain commercial
+production work.
 
 ## Deployment
 
@@ -12,11 +13,12 @@ working single-sensor developer preview.
 
 ## Sensor Enrollment
 
-- [ ] Replace the shared `ENGINE_API_KEY` with a unique, revocable credential per sensor.
-- [ ] Add one-time enrollment codes generated from an authenticated dashboard.
-- [ ] Persist sensor identity, health, commands, and last-seen status in the database.
-- [ ] Support multiple sensors and network locations per organization.
-- [ ] Show the sensor name, location, version, and connectivity history in the dashboard.
+- [x] Use a unique, revocable credential for every graphically enrolled sensor.
+- [x] Add one-time enrollment codes generated from an authenticated dashboard.
+- [x] Persist sensor identity, health, commands, and last-seen status in the database.
+- [x] Support multiple sensors per user account with independent controls and scan state.
+- [ ] Add organizations and named network locations above account-level ownership.
+- [x] Show sensor name, platform, version, current state, and last-seen time.
 
 ## Installation
 
@@ -30,12 +32,15 @@ working single-sensor developer preview.
 
 - [ ] Require verified email addresses for non-demo registrations.
 - [ ] Add organizations, membership roles, and invitations.
-- [ ] Scope every alert and sensor query by organization and enforce that scope with RLS.
+- [x] Scope every alert and sensor action by user and enforce alert reads with RLS.
+- [x] Enforce sensor-owner relationships with database constraints and private service-role-only tables.
+- [ ] Move user-level ownership to organization membership and role policies.
 - [ ] Separate demo data from production accounts and remove shared demo credentials.
 
 ## Release Verification
 
 - [ ] Test installation, restart, reconnect, upgrade, and uninstall on supported systems.
 - [ ] Test credential rotation and revocation for a compromised or retired sensor.
-- [ ] Perform a multi-tenant authorization review and dependency/security scan.
+- [x] Add two-tenant authorization tests for alert reads, heartbeat, controls, scans, schedules, AI, and revocation.
+- [ ] Run an independent security review and dependency scan before a public release.
 - [ ] Publish supported platforms, network visibility limits, and a privacy policy.

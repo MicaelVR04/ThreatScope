@@ -30,8 +30,9 @@ if [ ! -f "${PROJECT_ROOT}/.env" ]; then
   exit 1
 fi
 
-if ! grep -Eq '^ENGINE_API_KEY=.+$' "${PROJECT_ROOT}/.env"; then
-  echo "ENGINE_API_KEY must be configured in ${PROJECT_ROOT}/.env"
+if ! grep -Eq '^SENSOR_TOKEN=.+$|^SENSOR_ENROLLMENT_CODE=.+$' "${PROJECT_ROOT}/.env"; then
+  echo "A SENSOR_TOKEN or one-time SENSOR_ENROLLMENT_CODE must be configured in ${PROJECT_ROOT}/.env"
+  echo "Generate an installation code from the signed-in dashboard."
   exit 1
 fi
 

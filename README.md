@@ -83,6 +83,7 @@ SUPABASE_URL=https://your-project.supabase.co
 SUPABASE_SERVICE_ROLE_KEY=your-service-role-key
 SUPABASE_ALERTS_TABLE=alerts
 SUPABASE_RUNTIME_STATE_TABLE=runtime_state
+SUPABASE_SCAN_STATE_TABLE=sensor_scan_state
 
 VITE_SUPABASE_URL=https://your-project.supabase.co
 VITE_SUPABASE_ANON_KEY=your-anon-or-publishable-key
@@ -137,10 +138,18 @@ supabase/alerts_schema.sql
 supabase/runtime_state_schema.sql
 ```
 
-The alerts policy permits reads only for signed-in users. Anonymous visitors
-cannot read alert rows. The private runtime table has no browser policy; only
-the backend service role uses it to restore monitoring and assessment state
-after an API restart.
+5. Run the sensor enrollment schema, followed by the multi-user migration:
+
+```text
+supabase/sensor_enrollment_schema.sql
+supabase/multi_user_sensor_schema.sql
+```
+
+The alerts policy permits each signed-in user to read only their own rows.
+Anonymous visitors cannot read alerts. Sensor credentials, heartbeat metadata,
+and scan state have no browser access; only the backend service role can use
+those tables. Database foreign keys also enforce that an alert's sensor belongs
+to the same user as the alert.
 
 ## Running Locally
 
@@ -165,11 +174,14 @@ Services:
 
 ### Option 2: Run Services Manually
 
+Python 3.11 or newer is recommended. Python 3.10 is the minimum supported
+version for the API and sensor dependencies.
+
 API:
 
 ```bash
 cd api
-python3 -m venv .venv
+python3.11 -m venv .venv
 source .venv/bin/activate
 pip install -r requirements.txt
 uvicorn main:app --reload --host 0.0.0.0 --port 8000
@@ -254,9 +266,10 @@ and demo verification steps.
 
 This is a presentation environment, not a commercial production tier. Render
 free web services sleep after inactivity and can take about a minute to wake.
-Pre-warm the API before a meeting. A public release also needs per-sensor
-enrollment credentials, tenant isolation, signed installers, monitoring, and
-paid always-on infrastructure.
+Pre-warm the API before a meeting. Account-level tenant isolation and revocable
+per-sensor credentials are implemented. A public commercial release still
+needs notarized installers, operational monitoring, backups, organization
+roles, and paid always-on infrastructure.
 
 ## Demo Traffic
 
@@ -338,9 +351,10 @@ Keep the API key server-side in `.env`. Do not expose it in dashboard code.
 
 ## Continuous Monitoring And Assessments
 
-ThreatScope's sensor monitors packets continuously. The dashboard can start or
-pause packet capture without stopping the background service, and it can run an
-assessment immediately or every 5 or 10 minutes.
+Each account can enroll multiple sensors. The dashboard device selector scopes
+alerts, statistics, assessments, monitoring controls, schedules, and AI analysis
+to one owned device. Each sensor monitors packets continuously and persists its
+own control and assessment state across API restarts.
 
 An assessment records both alert and packet-count deltas. The dashboard only
 reports **No Known Threats Detected** when the sensor stayed online, inspected
@@ -350,21 +364,24 @@ result is not a guarantee against attack types ThreatScope does not detect.
 
 ## Security Configuration
 
-For a shared demo or deployment, keep `ALLOW_INSECURE_LOCAL_DEV=false` and configure both server-side secrets in `.env`:
+For a shared demo or deployment, keep `ALLOW_INSECURE_LOCAL_DEV=false`. The
+legacy demo traffic script uses these server-side values:
 
 ```bash
 ENGINE_API_KEY=a_long_random_value
 SENSOR_OWNER_USER_ID=the_demo_users_supabase_uuid
 ```
 
-Dashboard API requests require a valid Supabase access token. For legacy HS256 Supabase projects, also set `SUPABASE_JWT_SECRET`; newer asymmetric-key projects are verified against the public JWKS endpoint using the existing `SUPABASE_URL`. The packet engine and `api/simulate.py` submit alerts with `X-Engine-Key`; this key must never be exposed to the browser. The demo reset endpoint uses the same internal key.
+Dashboard API requests require a valid Supabase access token with the expected
+issuer, audience, and UUID subject. Legacy HS256 projects also require
+`SUPABASE_JWT_SECRET`; asymmetric projects use Supabase's public JWKS endpoint.
 
-The API assigns sensor alerts to `SENSOR_OWNER_USER_ID`. Supabase RLS limits
-browser reads to that UUID, and the API limits AI and sensor controls to the
-same owner. This staging design uses one-time enrollment and per-sensor
-revocable credentials for the configured owner. A commercial multi-tenant
-release would still need organization-level ownership, Developer ID signing and
-notarization, and production monitoring infrastructure.
+Normal installed sensors do not use `ENGINE_API_KEY` or
+`SENSOR_OWNER_USER_ID`. A one-time code binds each installation to the signed-in
+user, and the sensor receives a unique revocable credential. Ownership is
+checked in API queries and database constraints; browser alert reads also use
+RLS. `ENGINE_API_KEY` and `SENSOR_OWNER_USER_ID` remain only for deterministic
+team demo traffic and must never be exposed to the browser or installer.
 
 ## Tests
 
@@ -379,7 +396,7 @@ API tests:
 
 ```bash
 cd api
-python -m pytest tests/test_api.py -v
+python -m pytest -v
 ```
 
 Dashboard build check:

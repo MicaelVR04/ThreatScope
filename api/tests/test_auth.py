@@ -13,12 +13,13 @@ from main import app
 
 
 client = TestClient(app)
+TEST_JWT_SECRET = "threatscope-test-jwt-secret-32-bytes"
 
 
 def test_dashboard_auth_fails_closed_without_secret(monkeypatch):
     monkeypatch.delenv("SUPABASE_JWT_SECRET", raising=False)
     monkeypatch.setenv("ALLOW_INSECURE_LOCAL_DEV", "false")
-    token = jwt.encode({"aud": "authenticated"}, "unused-test-secret", algorithm="HS256")
+    token = jwt.encode({"aud": "authenticated"}, TEST_JWT_SECRET, algorithm="HS256")
 
     with pytest.raises(HTTPException) as exc:
         auth.decode_dashboard_token(token)
@@ -58,7 +59,7 @@ def test_engine_key_accepts_exact_value(monkeypatch):
 
 
 def test_dashboard_alert_read_rejects_missing_token(monkeypatch):
-    monkeypatch.setenv("SUPABASE_JWT_SECRET", "test-secret")
+    monkeypatch.setenv("SUPABASE_JWT_SECRET", TEST_JWT_SECRET)
     monkeypatch.setenv("ALLOW_INSECURE_LOCAL_DEV", "false")
 
     response = client.get("/alerts")
@@ -110,23 +111,50 @@ def test_demo_reset_rejects_missing_engine_key(monkeypatch):
     assert response.status_code == 401
 
 
-def test_sensor_owner_rejects_another_authenticated_user(monkeypatch):
-    monkeypatch.setenv("SENSOR_OWNER_USER_ID", "owner-user")
-
-    with pytest.raises(HTTPException) as exc:
-        auth.verify_sensor_owner({"sub": "different-user"})
-
-    assert exc.value.status_code == 403
-
-
-def test_sensor_owner_fails_closed_when_owner_is_not_configured(monkeypatch):
-    monkeypatch.delenv("SENSOR_OWNER_USER_ID", raising=False)
+def test_dashboard_auth_rejects_non_uuid_subject(monkeypatch):
+    monkeypatch.setenv("SUPABASE_URL", "https://example.supabase.co")
+    monkeypatch.setenv("SUPABASE_JWT_SECRET", TEST_JWT_SECRET)
     monkeypatch.setenv("ALLOW_INSECURE_LOCAL_DEV", "false")
+    token = jwt.encode({
+        "sub": "not-a-uuid",
+        "aud": "authenticated",
+        "iss": "https://example.supabase.co/auth/v1",
+    }, TEST_JWT_SECRET, algorithm="HS256")
 
     with pytest.raises(HTTPException) as exc:
-        auth.verify_sensor_owner({"sub": "any-user"})
+        auth.decode_dashboard_token(token)
 
-    assert exc.value.status_code == 503
+    assert exc.value.status_code == 401
+
+
+def test_dashboard_auth_rejects_wrong_issuer(monkeypatch):
+    monkeypatch.setenv("SUPABASE_URL", "https://example.supabase.co")
+    monkeypatch.setenv("SUPABASE_JWT_SECRET", TEST_JWT_SECRET)
+    monkeypatch.setenv("ALLOW_INSECURE_LOCAL_DEV", "false")
+    token = jwt.encode({
+        "sub": "98a345c1-6b65-4d93-96d6-59bec63fb4cf",
+        "aud": "authenticated",
+        "iss": "https://attacker.invalid/auth/v1",
+    }, TEST_JWT_SECRET, algorithm="HS256")
+
+    with pytest.raises(HTTPException) as exc:
+        auth.decode_dashboard_token(token)
+
+    assert exc.value.status_code == 401
+
+
+def test_dashboard_auth_accepts_expected_issuer_and_uuid_subject(monkeypatch):
+    owner_id = "98a345c1-6b65-4d93-96d6-59bec63fb4cf"
+    monkeypatch.setenv("SUPABASE_URL", "https://example.supabase.co")
+    monkeypatch.setenv("SUPABASE_JWT_SECRET", TEST_JWT_SECRET)
+    monkeypatch.setenv("ALLOW_INSECURE_LOCAL_DEV", "false")
+    token = jwt.encode({
+        "sub": owner_id,
+        "aud": "authenticated",
+        "iss": "https://example.supabase.co/auth/v1",
+    }, TEST_JWT_SECRET, algorithm="HS256")
+
+    assert auth.decode_dashboard_token(token)["sub"] == owner_id
 
 
 def test_secure_ingestion_requires_configured_owner(monkeypatch):

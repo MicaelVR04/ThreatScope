@@ -11,8 +11,10 @@ import os
 import logging
 import hmac
 import jwt
+from functools import lru_cache
 from pathlib import Path
 from typing import Optional
+from uuid import UUID
 from dotenv import load_dotenv
 from fastapi import HTTPException, Request, Security
 from fastapi.security import HTTPAuthorizationCredentials, HTTPBearer
@@ -39,11 +41,25 @@ def _supabase_url() -> str:
     return os.getenv("SUPABASE_URL", "").strip().rstrip("/")
 
 
+@lru_cache(maxsize=4)
+def _jwks_client(supabase_url: str):
+    return PyJWKClient(f"{supabase_url}/auth/v1/.well-known/jwks.json")
+
+
+def _validated_claims(payload: dict) -> dict:
+    subject = payload.get("sub", "")
+    try:
+        payload["sub"] = str(UUID(subject))
+    except (TypeError, ValueError) as exc:
+        raise HTTPException(status_code=401, detail="Invalid authorization subject") from exc
+    return payload
+
+
 def decode_dashboard_token(token: str) -> dict:
     """Validate a dashboard access token for HTTP or WebSocket requests."""
     if _allow_insecure_local_dev():
         logger.warning("Dashboard auth bypassed because ALLOW_INSECURE_LOCAL_DEV=true")
-        return {}
+        return {"sub": "00000000-0000-4000-8000-000000000001"}
 
     if not token:
         raise HTTPException(status_code=401, detail="Missing authorization token")
@@ -52,12 +68,24 @@ def decode_dashboard_token(token: str) -> dict:
         algorithm = jwt.get_unverified_header(token).get("alg")
         if algorithm == "HS256":
             secret = _jwt_secret()
+            supabase_url = _supabase_url()
             if not secret:
                 raise HTTPException(
                     status_code=503,
                     detail="SUPABASE_JWT_SECRET is required for legacy HS256 tokens",
                 )
-            return jwt.decode(token, secret, algorithms=["HS256"], audience="authenticated")
+            if not supabase_url:
+                raise HTTPException(
+                    status_code=503,
+                    detail="SUPABASE_URL is required for issuer validation",
+                )
+            return _validated_claims(jwt.decode(
+                token,
+                secret,
+                algorithms=["HS256"],
+                audience="authenticated",
+                issuer=f"{supabase_url}/auth/v1",
+            ))
 
         if algorithm in {"ES256", "RS256"}:
             supabase_url = _supabase_url()
@@ -66,9 +94,15 @@ def decode_dashboard_token(token: str) -> dict:
                     status_code=503,
                     detail="SUPABASE_URL is required for asymmetric JWT verification",
                 )
-            jwks = PyJWKClient(f"{supabase_url}/auth/v1/.well-known/jwks.json")
+            jwks = _jwks_client(supabase_url)
             signing_key = jwks.get_signing_key_from_jwt(token)
-            return jwt.decode(token, signing_key.key, algorithms=[algorithm], audience="authenticated")
+            return _validated_claims(jwt.decode(
+                token,
+                signing_key.key,
+                algorithms=[algorithm],
+                audience="authenticated",
+                issuer=f"{supabase_url}/auth/v1",
+            ))
 
         raise HTTPException(status_code=401, detail="Unsupported JWT signing algorithm")
     except jwt.ExpiredSignatureError as exc:
@@ -89,7 +123,7 @@ def verify_token(credentials: Optional[HTTPAuthorizationCredentials] = Security(
     if credentials is None:
         if _allow_insecure_local_dev():
             logger.warning("Dashboard auth bypassed because ALLOW_INSECURE_LOCAL_DEV=true")
-            return {}
+            return {"sub": "00000000-0000-4000-8000-000000000001"}
         raise HTTPException(status_code=401, detail="Missing authorization token")
 
     return decode_dashboard_token(credentials.credentials)
@@ -107,21 +141,3 @@ def verify_engine_key(request: Request):
     provided_key = request.headers.get("X-Engine-Key", "")
     if not hmac.compare_digest(provided_key, expected_key):
         raise HTTPException(status_code=401, detail="Invalid engine key")
-
-
-def verify_sensor_owner(user=Security(verify_token)):
-    """Restricts sensor controls and diagnostics to the configured demo owner."""
-    owner_id = os.getenv("SENSOR_OWNER_USER_ID", "").strip()
-    if _allow_insecure_local_dev() and not user.get("sub"):
-        return user
-    if not owner_id:
-        raise HTTPException(
-            status_code=503,
-            detail="Sensor ownership is not configured on this server.",
-        )
-    if owner_id and user.get("sub") != owner_id:
-        raise HTTPException(
-            status_code=403,
-            detail="This account is not authorized to control the configured network sensor.",
-        )
-    return user

@@ -50,7 +50,7 @@ log = logging.getLogger("threatscope.sensor")
 def ensure_enrolled():
     """Exchanges an installation code before packet capture modules are loaded."""
     require_secure_api_url(API_BASE_URL)
-    if os.getenv("SENSOR_TOKEN", "").strip() or os.getenv("ENGINE_API_KEY", "").strip():
+    if os.getenv("SENSOR_TOKEN", "").strip():
         return
 
     code = os.getenv("SENSOR_ENROLLMENT_CODE", "").strip()

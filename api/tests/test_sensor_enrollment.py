@@ -9,7 +9,7 @@ from fastapi.testclient import TestClient
 
 sys.path.insert(0, os.path.abspath(os.path.join(os.path.dirname(__file__), "..")))
 
-from auth import verify_sensor_owner
+from auth import verify_token
 from database import get_connection, get_sensor_credential, init_db
 from main import app, limiter
 from sensor_enrollment import authenticate_sensor_token
@@ -29,11 +29,11 @@ def clean_enrollment_state():
         conn.commit()
     finally:
         conn.close()
-    app.dependency_overrides[verify_sensor_owner] = lambda: {"sub": OWNER_ID}
+    app.dependency_overrides[verify_token] = lambda: {"sub": OWNER_ID}
     limiter.enabled = False
     yield
     limiter.enabled = True
-    app.dependency_overrides.pop(verify_sensor_owner, None)
+    app.dependency_overrides.pop(verify_token, None)
 
 
 def create_and_exchange(name="Office Mac"):
@@ -97,6 +97,16 @@ def test_new_code_invalidates_older_unused_code():
     assert accepted.status_code == 200
 
 
+def test_account_sensor_quota_is_enforced(monkeypatch):
+    monkeypatch.setenv("SENSOR_MAX_PER_USER", "1")
+    create_and_exchange()
+
+    response = client.post("/sensors/enrollment")
+
+    assert response.status_code == 409
+    assert response.json()["detail"] == "This account has reached its active sensor limit."
+
+
 def test_expired_code_cannot_be_exchanged():
     code = client.post("/sensors/enrollment").json()["code"]
     conn = get_connection()
@@ -137,6 +147,7 @@ def test_sensor_token_scopes_alert_to_enrolling_owner():
 
     assert response.status_code == 200
     assert response.json()["user_id"] == OWNER_ID
+    assert response.json()["sensor_id"] == credential["sensor_id"]
 
 
 def test_sensor_cannot_heartbeat_as_another_sensor():

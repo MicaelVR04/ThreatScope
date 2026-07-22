@@ -9,6 +9,7 @@ Responsibilities:
 
 from pydantic import BaseModel, Field, field_validator
 from typing import Optional
+from uuid import UUID
 
 
 class Alert(BaseModel):
@@ -17,13 +18,14 @@ class Alert(BaseModel):
     This is the core data structure shared across the entire app.
     """
     id:        Optional[int] = None
-    type:      str
-    src_ip:    str
-    dst_ip:    str
+    type:      str = Field(min_length=2, max_length=64, pattern=r"^[A-Z][A-Z0-9_]+$")
+    src_ip:    str = Field(min_length=1, max_length=64)
+    dst_ip:    str = Field(min_length=1, max_length=64)
     severity:  str
-    message:   str
-    timestamp: str
+    message:   str = Field(min_length=1, max_length=512)
+    timestamp: str = Field(min_length=1, max_length=64)
     user_id:   Optional[str] = None
+    sensor_id: Optional[str] = None
 
     @field_validator("severity")
     @classmethod
@@ -49,6 +51,7 @@ class ScanScheduleRequest(BaseModel):
     """
     enabled: bool
     interval_minutes: int
+    sensor_id: UUID
 
     @field_validator("interval_minutes")
     @classmethod
@@ -59,16 +62,21 @@ class ScanScheduleRequest(BaseModel):
 
 
 class SensorHeartbeat(BaseModel):
-    sensor_id: str
-    interface: str
+    sensor_id: UUID
+    interface: str = Field(min_length=1, max_length=64)
     monitoring: bool
-    packet_count: int
-    last_error: Optional[str] = None
-    version: str = "1.0.0"
+    packet_count: int = Field(ge=0)
+    last_error: Optional[str] = Field(default=None, max_length=512)
+    version: str = Field(default="1.0.0", min_length=1, max_length=32)
 
 
 class MonitoringRequest(BaseModel):
     enabled: bool
+    sensor_id: UUID
+
+
+class SensorTargetRequest(BaseModel):
+    sensor_id: UUID
 
 
 class SensorEnrollmentExchange(BaseModel):
