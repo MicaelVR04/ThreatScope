@@ -1,5 +1,5 @@
 import { NavLink, useNavigate } from 'react-router-dom'
-import { Shield, LayoutDashboard, Clock, Wifi, WifiOff, LogOut, Home } from 'lucide-react'
+import { Shield, LayoutDashboard, Clock, Laptop, Wifi, WifiOff, LogOut, Home } from 'lucide-react'
 import Button from './theme/Button'
 
 export default function Navbar({ connected, userEmail, signingOut, onLogout }) {
@@ -20,7 +20,7 @@ export default function Navbar({ connected, userEmail, signingOut, onLogout }) {
         </div>
       </div>
 
-      <nav className="flex flex-1 gap-3 sm:ml-3 sm:gap-5">
+      <nav className="order-3 flex w-full justify-between gap-2 border-t border-white/[0.08] pt-2 sm:order-none sm:ml-3 sm:w-auto sm:flex-1 sm:justify-start sm:gap-5 sm:border-0 sm:pt-0">
         <NavLink
           to="/dashboard"
           end
@@ -43,6 +43,17 @@ export default function Navbar({ connected, userEmail, signingOut, onLogout }) {
         >
           <Clock size={15} />
           Alert History
+        </NavLink>
+        <NavLink
+          to="/sensors"
+          className={({ isActive }) =>
+            `flex min-h-11 items-center gap-1.5 py-1 font-sans text-sm no-underline transition-colors duration-150 ease-swift sm:min-h-0 ${
+              isActive ? 'font-semibold text-signal' : 'text-ink-muted'
+            }`
+          }
+        >
+          <Laptop size={15} />
+          Sensors
         </NavLink>
       </nav>
 

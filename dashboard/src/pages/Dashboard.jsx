@@ -1,10 +1,10 @@
 import { useState, useEffect, useLayoutEffect, useRef, useCallback } from 'react'
-import { Activity, AlertTriangle, Loader2, PauseCircle, PlayCircle } from 'lucide-react'
+import { useNavigate } from 'react-router-dom'
+import { Activity, AlertTriangle, Laptop, Loader2, PauseCircle, PlayCircle } from 'lucide-react'
 import Button from '../components/theme/Button'
 import AlertCard from '../components/AlertCard'
 import AttackTypeChart from '../components/AttackTypeChart'
 import NetworkPulse from '../components/NetworkPulse'
-import SensorEnrollmentPanel from '../components/SensorEnrollmentPanel'
 import useWebSocket from '../hooks/useWebSocket'
 import {
   analyzeRecentAlerts,
@@ -121,6 +121,7 @@ function useCountUp(value, duration = 700) {
 }
 
 export default function Dashboard({ onConnectionChange }) {
+  const navigate = useNavigate()
   const { alerts: wsAlerts, connected } = useWebSocket()
   const [summary,    setSummary]    = useState({ total: 0, high: 0, medium: 0, low: 0 })
   const [chartData,  setChartData]  = useState([])
@@ -476,11 +477,12 @@ export default function Dashboard({ onConnectionChange }) {
                 Stop schedule
               </Button>
             )}
+            <Button variant="ghost" size="sm" onClick={() => navigate('/sensors')}>
+              <Laptop size={14} /> Manage sensors
+            </Button>
           </div>
         </div>
       </section>
-
-      <SensorEnrollmentPanel sensorOnline={Boolean(scanStatus?.sensor?.online)} />
 
       {/* Two-column body: charts + AI (left) / live feed (right) — 340px
           sidebar, 18px gaps. Default flex cross-axis is `stretch`, so the

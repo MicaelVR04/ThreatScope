@@ -25,10 +25,26 @@ remove_local_sensor() {
   rm -rf "${INSTALL_DIR}"
 }
 
+revoke_local_sensor() {
+  [ -f "${CONFIG_PATH}" ] || return 0
+  STORED_API="$(awk -F= '$1 == "API_BASE_URL" {print substr($0, index($0, "=") + 1); exit}' "${CONFIG_PATH}")"
+  STORED_TOKEN="$(awk -F= '$1 == "SENSOR_TOKEN" {print substr($0, index($0, "=") + 1); exit}' "${CONFIG_PATH}")"
+  if printf '%s' "${STORED_API}" | grep -Eq '^https://[A-Za-z0-9.-]+(:[0-9]+)?(/[A-Za-z0-9._~/-]*)?$' \
+    && printf '%s' "${STORED_TOKEN}" | grep -Eq '^ts1\.[0-9a-fA-F-]{36}\.[A-Za-z0-9_-]{32,64}$'; then
+    CURL_CONFIG="$(mktemp -t threatscope-revoke)" || return 0
+    chmod 600 "${CURL_CONFIG}"
+    printf 'header = "X-Sensor-Token: %s"\n' "${STORED_TOKEN}" > "${CURL_CONFIG}"
+    /usr/bin/curl --config "${CURL_CONFIG}" --silent --show-error --fail --max-time 10 \
+      -X DELETE "${STORED_API}/sensors/self" >/dev/null 2>&1 || true
+    rm -f "${CURL_CONFIG}"
+  fi
+}
+
 cleanup_failed_install() {
   status=$?
   trap - EXIT HUP INT TERM
   if [ "${INSTALL_COMPLETE:-0}" -ne 1 ]; then
+    revoke_local_sensor
     remove_local_sensor
   fi
   exit "${status}"
@@ -101,7 +117,6 @@ PLIST
     launchctl bootout system "${PLIST_PATH}" >/dev/null 2>&1 || true
     launchctl enable "system/${LABEL}"
     launchctl bootstrap system "${PLIST_PATH}"
-    launchctl kickstart -k "system/${LABEL}"
 
     attempts=0
     while [ "${attempts}" -lt 45 ]; do
@@ -118,19 +133,7 @@ PLIST
     fail "The sensor could not connect. Generate a new code and try again."
     ;;
   remove)
-    if [ -f "${CONFIG_PATH}" ]; then
-      STORED_API="$(awk -F= '$1 == "API_BASE_URL" {print substr($0, index($0, "=") + 1); exit}' "${CONFIG_PATH}")"
-      STORED_TOKEN="$(awk -F= '$1 == "SENSOR_TOKEN" {print substr($0, index($0, "=") + 1); exit}' "${CONFIG_PATH}")"
-      if printf '%s' "${STORED_API}" | grep -Eq '^https://[A-Za-z0-9.-]+(:[0-9]+)?(/[A-Za-z0-9._~/-]*)?$' \
-        && printf '%s' "${STORED_TOKEN}" | grep -Eq '^ts1\.[0-9a-fA-F-]{36}\.[A-Za-z0-9_-]{32,64}$'; then
-        CURL_CONFIG="$(mktemp -t threatscope-revoke)"
-        chmod 600 "${CURL_CONFIG}"
-        printf 'header = "X-Sensor-Token: %s"\n' "${STORED_TOKEN}" > "${CURL_CONFIG}"
-        /usr/bin/curl --config "${CURL_CONFIG}" --silent --show-error --fail --max-time 10 \
-          -X DELETE "${STORED_API}/sensors/self" >/dev/null 2>&1 || true
-        rm -f "${CURL_CONFIG}"
-      fi
-    fi
+    revoke_local_sensor
     remove_local_sensor
     printf 'Sensor removed from this Mac. You can also remove its access record from the dashboard.\n'
     ;;

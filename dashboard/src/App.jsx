@@ -7,6 +7,7 @@ import Login from './pages/Login'
 import Register from './pages/Register'
 import Landing from './pages/Landing'
 import SensorSetupGuide from './pages/SensorSetupGuide'
+import SensorManagement from './pages/SensorManagement'
 import { supabase } from './supabaseClient'
 
 // ── Scroll to top on every route change ─────────────────────────────────────
@@ -149,6 +150,20 @@ function AppShell() {
                   onLogout={handleLogout}
                 />
                 <AlertHistory />
+              </ProtectedRoute>
+            }
+          />
+          <Route
+            path="/sensors"
+            element={
+              <ProtectedRoute session={session}>
+                <Navbar
+                  connected={connected}
+                  userEmail={session?.user?.email}
+                  signingOut={signingOut}
+                  onLogout={handleLogout}
+                />
+                <SensorManagement />
               </ProtectedRoute>
             }
           />
