@@ -1,4 +1,4 @@
-import { threatLabel } from '../utils/threatLabels'
+import { threatFriendlyLabel, threatLabel } from '../utils/threatLabels'
 
 const GLYPH = { HIGH: '▲', MEDIUM: '▶', LOW: '•' }
 const GLYPH_COLOR = { HIGH: 'text-severity-high', MEDIUM: 'text-severity-medium', LOW: 'text-severity-low' }
@@ -15,8 +15,11 @@ export default function AlertCard({ alert }) {
         {new Date(alert.timestamp).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit', second: '2-digit' })}
       </span>
       <span className={`w-[14px] shrink-0 font-mono text-xs ${glyphColor}`}>{GLYPH[alert.severity] || '•'}</span>
-      <span className="text-ink-muted">
-        {threatLabel(alert.type)} <b className={`font-semibold ${bodyBold}`}>{alert.severity}</b>
+      <span className="min-w-0 text-ink-muted">
+        <span className="font-medium text-ink">{threatFriendlyLabel(alert.type)}</span>{' '}
+        <b className={`font-semibold ${bodyBold}`}>{alert.severity}</b>
+        <br />
+        <span className="font-mono text-[10px] text-ink-faint">{alert.type} · {threatLabel(alert.type)}</span>
         <br />
         <span className="font-mono text-[11px] text-ink-faint">{alert.src_ip} → {alert.dst_ip}</span>
       </span>

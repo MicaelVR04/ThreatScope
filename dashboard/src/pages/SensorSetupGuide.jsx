@@ -78,6 +78,16 @@ export default function SensorSetupGuide() {
             <InstallStep Icon={CheckCircle2} number="3" title="Approve" body="Enter your Mac administrator password when macOS asks, then wait for the connected confirmation." />
           </div>
 
+          <div className="mt-8 border-l-2 border-signal/50 pl-4">
+            <h3 className="font-display text-sm font-semibold text-ink">Updates clean up the previous registration</h3>
+            <p className="mt-2 max-w-3xl text-sm leading-relaxed text-ink-muted">
+              When setup replaces an existing ThreatScope sensor on the same Mac, it waits for the new sensor&apos;s
+              first successful heartbeat before revoking the previous local registration. It never removes a
+              different Mac. If automatic cleanup cannot reach the API, the older entry remains available for
+              you to remove from <strong className="text-ink">Manage sensors</strong>.
+            </p>
+          </div>
+
           <div className="mt-8 border-l-2 border-severity-medium/60 pl-4">
             <h3 className="font-display text-sm font-semibold text-ink">Why macOS may show “Open Anyway”</h3>
             <p className="mt-2 max-w-3xl text-sm leading-relaxed text-ink-muted">

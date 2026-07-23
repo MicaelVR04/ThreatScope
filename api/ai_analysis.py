@@ -25,6 +25,26 @@ DISCLAIMER = (
 )
 logger = logging.getLogger(__name__)
 
+RULE_ENGINE_CAPABILITIES = {
+    "PORT_SCAN": (
+        "Tracks unique destination ports reached by initial TCP SYN packets from one "
+        "source to one target inside a bounded time window."
+    ),
+    "PING_SWEEP": (
+        "Tracks unique ICMP echo-request destinations from one source inside a bounded "
+        "time window."
+    ),
+    "SYN_FLOOD": (
+        "Tracks unique unresolved initial SYN flows per source and target inside a bounded "
+        "time window, and removes matching flows when response or later-connection packets arrive."
+    ),
+    "ARP_SPOOF": (
+        "Evaluates ARP replies and requires repeated conflicting MAC claims for the same IP "
+        "before alerting."
+    ),
+    "SHARED": "Suppresses duplicate alerts from the same rule, source, and target during a cooldown.",
+}
+
 
 def get_ai_config() -> Dict[str, Any]:
     return {
@@ -43,8 +63,20 @@ def get_ollama_config() -> Dict[str, Any]:
     return get_ai_config()
 
 
+def _parse_alert_timestamp(value: Any):
+    if not value:
+        return None
+    try:
+        parsed = datetime.fromisoformat(str(value).replace("Z", "+00:00"))
+        if parsed.tzinfo is None:
+            parsed = parsed.replace(tzinfo=timezone.utc)
+        return parsed.astimezone(timezone.utc)
+    except (TypeError, ValueError):
+        return None
+
+
 def compact_alerts(alerts: List[dict]) -> List[dict]:
-    return [
+    compacted = [
         {
             "type": alert.get("type"),
             "severity": alert.get("severity"),
@@ -55,10 +87,46 @@ def compact_alerts(alerts: List[dict]) -> List[dict]:
         }
         for alert in alerts
     ]
+    indexed = [
+        (index, alert, _parse_alert_timestamp(alert.get("timestamp")))
+        for index, alert in enumerate(compacted)
+    ]
+    indexed.sort(
+        key=lambda item: (
+            item[2] is None,
+            item[2].timestamp() if item[2] else 0,
+            item[0],
+        )
+    )
+    return [alert for _, alert, _ in indexed]
+
+
+def build_evidence(alerts: List[dict]) -> Dict[str, Any]:
+    ordered_alerts = compact_alerts(alerts)
+    valid_timestamps = [
+        parsed
+        for alert in ordered_alerts
+        if (parsed := _parse_alert_timestamp(alert.get("timestamp"))) is not None
+    ]
+    observed_span = None
+    if len(valid_timestamps) >= 2:
+        observed_span = round(
+            (valid_timestamps[-1] - valid_timestamps[0]).total_seconds(),
+            3,
+        )
+
+    return {
+        "ordering": "oldest_to_newest_by_recorded_timestamp",
+        "recorded_alert_sequence": [alert.get("type") for alert in ordered_alerts],
+        "observed_alert_span_seconds": observed_span,
+        "span_definition": "Time between the first and last recorded alert timestamps, not attack duration.",
+        "alerts": ordered_alerts,
+    }
 
 
 def build_prompt(alerts: List[dict], current_time: datetime = None) -> str:
     now = current_time or datetime.now(timezone.utc)
+    evidence = build_evidence(alerts)
     return (
         "You are helping developers evaluate a rule-based network intrusion "
         "detection demo called ThreatScope. The rule engine already generated "
@@ -70,10 +138,21 @@ def build_prompt(alerts: List[dict], current_time: datetime = None) -> str:
         "unless the supplied fields contain independent evidence for that conclusion. "
         "Consider legitimate high-connection applications such as peer-to-peer or torrent "
         "clients when alerts show many public peers. Use cautious terms such as possible, "
-        "may, and warrants verification.\n"
+        "may, and warrants verification. Do not invent packet counts, thresholds, ports, "
+        "time windows, or connection outcomes. Repeat those details only when they appear "
+        "in the supplied alert fields. Do not describe rule matches as lateral movement; "
+        "the evidence does not establish host compromise or movement between systems.\n"
         f"The current API time is {now.isoformat()}. Use it when interpreting "
         "alert timestamps. Do not call an alert timestamp future-dated unless "
-        "it is later than this value.\n\n"
+        "it is later than this value. The server-calculated evidence metadata is "
+        "authoritative: preserve recorded_alert_sequence exactly. If you mention elapsed "
+        "time, use observed_alert_span_seconds exactly and describe it only as the span "
+        "between recorded alerts, not as a window or the duration of an attack.\n"
+        "The default deterministic ThreatScope demo uses source 192.168.99.50, target "
+        "192.168.99.10, and the sequence PORT_SCAN, PING_SWEEP, SYN_FLOOD, ARP_SPOOF. "
+        "When the evidence matches, say it matches the default demo profile if testing "
+        "was intentional; otherwise recommend verification. Do not automatically assume "
+        "that matching addresses prove traffic is a demo.\n\n"
         "Analyze the recent alerts and respond only as JSON with these keys:\n"
         "- summary: plain-English summary of what happened\n"
         "- pattern: likely pattern or sequence across the alerts\n"
@@ -83,8 +162,17 @@ def build_prompt(alerts: List[dict], current_time: datetime = None) -> str:
         "Keep the language short, practical, and honest. Do not recommend "
         "replacing rule-based detection with AI. Do not suggest ignoring "
         "private/internal IP ranges because this MVP is focused on LAN traffic. "
-        "Only mention IP reputation if public internet IPs appear.\n\n"
-        f"Recent alerts:\n{json.dumps(compact_alerts(alerts), indent=2)}"
+        "Only mention IP reputation if public internet IPs appear. Suggestions must be "
+        "changes to ThreatScope detection, correlation, suppression, or presentation. "
+        "Do not present firewall rate limiting, static ARP configuration, or other host/network "
+        "mitigations as rule-tuning changes that ThreatScope performs. Do not recommend "
+        "suppressing or allowlisting the default demo profile because the demo relies on those "
+        "alerts being visible. Do not recommend capabilities already listed below; suggestions "
+        "must add a concrete behavior beyond what is currently implemented. ThreatScope's "
+        "severity schema is limited to LOW, MEDIUM, and HIGH; do not recommend unsupported "
+        "severity labels such as CRITICAL.\n\n"
+        f"Current rule capabilities:\n{json.dumps(RULE_ENGINE_CAPABILITIES, indent=2)}\n\n"
+        f"Authoritative evidence:\n{json.dumps(evidence, indent=2)}"
     )
 
 
@@ -109,6 +197,14 @@ def normalize_analysis(raw: Any) -> Dict[str, Any]:
         "risk_level": risk_level,
         "demo_note": str(raw.get("demo_note", "No demo note returned.") if isinstance(raw, dict) else "No demo note returned."),
         "rule_tuning_suggestions": [str(item) for item in suggestions][:4],
+    }
+
+
+def evidence_fields(alerts: List[dict]) -> Dict[str, Any]:
+    evidence = build_evidence(alerts)
+    return {
+        "recorded_alert_sequence": evidence["recorded_alert_sequence"],
+        "observed_alert_span_seconds": evidence["observed_alert_span_seconds"],
     }
 
 
@@ -149,6 +245,7 @@ def analyze_alerts_with_ollama(alerts: List[dict]) -> Dict[str, Any]:
     return {
         "model": config["model"],
         "alert_count": len(alerts),
+        **evidence_fields(alerts),
         **normalized,
         "disclaimer": DISCLAIMER,
     }
@@ -186,7 +283,7 @@ def analyze_alerts_with_openai(alerts: List[dict]) -> Dict[str, Any]:
         "model": config["openai_model"],
         "messages": messages,
         "response_format": {"type": "json_object"},
-        "temperature": 0.7 if is_groq_qwen else 0.2,
+        "temperature": 0.2,
     }
     if is_groq_qwen:
         payload.update({
@@ -235,6 +332,7 @@ def analyze_alerts_with_openai(alerts: List[dict]) -> Dict[str, Any]:
     return {
         "model": config["openai_model"],
         "alert_count": len(alerts),
+        **evidence_fields(alerts),
         **normalized,
         "disclaimer": DISCLAIMER,
     }
@@ -251,6 +349,8 @@ def empty_analysis(model: str) -> Dict[str, Any]:
     return {
         "model": model,
         "alert_count": 0,
+        "recorded_alert_sequence": [],
+        "observed_alert_span_seconds": None,
         "summary": "No recent alerts are available to analyze.",
         "pattern": "No alert pattern available.",
         "risk_level": "LOW",

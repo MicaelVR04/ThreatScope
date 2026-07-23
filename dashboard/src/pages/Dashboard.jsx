@@ -448,7 +448,7 @@ export default function Dashboard({ onConnectionChange }) {
                 <option value="">No registered sensors</option>
               ) : sensors.map(sensor => (
                 <option key={sensor.sensor_id || sensor.id} value={sensor.sensor_id || sensor.id}>
-                  {sensor.name || 'Unnamed sensor'} · {sensor.online ? 'online' : 'offline'}
+                  {sensor.name || 'Unnamed sensor'} · v{sensor.version || 'unknown'} · {sensor.online ? 'online' : 'offline'}
                 </option>
               ))}
             </select>
@@ -587,6 +587,7 @@ export default function Dashboard({ onConnectionChange }) {
             <div className="h-[120px] overflow-hidden rounded-lg bg-gradient-to-b from-signal/[0.05] to-transparent">
               <NetworkPulse
                 packetCount={scanStatus?.sensor?.packet_count}
+                sampleTimestamp={scanStatus?.sensor?.last_heartbeat_at}
                 active={Boolean(scanStatus?.sensor?.online && scanStatus?.sensor?.monitoring)}
               />
             </div>
@@ -635,7 +636,15 @@ export default function Dashboard({ onConnectionChange }) {
                 {aiResult && (
                   <div className="flex flex-col gap-1.5 text-ink-muted">
                     <p><span className="text-signal">&gt;</span> model: {aiResult.model} · {aiResult.alert_count} alerts analyzed</p>
-                    <p><span className="text-signal">&gt;</span> pattern: {aiResult.pattern}</p>
+                    {aiResult.recorded_alert_sequence?.length > 0 && (
+                      <p>
+                        <span className="text-signal">&gt;</span> evidence: {aiResult.recorded_alert_sequence.join(' → ')}
+                        {aiResult.observed_alert_span_seconds != null && (
+                          <> · {aiResult.observed_alert_span_seconds}s between first and last recorded alert</>
+                        )}
+                      </p>
+                    )}
+                    <p><span className="text-signal">&gt;</span> AI pattern: {aiResult.pattern}</p>
                     <p><span className="text-signal">&gt;</span> summary: {aiResult.summary}</p>
                     <p><span className="text-signal">&gt;</span> risk_level: <b className={riskTextClass(aiResult.risk_level)}>{aiResult.risk_level}</b></p>
                     {aiResult.rule_tuning_suggestions?.length > 0 && (

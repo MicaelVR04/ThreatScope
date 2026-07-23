@@ -58,6 +58,7 @@ from sensor_manager import (
 )
 from sensor_enrollment import (
     create_code,
+    current_sensor_readiness,
     exchange_code,
     record_sensor_seen,
     revoke_current_sensor,
@@ -371,6 +372,19 @@ def delete_current_sensor(principal=Depends(verify_sensor_request)):
     if not revoke_current_sensor(principal):
         raise HTTPException(status_code=404, detail="Sensor not found")
     return {"message": "Sensor access revoked"}
+
+
+@app.get("/sensors/self/ready")
+@limiter.limit("120/minute")
+def read_current_sensor_readiness(
+    request: Request,
+    principal=Depends(verify_sensor_request),
+):
+    """Confirms that the calling sensor completed its first heartbeat."""
+    readiness = current_sensor_readiness(principal)
+    if not readiness.get("ready"):
+        raise HTTPException(status_code=409, detail="Sensor heartbeat is pending")
+    return readiness
 
 
 @app.delete("/sensors/{sensor_id}")

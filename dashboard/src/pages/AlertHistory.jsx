@@ -3,6 +3,7 @@ import Button from '../components/theme/Button'
 import AlertTable from '../components/AlertTable'
 import { clearMyAlerts, getAlerts } from '../services/api'
 import { RefreshCw, Download, Trash2 } from 'lucide-react'
+import { threatFriendlyLabel, threatLabel, threatPlainEnglish } from '../utils/threatLabels'
 
 // Same fine film-grain noise as Landing.jsx/AuthLayout.jsx/Dashboard.jsx,
 // generated once at module load — not rebuilt, just reused so every page
@@ -24,6 +25,7 @@ export default function AlertHistory() {
   const [dateFrom,  setDateFrom] = useState('')
   const [dateTo,    setDateTo]   = useState('')
   const [clearing,  setClearing] = useState(false)
+  const [confirmingClear, setConfirmingClear] = useState(false)
 
   function load() {
     setLoading(true)
@@ -41,6 +43,9 @@ export default function AlertHistory() {
     return alerts.filter(a => {
       const matchSearch = !q ||
         a.type?.toLowerCase().includes(q) ||
+        threatLabel(a.type).toLowerCase().includes(q) ||
+        threatFriendlyLabel(a.type).toLowerCase().includes(q) ||
+        threatPlainEnglish(a.type).toLowerCase().includes(q) ||
         a.src_ip?.includes(q) ||
         a.dst_ip?.includes(q)
       const ts = new Date(a.timestamp)
@@ -62,7 +67,6 @@ export default function AlertHistory() {
   }
 
   async function clearHistory() {
-    if (!window.confirm('Clear your entire alert history? This cannot be undone.')) return
     setClearing(true)
     setError(null)
     try {
@@ -71,6 +75,7 @@ export default function AlertHistory() {
       setSearch('')
       setDateFrom('')
       setDateTo('')
+      setConfirmingClear(false)
     } catch (err) {
       setError(err.message)
     } finally {
@@ -128,10 +133,32 @@ export default function AlertHistory() {
           <Button variant="secondary" size="sm" className="group" onClick={exportCSV} title="Export CSV" disabled={!filtered.length}>
             <Download size={14} className="transition-transform duration-200 ease-swift group-hover:translate-y-0.5" /> Export CSV
           </Button>
-          <Button variant="danger" size="sm" onClick={clearHistory} disabled={!alerts.length || clearing}>
+          <Button variant="danger" size="sm" onClick={() => setConfirmingClear(true)} disabled={!alerts.length || clearing || confirmingClear}>
             <Trash2 size={14} /> {clearing ? 'Clearing...' : 'Clear alert history'}
           </Button>
         </div>
+
+        {confirmingClear && (
+          <div
+            role="alertdialog"
+            aria-labelledby="clear-history-title"
+            aria-describedby="clear-history-description"
+            className="w-full rounded-md border border-severity-high/30 bg-severity-high/10 p-4"
+          >
+            <p id="clear-history-title" className="font-display text-sm font-semibold text-ink">Delete all alert history?</p>
+            <p id="clear-history-description" className="mt-1 text-xs leading-relaxed text-ink-muted">
+              This permanently removes every alert stored for your account. Other users are not affected.
+            </p>
+            <div className="mt-3 flex flex-col-reverse gap-2 min-[360px]:flex-row min-[360px]:justify-end">
+              <Button variant="secondary" size="sm" onClick={() => setConfirmingClear(false)} disabled={clearing}>
+                Cancel
+              </Button>
+              <Button variant="danger" size="sm" onClick={clearHistory} disabled={clearing}>
+                <Trash2 size={14} /> {clearing ? 'Deleting...' : 'Delete all alerts'}
+              </Button>
+            </div>
+          </div>
+        )}
       </div>
 
       {/* Content */}

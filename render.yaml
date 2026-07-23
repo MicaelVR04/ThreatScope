@@ -46,7 +46,7 @@ services:
       - key: SENSOR_HEARTBEAT_TIMEOUT_SECONDS
         value: "90"
       - key: SENSOR_HEARTBEAT_COMMAND_SECONDS
-        value: "15"
+        value: "5"
       - key: SENSOR_ENROLLMENT_TTL_SECONDS
         value: "600"
       - key: SENSOR_MAX_PER_USER

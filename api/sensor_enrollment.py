@@ -13,6 +13,7 @@ from auth import verify_engine_key
 from database import (
     consume_sensor_enrollment,
     create_sensor_enrollment,
+    get_owned_sensor,
     get_sensor_credential,
     list_sensors,
     mark_sensor_seen,
@@ -169,3 +170,18 @@ def revoke_current_sensor(principal: dict) -> bool:
     if principal.get("auth_type") != "sensor":
         return False
     return revoke_sensor(principal["sensor_id"])
+
+
+def current_sensor_readiness(principal: dict) -> dict:
+    """Returns heartbeat readiness only for the calling sensor credential."""
+    if principal.get("auth_type") != "sensor":
+        return {"ready": False}
+    sensor = get_owned_sensor(principal["sensor_id"], principal["owner_id"])
+    if not sensor:
+        return {"ready": False}
+    return {
+        "sensor_id": sensor["id"],
+        "ready": bool(sensor.get("last_seen_at")),
+        "last_seen_at": sensor.get("last_seen_at"),
+        "version": sensor.get("version"),
+    }

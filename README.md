@@ -233,10 +233,13 @@ revokes a missing or unavailable Mac.
 
 Installed sensors do not update themselves. When the dashboard reports an
 update, download the newest setup package, generate a new one-time code, and run
-the setup app again. Confirm that the new device reports the current version,
-then use **Remove access** on the older device entry. Sensor version `1.2.0`
-adds time-windowed, per-target TCP detection to reduce false positives from
-legitimate peer-to-peer applications.
+the setup app again. The installer waits for the new sensor's first successful
+heartbeat, then revokes only the previous registration stored on that same Mac.
+It never removes a different device. If API access prevents automatic cleanup,
+confirm that the new device reports the current version and use **Remove
+access** on the older entry. Sensor version `1.2.0` adds time-windowed,
+per-target TCP detection to reduce false positives from legitimate peer-to-peer
+applications.
 
 The command-line scripts remain available for project developers and recovery:
 
