@@ -25,6 +25,26 @@ DISCLAIMER = (
 )
 logger = logging.getLogger(__name__)
 
+RULE_ENGINE_CAPABILITIES = {
+    "PORT_SCAN": (
+        "Tracks unique destination ports reached by initial TCP SYN packets from one "
+        "source to one target inside a bounded time window."
+    ),
+    "PING_SWEEP": (
+        "Tracks unique ICMP echo-request destinations from one source inside a bounded "
+        "time window."
+    ),
+    "SYN_FLOOD": (
+        "Tracks unique unresolved initial SYN flows per source and target inside a bounded "
+        "time window, and removes matching flows when response or later-connection packets arrive."
+    ),
+    "ARP_SPOOF": (
+        "Evaluates ARP replies and requires repeated conflicting MAC claims for the same IP "
+        "before alerting."
+    ),
+    "SHARED": "Suppresses duplicate alerts from the same rule, source, and target during a cooldown.",
+}
+
 
 def get_ai_config() -> Dict[str, Any]:
     return {
@@ -145,8 +165,13 @@ def build_prompt(alerts: List[dict], current_time: datetime = None) -> str:
         "Only mention IP reputation if public internet IPs appear. Suggestions must be "
         "changes to ThreatScope detection, correlation, suppression, or presentation. "
         "Do not present firewall rate limiting, static ARP configuration, or other host/network "
-        "mitigations as rule-tuning changes that ThreatScope performs. Any allowlist suggestion "
-        "for the default demo address must be explicitly limited to demo mode.\n\n"
+        "mitigations as rule-tuning changes that ThreatScope performs. Do not recommend "
+        "suppressing or allowlisting the default demo profile because the demo relies on those "
+        "alerts being visible. Do not recommend capabilities already listed below; suggestions "
+        "must add a concrete behavior beyond what is currently implemented. ThreatScope's "
+        "severity schema is limited to LOW, MEDIUM, and HIGH; do not recommend unsupported "
+        "severity labels such as CRITICAL.\n\n"
+        f"Current rule capabilities:\n{json.dumps(RULE_ENGINE_CAPABILITIES, indent=2)}\n\n"
         f"Authoritative evidence:\n{json.dumps(evidence, indent=2)}"
     )
 

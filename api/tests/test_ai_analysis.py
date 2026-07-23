@@ -107,7 +107,11 @@ def test_prompt_forbids_unsupported_compromise_claims():
     assert "preserve recorded_alert_sequence exactly" in prompt
     assert "Do not describe rule matches as lateral movement" in prompt
     assert "default deterministic ThreatScope demo" in prompt
-    assert "Any allowlist suggestion" in prompt
+    assert "Do not recommend suppressing or allowlisting the default demo profile" in prompt
+    assert "requires repeated conflicting MAC claims" in prompt
+    assert "removes matching flows when response or later-connection packets arrive" in prompt
+    assert "Do not recommend capabilities already listed" in prompt
+    assert "severity schema is limited to LOW, MEDIUM, and HIGH" in prompt
 
 
 def test_analyze_alerts_with_mocked_ollama(monkeypatch):
