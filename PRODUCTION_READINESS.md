@@ -30,7 +30,7 @@ production work.
 
 ## Accounts And Data Isolation
 
-- [ ] Require verified email addresses for non-demo registrations.
+- [x] Require verified email addresses for non-demo registrations.
 - [ ] Add organizations, membership roles, and invitations.
 - [x] Scope every alert and sensor action by user and enforce alert reads with RLS.
 - [x] Enforce sensor-owner relationships with database constraints and private service-role-only tables.
