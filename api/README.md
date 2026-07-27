@@ -91,6 +91,7 @@ API is now running at `http://localhost:8000`
 | `GET` | `/alerts/summary` | Get alert counts by severity |
 | `GET` | `/alerts/stats` | Get alert counts by attack type |
 | `DELETE` | `/alerts` | Clear all alerts (demo reset) |
+| `DELETE` | `/alerts/mine` | Clear the signed-in user's alert history |
 | `GET` | `/health` | Health check |
 | `WS` | `/ws` | WebSocket for real-time alert streaming |
 
@@ -179,11 +180,22 @@ Returns alert counts grouped by attack type. Used for dashboard charts.
 ---
 
 ### DELETE /alerts
-Clears all alerts from the database. Useful for resetting between demos.
+Internal engine-key operation that clears all alerts from the database.
 
 **Response:**
 ```json
 { "message": "All alerts cleared" }
+```
+
+---
+
+### DELETE /alerts/mine
+Clears only the authenticated user's alert history. The dashboard exposes this
+through a confirmed **Clear alert history** action.
+
+**Response:**
+```json
+{ "message": "Your alert history was cleared" }
 ```
 
 ---

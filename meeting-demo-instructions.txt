@@ -1,0 +1,249 @@
+ThreatScope meeting/demo instructions
+
+Goal of the meeting:
+Show that ThreatScope works end to end and explain what each person owns.
+
+Simple project summary:
+ThreatScope is a real-time Network Intrusion Detection System.
+
+The flow is:
+network/demo packets -> Python Scapy engine -> FastAPI API -> Supabase -> React dashboard
+
+The engine detects:
+- PORT_SCAN
+- SYN_FLOOD
+- PING_SWEEP
+- ARP_SPOOF
+
+What the four detections mean:
+- PING_SWEEP: one source pings multiple IP addresses to find live hosts on a network. This is early reconnaissance. Severity: LOW.
+- PORT_SCAN: one source checks many ports to find open services. This is stronger reconnaissance and often comes before an attack. Severity: MEDIUM.
+- ARP_SPOOF: one device claims another device's IP address on the local network. This can be used for man-in-the-middle attacks. Severity: MEDIUM.
+- SYN_FLOOD: one source sends many TCP SYN packets to overwhelm a target service. This is an active denial-of-service pattern. Severity: HIGH.
+
+Why only these four for the demo:
+ThreatScope is an MVP, not a full Snort or Suricata replacement. We chose four rules because they are common, easy to explain, testable in a short demo, and show different stages of suspicious activity:
+- discovery: PING_SWEEP
+- service reconnaissance: PORT_SCAN
+- local network attack setup: ARP_SPOOF
+- active disruption: SYN_FLOOD
+
+Honest framing:
+"ThreatScope currently detects a focused set of common network behaviors in real time. The rule engine is intentionally small for the MVP so we can prove the full pipeline works end to end: packet analysis, API ingestion, Supabase storage, realtime updates, and dashboard visibility. More detections can be added later using the same pattern."
+
+Ollama / AI framing:
+"Ollama is used locally as a developer diagnostic helper. It reads recent alerts after the rule engine has already detected them, then summarizes the pattern and suggests possible rule tuning. It does not replace the detection rules and it is not a public chatbot."
+
+Cloud AI framing:
+"The AI layer can also be switched to a cloud provider with an API key. That makes the analysis feature work without relying on one teammate's local machine, while the detection rules still remain the source of truth."
+
+Scheduled scan framing:
+"The local sensor monitors packets continuously as a background service. The dashboard can pause or resume monitoring and schedule verified assessment windows every 5 or 10 minutes. ThreatScope only reports No Known Threats Detected when the sensor was online, inspected packets, and none matched the four rules included in this version."
+
+Best setup:
+Use one machine as the demo machine if possible.
+
+Micael:
+- Runs the demo commands.
+- Explains the engine and full project flow.
+
+Bryan:
+- Explains the API and Supabase backend.
+
+Cristian:
+- Explains the dashboard and live visual updates.
+
+Important:
+Do not show the real .env file on screen because it has Supabase secrets.
+
+Before the meeting:
+From the project root, run:
+
+cd /Users/micaelvelez/DemoDayProject/ThreatScope
+git switch dev
+git pull origin dev
+
+Make sure .env has these values filled in:
+
+SUPABASE_URL=your_supabase_url
+SUPABASE_SERVICE_ROLE_KEY=your_service_role_key
+SUPABASE_ALERTS_TABLE=alerts
+SUPABASE_SCAN_STATE_TABLE=sensor_scan_state
+
+VITE_SUPABASE_URL=your_supabase_url
+VITE_SUPABASE_ANON_KEY=your_anon_or_publishable_key
+
+API_URL=http://localhost:8000/alerts
+API_BASE_URL=http://localhost:8000
+SUPABASE_JWT_SECRET=your_supabase_jwt_secret
+ENGINE_API_KEY=generate_a_long_random_value
+SENSOR_OWNER_USER_ID=demo_accounts_supabase_uuid
+ALLOW_INSECURE_LOCAL_DEV=false
+DEMO_MODE=true
+ALERT_COOLDOWN_SECONDS=60
+ARP_ENTRY_TTL_SECONDS=300
+ARP_SPOOF_CONFIRMATION_THRESHOLD=2
+SCAN_WINDOW_SECONDS=8
+SCAN_INTERVAL_MINUTES=5
+SENSOR_HEARTBEAT_INTERVAL_SECONDS=5
+SENSOR_HEARTBEAT_TIMEOUT_SECONDS=20
+MONITORING_DEFAULT_ENABLED=true
+
+Terminal 1: Start the API
+
+cd api
+source ../.venv/bin/activate
+uvicorn main:app --reload --host 0.0.0.0 --port 8000
+
+If that venv does not work:
+
+cd api
+python3 -m venv .venv
+source .venv/bin/activate
+pip install -r requirements.txt
+uvicorn main:app --reload --host 0.0.0.0 --port 8000
+
+Optional API health check:
+
+curl http://localhost:8000/health
+
+Expected result:
+
+{"status":"ok","service":"ThreatScope API"}
+
+What Bryan says:
+"This FastAPI service receives alerts from the engine at POST /alerts, validates them, and writes them to Supabase."
+
+Terminal 2: Start the dashboard
+
+cd dashboard
+npm install
+npm run dev
+
+Open this in the browser:
+
+http://localhost:5173
+
+What Cristian says:
+"The dashboard reads alerts from Supabase and subscribes to Supabase Realtime, so new alerts appear live without refreshing."
+
+One-time sensor installation:
+
+Sign in, open Sensor installation, download the setup app, generate a one-time
+code, and follow its prompts. No Terminal is required. The sensor starts
+automatically at boot. Confirm the intended device is selected and the dashboard
+shows Sensor online and Continuous Monitoring Active before running an
+assessment.
+
+Optional Ollama setup:
+
+Install Ollama:
+https://ollama.com/download
+
+Pull the recommended local model:
+
+ollama pull qwen2.5:7b
+
+Optional lighter model:
+
+ollama pull llama3.2:3b
+
+Required .env values:
+
+AI_PROVIDER=ollama
+OLLAMA_BASE_URL=http://127.0.0.1:11434
+OLLAMA_MODEL=qwen2.5:7b
+OLLAMA_TIMEOUT_SECONDS=45
+OLLAMA_ALERT_LIMIT=20
+
+For a clean demo AI summary, either clear older test alerts before presenting or temporarily set:
+
+OLLAMA_ALERT_LIMIT=4
+
+This keeps Ollama focused on the four current demo alerts instead of older test/simulated rows.
+
+Optional cloud AI values:
+
+AI_PROVIDER=openai
+OPENAI_API_KEY=your-api-key
+OPENAI_MODEL=qwen/qwen3.6-27b
+OPENAI_BASE_URL=https://api.groq.com/openai/v1
+
+Terminal 3: Trigger demo alerts
+
+cd engine
+source ../.venv/bin/activate
+python demo_traffic.py port-scan
+
+If that venv does not work:
+
+cd engine
+python3 -m venv .venv
+source .venv/bin/activate
+pip install -r requirements.txt
+python demo_traffic.py port-scan
+
+Then run:
+
+python demo_traffic.py ping-sweep
+python demo_traffic.py arp-spoof
+python demo_traffic.py syn-flood
+
+What Micael says:
+"These demo packets are crafted so the meeting is reliable, but they still go through the real detection rules, the real API, Supabase, and the live dashboard."
+
+What to show on screen:
+1. Open the dashboard at http://localhost:5173
+2. Show Sensor online and Continuous Monitoring Active.
+3. Click Assess now and point out the verified packet window.
+4. Explain that No Known Threats Detected only appears after packets were inspected and is limited to the four enabled detection rules.
+5. Run: python demo_traffic.py port-scan
+6. Show the Port scan alert appearing live with the plain-English explanation.
+7. Show the summary cards and charts updating.
+8. Run: python demo_traffic.py ping-sweep
+9. Show the LOW severity Host discovery alert.
+10. Run: python demo_traffic.py arp-spoof
+11. Show the MEDIUM severity Network impersonation alert.
+12. Run: python demo_traffic.py syn-flood
+13. Show the HIGH severity Connection flood alert.
+14. Click Analyze recent alerts in the AI Analysis panel.
+15. Explain that AI summarizes the stored alerts but the rules still do the detection.
+16. Open alert history and show the alerts stored with plain-English descriptions.
+
+Meeting script:
+
+Micael:
+"ThreatScope is a real-time network intrusion detection system. The flow is packets into the Python/Scapy engine, alerts sent to FastAPI, alerts stored in Supabase, and live updates shown in the React dashboard."
+
+Bryan:
+"The API is the ingestion layer. It receives alerts from the engine through POST /alerts, validates severity and alert data, then writes the alert into Supabase."
+
+Cristian:
+"The dashboard is the monitoring interface. It reads from Supabase, listens for realtime inserts, and updates the alert feed, cards, charts, and history."
+
+Demo commands:
+
+cd engine
+python demo_traffic.py ping-sweep
+python demo_traffic.py port-scan
+python demo_traffic.py arp-spoof
+python demo_traffic.py syn-flood
+
+If they ask about real capture:
+Say:
+"Live capture works locally with Scapy and requires sudo on macOS. For this short meeting, we use deterministic demo traffic so the result is reliable, but the alerts still pass through the real engine rules and full backend/dashboard pipeline."
+
+Live capture command, only if needed:
+
+cd engine
+sudo python capture.py
+
+Recommendation:
+For this peer meeting, use demo_traffic.py instead of relying on live capture. It is cleaner and more reliable for a short meeting.
+
+End with next steps:
+- Real LAN testing with multiple machines.
+- More false-positive tuning.
+- Dashboard polish.
+- Final Demo Day script.
+- Final release from dev to main when ready.

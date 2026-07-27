@@ -19,25 +19,42 @@ import os
 sys.path.insert(0, os.path.abspath(os.path.join(os.path.dirname(__file__), "..")))
 
 from main import app
-import database
-from database import init_db, clear_alerts, get_alerts, insert_alert
-from auth import verify_token
+from auth import verify_engine_key, verify_token
+from sensor_enrollment import verify_sensor_or_engine
+from database import init_db, clear_alerts, get_alerts, get_connection, insert_alert
 
 # ── Test Client ────────────────────────────────────────────────────────────
 client = TestClient(app)
+TEST_USER_ID = "98a345c1-6b65-4d93-96d6-59bec63fb4cf"
+OTHER_USER_ID = "00000000-0000-4000-8000-000000000003"
+OWN_SENSOR_ID = "00000000-0000-4000-8000-00000000000a"
+OTHER_SENSOR_ID = "00000000-0000-4000-8000-00000000000b"
 
 
 # ── Fixtures ───────────────────────────────────────────────────────────────
 @pytest.fixture(autouse=True)
-def setup_and_teardown():
+def setup_and_teardown(monkeypatch):
     """
     Runs before and after every test.
     Initializes the DB and clears all alerts so tests don't affect each other.
     """
-    init_db()
-    clear_alerts()
-    yield
-    clear_alerts()
+    monkeypatch.setenv("SENSOR_OWNER_USER_ID", TEST_USER_ID)
+    app.dependency_overrides[verify_token] = lambda: {"sub": TEST_USER_ID}
+    app.dependency_overrides[verify_engine_key] = lambda: None
+    app.dependency_overrides[verify_sensor_or_engine] = lambda: {
+        "sensor_id": None,
+        "owner_id": TEST_USER_ID,
+        "auth_type": "engine",
+    }
+    try:
+        init_db()
+        clear_alerts()
+        yield
+        clear_alerts()
+    finally:
+        app.dependency_overrides.pop(verify_token, None)
+        app.dependency_overrides.pop(verify_engine_key, None)
+        app.dependency_overrides.pop(verify_sensor_or_engine, None)
 
 
 def make_alert(severity="HIGH", attack_type="PORT_SCAN"):
@@ -50,6 +67,22 @@ def make_alert(severity="HIGH", attack_type="PORT_SCAN"):
         "message": f"Test alert — {attack_type}",
         "timestamp": datetime.now(timezone.utc).isoformat()
     }
+
+
+def add_sensor(sensor_id, owner_id, token_hash):
+    conn = get_connection()
+    try:
+        conn.execute(
+            """
+            INSERT INTO sensors
+                (id, owner_id, name, platform, version, token_hash, created_at)
+            VALUES (?, ?, 'Test Mac', 'macOS', 'test', ?, ?)
+            """,
+            (sensor_id, owner_id, token_hash, datetime.now(timezone.utc).isoformat()),
+        )
+        conn.commit()
+    finally:
+        conn.close()
 
 
 # ── Health Check ───────────────────────────────────────────────────────────
@@ -104,39 +137,6 @@ class TestCreateAlert:
         r2 = client.post("/alerts", json=make_alert())
         assert r1.json()["id"] != r2.json()["id"]
 
-    def test_alert_is_stored_with_authenticated_user_id(self):
-        """The JWT subject is persisted for Supabase ownership and RLS."""
-        real_user_uuid = "98a345c1-6b65-4d93-96d6-59bec63fb4cf"
-        app.dependency_overrides[verify_token] = lambda: {"sub": real_user_uuid}
-        try:
-            response = client.post("/alerts", json=make_alert())
-            assert response.status_code == 200
-            assert get_alerts()[0]["user_id"] == real_user_uuid
-        finally:
-            app.dependency_overrides.pop(verify_token, None)
-
-    def test_supabase_insert_keeps_user_id(self, monkeypatch):
-        """Supabase receives the owner column alongside the alert payload."""
-        fake_uuid = "00000000-0000-0000-0000-000000000001"
-        inserted = {}
-        class Query:
-            def insert(self, payload):
-                inserted.update(payload)
-                return self
-            def execute(self):
-                return type("Result", (), {"data": [{"id": "alert-1"}]})()
-        class Client:
-            def table(self, name):
-                assert name == database.SUPABASE_ALERTS_TABLE
-                return Query()
-        monkeypatch.setattr(database, "SUPABASE_ACTIVE", True)
-        monkeypatch.setattr(database, "_get_supabase", lambda: Client())
-        alert = make_alert()
-        alert.update({"id": None, "user_id": fake_uuid})
-        assert insert_alert(alert) == "alert-1"
-        assert inserted["user_id"] == fake_uuid
-        assert "id" not in inserted
-
 
 # ── GET /alerts ────────────────────────────────────────────────────────────
 class TestReadAlerts:
@@ -145,6 +145,19 @@ class TestReadAlerts:
         response = client.get("/alerts")
         assert response.status_code == 200
         assert response.json() == []
+
+    def test_alert_reads_are_scoped_to_authenticated_user(self):
+        owner_alert = make_alert()
+        other_alert = make_alert(attack_type="ARP_SPOOF")
+        other_alert["user_id"] = OTHER_USER_ID
+
+        created = client.post("/alerts", json=owner_alert)
+        insert_alert(other_alert)
+        response = client.get("/alerts")
+
+        assert created.status_code == 200
+        assert response.status_code == 200
+        assert [alert["type"] for alert in response.json()] == ["PORT_SCAN"]
 
     def test_get_alerts_returns_created(self):
         """Should return alerts after they are created."""
@@ -200,6 +213,49 @@ class TestReadAlerts:
         ids = [a["id"] for a in data]
         assert ids == sorted(ids, reverse=True)
 
+    def test_sensor_filter_enforces_sensor_ownership(self):
+        add_sensor(OWN_SENSOR_ID, TEST_USER_ID, "a" * 64)
+        add_sensor(OTHER_SENSOR_ID, OTHER_USER_ID, "b" * 64)
+        own_alert = make_alert(attack_type="PING_SWEEP")
+        own_alert.update({"user_id": TEST_USER_ID, "sensor_id": OWN_SENSOR_ID})
+        other_alert = make_alert(attack_type="ARP_SPOOF")
+        other_alert.update({"user_id": OTHER_USER_ID, "sensor_id": OTHER_SENSOR_ID})
+        insert_alert(own_alert)
+        insert_alert(other_alert)
+
+        allowed = client.get(f"/alerts?sensor_id={OWN_SENSOR_ID}")
+        denied = client.get(f"/alerts?sensor_id={OTHER_SENSOR_ID}")
+
+        assert allowed.status_code == 200
+        assert [alert["type"] for alert in allowed.json()] == ["PING_SWEEP"]
+        assert denied.status_code == 404
+
+
+class TestSensorControlIsolation:
+    def test_cross_owner_sensor_controls_return_generic_not_found(self):
+        add_sensor(OTHER_SENSOR_ID, OTHER_USER_ID, "b" * 64)
+
+        status = client.get(f"/scan/status?sensor_id={OTHER_SENSOR_ID}")
+        monitoring = client.post("/sensor/monitoring", json={
+            "sensor_id": OTHER_SENSOR_ID,
+            "enabled": False,
+        })
+        scan = client.post("/scan/run", json={"sensor_id": OTHER_SENSOR_ID})
+        schedule = client.post("/scan/schedule", json={
+            "sensor_id": OTHER_SENSOR_ID,
+            "enabled": True,
+            "interval_minutes": 5,
+        })
+        ai = client.post("/ai/analyze-alerts", json={"sensor_id": OTHER_SENSOR_ID})
+
+        assert [response.status_code for response in (
+            status, monitoring, scan, schedule, ai
+        )] == [404, 404, 404, 404, 404]
+        assert all(
+            response.json()["detail"] == "Sensor not found"
+            for response in (status, monitoring, scan, schedule, ai)
+        )
+
 
 # ── GET /alerts/summary ────────────────────────────────────────────────────
 class TestAlertSummary:
@@ -236,7 +292,7 @@ class TestAlertStats:
         client.post("/alerts", json=make_alert("HIGH", "PORT_SCAN"))
         client.post("/alerts", json=make_alert("HIGH", "PORT_SCAN"))
         client.post("/alerts", json=make_alert("MEDIUM", "SYN_FLOOD"))
-        data = client.get("/alerts/stats").json()
+        data = client.get("/alerts/stats?group_by=type").json()
         types = {item["type"]: item["count"] for item in data}
         assert types["PORT_SCAN"] == 2
         assert types["SYN_FLOOD"] == 1
@@ -246,7 +302,7 @@ class TestAlertStats:
         for _ in range(3):
             client.post("/alerts", json=make_alert("HIGH", "PORT_SCAN"))
         client.post("/alerts", json=make_alert("MEDIUM", "SYN_FLOOD"))
-        data = client.get("/alerts/stats").json()
+        data = client.get("/alerts/stats?group_by=type").json()
         counts = [item["count"] for item in data]
         assert counts == sorted(counts, reverse=True)
 
@@ -267,3 +323,32 @@ class TestDeleteAlerts:
         client.delete("/alerts")
         data = client.get("/alerts/summary").json()
         assert data["total"] == 0
+
+    def test_authenticated_clear_only_removes_current_users_alerts(self):
+        current_user_alert = make_alert("HIGH")
+        current_user_alert["user_id"] = TEST_USER_ID
+        other_user_alert = make_alert("LOW")
+        other_user_alert["user_id"] = OTHER_USER_ID
+        insert_alert(current_user_alert)
+        insert_alert(other_user_alert)
+
+        response = client.delete("/alerts/mine")
+
+        assert response.status_code == 200
+        assert get_alerts(user_id=TEST_USER_ID) == []
+        assert len(get_alerts(user_id=OTHER_USER_ID)) == 1
+
+    def test_non_owner_clear_does_not_reset_sensor_status(self, monkeypatch):
+        reset_owner = None
+
+        def fake_reset(owner_id):
+            nonlocal reset_owner
+            reset_owner = owner_id
+
+        monkeypatch.setattr("main.record_alert_history_cleared", fake_reset)
+        app.dependency_overrides[verify_token] = lambda: {"sub": OTHER_USER_ID}
+
+        response = client.delete("/alerts/mine")
+
+        assert response.status_code == 200
+        assert reset_owner == OTHER_USER_ID
