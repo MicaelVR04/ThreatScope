@@ -1,5 +1,5 @@
-import { useState } from 'react'
-import { Link } from 'react-router-dom'
+import { useEffect, useState } from 'react'
+import { Link, useLocation } from 'react-router-dom'
 import { Mail, Lock, Eye, EyeOff, Loader2 } from 'lucide-react'
 import Button from '../components/theme/Button'
 import AuthLayout, { AUTH_INPUT_CLASS, AUTH_LINK_CLASS } from '../components/AuthLayout'
@@ -11,8 +11,33 @@ export default function Login() {
   const [showPassword, setShowPassword] = useState(false)
   const [error, setError] = useState(null)
   const [loading, setLoading] = useState(false)
+  const [googleLoading, setGoogleLoading] = useState(false)
+  const [needsConfirmation, setNeedsConfirmation] = useState(false)
+  const [resending, setResending] = useState(false)
+  const [resendStatus, setResendStatus] = useState(null)
+  const [cooldownUntil, setCooldownUntil] = useState(0)
+  const [now, setNow] = useState(Date.now())
+  const location = useLocation()
+  const secondsRemaining = Math.max(0, Math.ceil((cooldownUntil - now) / 1000))
+
+  useEffect(() => {
+    if (!cooldownUntil || secondsRemaining === 0) return undefined
+    const interval = window.setInterval(() => setNow(Date.now()), 1_000)
+    return () => window.clearInterval(interval)
+  }, [cooldownUntil, secondsRemaining])
+
+  const startCooldown = () => {
+    setNow(Date.now())
+    setCooldownUntil(Date.now() + 60_000)
+  }
+
+  const emailRedirectTo = `${window.location.origin}/login?confirmed=1`
+  const emailWasConfirmed = new URLSearchParams(location.search).get('confirmed') === '1'
+
   const handleLogin = async () => {
     setError(null)
+    setNeedsConfirmation(false)
+    setResendStatus(null)
     setLoading(true)
     try {
       if (!supabase) {
@@ -21,12 +46,70 @@ export default function Login() {
 
       const { error: authError } = await supabase.auth.signInWithPassword({ email, password })
       if (authError) {
-        setError(authError.message)
+        if (/email not confirmed/i.test(authError.message)) {
+          setNeedsConfirmation(true)
+          setError('Confirm your email before signing in.')
+        } else {
+          setError(authError.message)
+        }
       }
     } catch (authError) {
       setError(authError.message || 'Unable to sign in. Please try again.')
     } finally {
       setLoading(false)
+    }
+  }
+
+  const handleGoogleLogin = async () => {
+    setError(null)
+    setNeedsConfirmation(false)
+    setResendStatus(null)
+    setGoogleLoading(true)
+
+    try {
+      if (!supabase) {
+        throw new Error('Supabase is not configured. Check the dashboard environment variables.')
+      }
+
+      const { error: authError } = await supabase.auth.signInWithOAuth({
+        provider: 'google',
+        options: { redirectTo: `${window.location.origin}/dashboard` },
+      })
+
+      if (authError) throw authError
+    } catch (authError) {
+      setError(authError.message || 'Unable to start Google sign-in. Please try again.')
+      setGoogleLoading(false)
+    }
+  }
+
+  const handleResendConfirmation = async () => {
+    if (!supabase || !email || secondsRemaining > 0) return
+
+    setError(null)
+    setResendStatus(null)
+    setResending(true)
+    try {
+      const { error: authError } = await supabase.auth.resend({
+        type: 'signup',
+        email,
+        options: { emailRedirectTo },
+      })
+
+      startCooldown()
+      if (authError) {
+        setError(authError.status === 429
+          ? 'Please wait before requesting another confirmation email.'
+          : authError.message)
+        return
+      }
+
+      setResendStatus('A confirmation email was sent. Check your inbox and spam folder.')
+    } catch (authError) {
+      startCooldown()
+      setError(authError.message || 'Unable to resend the confirmation email.')
+    } finally {
+      setResending(false)
     }
   }
 
@@ -90,9 +173,52 @@ export default function Login() {
           </div>
         )}
 
+        {emailWasConfirmed && !error && (
+          <div className="mb-4 rounded-md border border-severity-low/25 bg-severity-low/10 px-3 py-2.5 text-[13px] text-severity-low" role="status">
+            Email confirmed. You can now sign in.
+          </div>
+        )}
+
+        {needsConfirmation && (
+          <div className="mb-4">
+            <Button
+              type="button"
+              variant="secondary"
+              size="sm"
+              disabled={resending || secondsRemaining > 0 || !email}
+              onClick={handleResendConfirmation}
+              className="w-full"
+            >
+              {resending
+                ? <><Loader2 size={16} className="animate-spin" /> Sending…</>
+                : secondsRemaining > 0
+                  ? `Resend available in ${secondsRemaining}s`
+                  : 'Resend confirmation email'}
+            </Button>
+            {resendStatus && <p className="mt-2 text-center text-[13px] text-severity-low" role="status">{resendStatus}</p>}
+          </div>
+        )}
+
         <Button type="submit" variant="primary" disabled={loading} className="w-full">
           {loading && <Loader2 size={16} className="animate-spin" />}
           {loading ? 'Signing in…' : 'Login'}
+        </Button>
+
+        <div className="my-5 flex items-center gap-3" aria-hidden="true">
+          <div className="h-px flex-1 bg-white/[0.1]" />
+          <span className="font-mono text-[11px] uppercase tracking-[0.14em] text-ink-faint">or</span>
+          <div className="h-px flex-1 bg-white/[0.1]" />
+        </div>
+
+        <Button
+          type="button"
+          variant="secondary"
+          disabled={loading || googleLoading}
+          onClick={handleGoogleLogin}
+          className="w-full"
+        >
+          {googleLoading && <Loader2 size={16} className="animate-spin" />}
+          {googleLoading ? 'Opening Google…' : 'Continue with Google'}
         </Button>
       </form>
 
