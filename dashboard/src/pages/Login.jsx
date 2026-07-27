@@ -11,6 +11,7 @@ export default function Login() {
   const [showPassword, setShowPassword] = useState(false)
   const [error, setError] = useState(null)
   const [loading, setLoading] = useState(false)
+  const [googleLoading, setGoogleLoading] = useState(false)
   const [needsConfirmation, setNeedsConfirmation] = useState(false)
   const [resending, setResending] = useState(false)
   const [resendStatus, setResendStatus] = useState(null)
@@ -56,6 +57,29 @@ export default function Login() {
       setError(authError.message || 'Unable to sign in. Please try again.')
     } finally {
       setLoading(false)
+    }
+  }
+
+  const handleGoogleLogin = async () => {
+    setError(null)
+    setNeedsConfirmation(false)
+    setResendStatus(null)
+    setGoogleLoading(true)
+
+    try {
+      if (!supabase) {
+        throw new Error('Supabase is not configured. Check the dashboard environment variables.')
+      }
+
+      const { error: authError } = await supabase.auth.signInWithOAuth({
+        provider: 'google',
+        options: { redirectTo: `${window.location.origin}/dashboard` },
+      })
+
+      if (authError) throw authError
+    } catch (authError) {
+      setError(authError.message || 'Unable to start Google sign-in. Please try again.')
+      setGoogleLoading(false)
     }
   }
 
@@ -178,6 +202,23 @@ export default function Login() {
         <Button type="submit" variant="primary" disabled={loading} className="w-full">
           {loading && <Loader2 size={16} className="animate-spin" />}
           {loading ? 'Signing in…' : 'Login'}
+        </Button>
+
+        <div className="my-5 flex items-center gap-3" aria-hidden="true">
+          <div className="h-px flex-1 bg-white/[0.1]" />
+          <span className="font-mono text-[11px] uppercase tracking-[0.14em] text-ink-faint">or</span>
+          <div className="h-px flex-1 bg-white/[0.1]" />
+        </div>
+
+        <Button
+          type="button"
+          variant="secondary"
+          disabled={loading || googleLoading}
+          onClick={handleGoogleLogin}
+          className="w-full"
+        >
+          {googleLoading && <Loader2 size={16} className="animate-spin" />}
+          {googleLoading ? 'Opening Google…' : 'Continue with Google'}
         </Button>
       </form>
 

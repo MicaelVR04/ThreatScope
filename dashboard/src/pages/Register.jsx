@@ -32,6 +32,7 @@ export default function Register() {
   const [confirmationPending, setConfirmationPending] = useState(false)
   const [resendStatus, setResendStatus] = useState(null)
   const [loading, setLoading] = useState(false)
+  const [googleLoading, setGoogleLoading] = useState(false)
   const [resending, setResending] = useState(false)
   const [cooldownUntil, setCooldownUntil] = useState(0)
   const [now, setNow] = useState(Date.now())
@@ -81,6 +82,26 @@ export default function Register() {
       setError(authError.message || 'Unable to create the account. Please try again.')
     } finally {
       setLoading(false)
+    }
+  }
+
+  const handleGoogleLogin = async () => {
+    setError(null)
+    setResendStatus(null)
+    setGoogleLoading(true)
+
+    try {
+      if (!supabase) throw new Error('Supabase is not configured. Check the dashboard environment variables.')
+
+      const { error: authError } = await supabase.auth.signInWithOAuth({
+        provider: 'google',
+        options: { redirectTo: `${window.location.origin}/dashboard` },
+      })
+
+      if (authError) throw authError
+    } catch (authError) {
+      setError(authError.message || 'Unable to start Google sign-in. Please try again.')
+      setGoogleLoading(false)
     }
   }
 
@@ -193,6 +214,23 @@ export default function Register() {
         <Button type="submit" variant="primary" disabled={loading} className="w-full">
           {loading && <Loader2 size={16} className="animate-spin" />}
           {loading ? 'Creating account…' : 'Create account'}
+        </Button>
+
+        <div className="my-5 flex items-center gap-3" aria-hidden="true">
+          <div className="h-px flex-1 bg-white/[0.1]" />
+          <span className="font-mono text-[11px] uppercase tracking-[0.14em] text-ink-faint">or</span>
+          <div className="h-px flex-1 bg-white/[0.1]" />
+        </div>
+
+        <Button
+          type="button"
+          variant="secondary"
+          disabled={loading || googleLoading}
+          onClick={handleGoogleLogin}
+          className="w-full"
+        >
+          {googleLoading && <Loader2 size={16} className="animate-spin" />}
+          {googleLoading ? 'Opening Google…' : 'Continue with Google'}
         </Button>
       </form>
 
