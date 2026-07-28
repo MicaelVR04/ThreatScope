@@ -96,6 +96,25 @@ function AppShell() {
       }
     }
 
+    // Supabase only honors a signInWithOAuth/resetPasswordForEmail
+    // `redirectTo` if that exact URL is in the project's Redirect URLs
+    // allow-list — otherwise it silently falls back to the configured Site
+    // URL (often just the app root) while still attaching the real session
+    // to the hash. Rather than depend on that allow-list being configured
+    // correctly, capture where we SHOULD end up from the hash's own `type`
+    // now — a password-recovery link still needs /reset-password to set a
+    // new password; anything else (a completed Google sign-in) belongs on
+    // /dashboard. Crucially, don't navigate yet: calling navigate() with a
+    // plain path string clears the URL's hash immediately (react-router
+    // resets it to empty), which would erase the access_token before
+    // supabase-js's own async hash detection ever reads it. Wait until
+    // getSession() below actually resolves with a real session first.
+    let postAuthRedirect = null
+    if (window.location.hash.includes('access_token=') && window.location.pathname !== '/reset-password') {
+      const params = new URLSearchParams(window.location.hash.slice(1))
+      postAuthRedirect = params.get('type') === 'recovery' ? '/reset-password' : '/dashboard'
+    }
+
     if (!supabase) {
       setSession(null)
       return undefined
@@ -104,6 +123,7 @@ function AppShell() {
     // Check for an existing session on mount
     supabase.auth.getSession().then(({ data: { session } }) => {
       setSession(session ?? null)
+      if (session && postAuthRedirect) navigate(postAuthRedirect, { replace: true })
     })
 
     // Listen for sign-in / sign-out events
