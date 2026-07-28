@@ -55,6 +55,19 @@ export default function Register() {
   const handleRegister = async () => {
     setError(null)
     setResendStatus(null)
+
+    // Belt-and-suspenders alongside the input's own minLength: the HTML
+    // attribute stops normal form submission, but it can't stop a direct
+    // call to Supabase's signup endpoint, which currently accepts shorter
+    // passwords than this form allows. Enforcing the real floor requires a
+    // Supabase Authentication → Policies → Minimum password length setting
+    // (not something reachable from this codebase) — this check just makes
+    // sure this form never sends a request weaker than what it displays.
+    if (password.length < 8) {
+      setError('Password must be at least 8 characters.')
+      return
+    }
+
     setLoading(true)
 
     try {
@@ -174,6 +187,9 @@ export default function Register() {
 
           <p className="mt-5 text-sm text-ink-muted">
             Already confirmed? <Link to="/login" className={AUTH_LINK_CLASS}>Login</Link>
+          </p>
+          <p className="mt-2 text-sm text-ink-muted">
+            Already have an account? <Link to="/forgot-password" className={AUTH_LINK_CLASS}>Reset your password</Link>
           </p>
         </div>
       </AuthLayout>

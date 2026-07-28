@@ -5,6 +5,8 @@ import Dashboard from './pages/Dashboard'
 import AlertHistory from './pages/AlertHistory'
 import Login from './pages/Login'
 import Register from './pages/Register'
+import ForgotPassword from './pages/ForgotPassword'
+import ResetPassword from './pages/ResetPassword'
 import Landing from './pages/Landing'
 import SensorSetupGuide from './pages/SensorSetupGuide'
 import SensorManagement from './pages/SensorManagement'
@@ -79,6 +81,21 @@ function AppShell() {
   const navigate = useNavigate()
 
   useEffect(() => {
+    // Google puts OAuth failures (user cancelled, denied consent, etc.) in
+    // the redirect URL's hash as `error`/`error_description` rather than
+    // ever creating a session — read that here, before supabase-js's own
+    // detectSessionInUrl consumes the hash, and forward it to /login as a
+    // query param so Login can show a real message instead of the user
+    // just silently landing back on the login screen with no explanation.
+    if (window.location.hash.includes('error=')) {
+      const params = new URLSearchParams(window.location.hash.slice(1))
+      const description = params.get('error_description') || params.get('error')
+      if (description) {
+        window.history.replaceState(null, '', window.location.pathname)
+        navigate(`/login?oauth_error=${encodeURIComponent(description.replace(/\+/g, ' '))}`, { replace: true })
+      }
+    }
+
     if (!supabase) {
       setSession(null)
       return undefined
@@ -125,6 +142,15 @@ function AppShell() {
           <Route path="/sensor-setup" element={<SensorSetupGuide />} />
           <Route path="/login" element={<PublicOnlyRoute session={session}><Login /></PublicOnlyRoute>} />
           <Route path="/register" element={<PublicOnlyRoute session={session}><Register /></PublicOnlyRoute>} />
+          <Route path="/forgot-password" element={<PublicOnlyRoute session={session}><ForgotPassword /></PublicOnlyRoute>} />
+          <Route
+            path="/reset-password"
+            element={
+              <ProtectedRoute session={session}>
+                <ResetPassword />
+              </ProtectedRoute>
+            }
+          />
           <Route
             path="/dashboard"
             element={
