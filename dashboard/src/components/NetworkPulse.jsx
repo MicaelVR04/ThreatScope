@@ -4,12 +4,22 @@ const MAX_SAMPLES = 24
 
 // Visualizes packet-count deltas between distinct sensor heartbeats. A sample
 // is added even when no packets arrived, so the timeline advances honestly.
-export default function NetworkPulse({ packetCount = 0, sampleTimestamp = null, active = false }) {
+export default function NetworkPulse({ packetCount = 0, sampleTimestamp = null, active = false, sensorKey = null }) {
   const canvasRef = useRef(null)
   const [samples, setSamples] = useState([0, 0])
   const [latestDelta, setLatestDelta] = useState(0)
   const previousCountRef = useRef(null)
   const previousTimestampRef = useRef(null)
+
+  // packetCount is a cumulative counter per sensor — switching the selected
+  // device without resetting this would diff the new sensor's count against
+  // the previous one's, producing a fabricated spike or a suppressed delta.
+  useEffect(() => {
+    previousCountRef.current = null
+    previousTimestampRef.current = null
+    setSamples([0, 0])
+    setLatestDelta(0)
+  }, [sensorKey])
 
   useEffect(() => {
     const current = Number(packetCount) || 0

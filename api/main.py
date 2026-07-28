@@ -210,7 +210,10 @@ def read_alerts(
         raise HTTPException(status_code=400, detail="severity must be LOW, MEDIUM, or HIGH")
 
     owner_id = _owner_id(user)
-    resolved_sensor_id = _owned_sensor_id(owner_id, sensor_id, required=bool(sensor_id))
+    # Only resolve/verify a sensor when one was explicitly requested — omitting
+    # sensor_id means "across all of my sensors", not "pick one for me". Passing
+    # None straight through to get_alerts() already aggregates correctly.
+    resolved_sensor_id = _owned_sensor_id(owner_id, sensor_id, required=True) if sensor_id else None
     return get_alerts(
         severity=severity,
         limit=limit,
@@ -227,7 +230,7 @@ def read_summary(sensor_id: Optional[UUID] = Query(default=None), user=Depends(v
     Used for the dashboard summary cards.
     """
     owner_id = _owner_id(user)
-    resolved_sensor_id = _owned_sensor_id(owner_id, sensor_id, required=bool(sensor_id))
+    resolved_sensor_id = _owned_sensor_id(owner_id, sensor_id, required=True) if sensor_id else None
     return get_summary(user_id=owner_id, sensor_id=resolved_sensor_id)
 
 
@@ -246,7 +249,7 @@ def read_stats(
         raise HTTPException(status_code=400, detail='group_by must be "type"')
 
     owner_id = _owner_id(user)
-    resolved_sensor_id = _owned_sensor_id(owner_id, sensor_id, required=bool(sensor_id))
+    resolved_sensor_id = _owned_sensor_id(owner_id, sensor_id, required=True) if sensor_id else None
     return get_stats(
         group_by=group_by,
         user_id=owner_id,

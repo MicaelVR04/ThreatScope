@@ -182,12 +182,18 @@ export default function Dashboard({ onConnectionChange }) {
   }, [])
 
   const refreshDashboardData = useCallback(async () => {
+    const requestedSensorId = selectedSensorId
     try {
       const [nextSummary, nextChartData, nextTypeStats] = await Promise.all([
-        getAlertsSummary(selectedSensorId),
-        getAlertStats(selectedSensorId),
-        getAttackTypeStats(selectedSensorId),
+        getAlertsSummary(requestedSensorId),
+        getAlertStats(requestedSensorId),
+        getAttackTypeStats(requestedSensorId),
       ])
+      // Drop the response if the user switched devices while this was in
+      // flight — otherwise a slower request for the PREVIOUS sensor can
+      // resolve after a faster one for the newly selected sensor and
+      // silently overwrite it with the wrong device's numbers.
+      if (selectedSensorRef.current !== requestedSensorId) return
       setSummary(nextSummary)
       setChartData(formatChartData(nextChartData))
       setTypeStats(nextTypeStats)
@@ -233,16 +239,23 @@ export default function Dashboard({ onConnectionChange }) {
   }, [refreshSensors])
 
   const refreshScanStatus = useCallback(async () => {
-    if (!selectedSensorId) {
+    const requestedSensorId = selectedSensorId
+    if (!requestedSensorId) {
       setScanStatus(null)
       return
     }
     try {
-      setScanStatus(await getScanStatus(selectedSensorId))
+      const nextScanStatus = await getScanStatus(requestedSensorId)
+      // Same stale-response guard as refreshDashboardData — don't let a
+      // slow request for the previously selected sensor overwrite the
+      // newly selected one's status.
+      if (selectedSensorRef.current !== requestedSensorId) return
+      setScanStatus(nextScanStatus)
       setApiOnline(true)
       setApiError(null)
     } catch (error) {
       console.error(error)
+      if (selectedSensorRef.current !== requestedSensorId) return
       setApiOnline(false)
       setApiError(error.message || 'ThreatScope API is unavailable.')
     }
@@ -589,6 +602,7 @@ export default function Dashboard({ onConnectionChange }) {
                 packetCount={scanStatus?.sensor?.packet_count}
                 sampleTimestamp={scanStatus?.sensor?.last_heartbeat_at}
                 active={Boolean(scanStatus?.sensor?.online && scanStatus?.sensor?.monitoring)}
+                sensorKey={selectedSensorId}
               />
             </div>
           </section>
