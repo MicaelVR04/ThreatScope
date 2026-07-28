@@ -1,6 +1,8 @@
 import { useState, useCallback, useEffect, Component } from 'react'
-import { BrowserRouter, Routes, Route, useLocation, Navigate, useNavigate } from 'react-router-dom'
+import { BrowserRouter, Routes, Route, Link, useLocation, Navigate, useNavigate } from 'react-router-dom'
 import Navbar from './components/Navbar'
+import Button from './components/theme/Button'
+import { AUTH_LINK_CLASS } from './components/AuthLayout'
 import Dashboard from './pages/Dashboard'
 import AlertHistory from './pages/AlertHistory'
 import Login from './pages/Login'
@@ -30,12 +32,12 @@ class ErrorBoundary extends Component {
   render() {
     if (this.state.error) {
       return (
-        <div style={errStyles.wrap}>
-          <h2 style={errStyles.title}>Something went wrong</h2>
-          <pre style={errStyles.msg}>{this.state.error.message}</pre>
-          <button style={errStyles.btn} onClick={() => this.setState({ error: null })}>
+        <div className="px-8 py-16 text-center">
+          <h2 className="mb-3 font-display text-xl font-semibold text-severity-high">Something went wrong</h2>
+          <pre className="mb-6 whitespace-pre-wrap text-[13px] text-ink-muted">{this.state.error.message}</pre>
+          <Button variant="primary" onClick={() => this.setState({ error: null })}>
             Try again
-          </button>
+          </Button>
         </div>
       )
     }
@@ -43,20 +45,13 @@ class ErrorBoundary extends Component {
   }
 }
 
-const errStyles = {
-  wrap:  { padding: '60px 32px', textAlign: 'center' },
-  title: { color: '#ef4444', fontSize: 20, marginBottom: 12 },
-  msg:   { color: '#94a3b8', fontSize: 13, marginBottom: 24, whiteSpace: 'pre-wrap' },
-  btn:   { background: '#6366f1', color: '#fff', border: 'none', borderRadius: 6, padding: '8px 20px', fontSize: 14, cursor: 'pointer' },
-}
-
 // ── 404 page ─────────────────────────────────────────────────────────────────
 function NotFound() {
   return (
-    <div style={{ padding: '80px 32px', textAlign: 'center' }}>
-      <h1 style={{ fontSize: 64, color: '#1e293b', margin: 0 }}>404</h1>
-      <p style={{ color: '#94a3b8', margin: '12px 0 24px' }}>Page not found</p>
-      <a href="/" style={{ color: '#6366f1', fontSize: 14 }}>← Back to home</a>
+    <div className="px-8 py-20 text-center">
+      <h1 className="m-0 font-display text-6xl font-bold text-ink">404</h1>
+      <p className="my-3 text-ink-muted">Page not found</p>
+      <Link to="/" className={AUTH_LINK_CLASS}>← Back to home</Link>
     </div>
   )
 }
