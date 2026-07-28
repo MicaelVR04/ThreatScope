@@ -1,7 +1,7 @@
-import { useState, useEffect, useMemo } from 'react'
+import { useState, useEffect, useMemo, useCallback } from 'react'
 import Button from '../components/theme/Button'
 import AlertTable from '../components/AlertTable'
-import { clearMyAlerts, getAlerts } from '../services/api'
+import { clearMyAlerts, getAlerts, getSensors } from '../services/api'
 import { RefreshCw, Download, Trash2 } from 'lucide-react'
 import { threatFriendlyLabel, threatLabel, threatPlainEnglish } from '../utils/threatLabels'
 
@@ -19,28 +19,45 @@ const NOISE_DATA_URI = `data:image/svg+xml,${encodeURIComponent(NOISE_SVG)}`
 
 export default function AlertHistory() {
   const [alerts,    setAlerts]   = useState([])
+  const [sensors,   setSensors]  = useState([])
   const [loading,   setLoading]  = useState(true)
   const [error,     setError]    = useState(null)
   const [search,    setSearch]   = useState('')
   const [dateFrom,  setDateFrom] = useState('')
   const [dateTo,    setDateTo]   = useState('')
+  const [deviceFilter, setDeviceFilter] = useState('all')
   const [clearing,  setClearing] = useState(false)
   const [confirmingClear, setConfirmingClear] = useState(false)
 
-  function load() {
+  const load = useCallback(() => {
     setLoading(true)
     setError(null)
-    getAlerts()
-      .then(setAlerts)
+    Promise.all([getAlerts(), getSensors().catch(() => [])])
+      .then(([nextAlerts, nextSensors]) => {
+        setAlerts(nextAlerts)
+        setSensors(nextSensors)
+      })
       .catch(err => setError(err.message))
       .finally(() => setLoading(false))
-  }
+  }, [])
 
-  useEffect(load, [])
+  useEffect(load, [load])
+
+  // Alerts only carry a sensor_id — map it to the sensor's own name (or
+  // "Unnamed sensor", same fallback Dashboard's device selector uses) so the
+  // table and filter can show something a person recognizes.
+  const sensorNameById = useMemo(() => {
+    const map = new Map()
+    sensors.forEach(sensor => {
+      map.set(sensor.sensor_id || sensor.id, sensor.name || 'Unnamed sensor')
+    })
+    return map
+  }, [sensors])
 
   const filtered = useMemo(() => {
     const q = search.toLowerCase()
     return alerts.filter(a => {
+      const matchDevice = deviceFilter === 'all' || a.sensor_id === deviceFilter
       const matchSearch = !q ||
         a.type?.toLowerCase().includes(q) ||
         threatLabel(a.type).toLowerCase().includes(q) ||
@@ -51,9 +68,9 @@ export default function AlertHistory() {
       const ts = new Date(a.timestamp)
       const matchFrom = !dateFrom || ts >= new Date(dateFrom)
       const matchTo   = !dateTo   || ts <= new Date(dateTo + 'T23:59:59')
-      return matchSearch && matchFrom && matchTo
+      return matchDevice && matchSearch && matchFrom && matchTo
     })
-  }, [alerts, search, dateFrom, dateTo])
+  }, [alerts, search, dateFrom, dateTo, deviceFilter])
 
   function exportCSV() {
     const headers = ['id', 'severity', 'type', 'src_ip', 'dst_ip', 'timestamp']
@@ -75,6 +92,7 @@ export default function AlertHistory() {
       setSearch('')
       setDateFrom('')
       setDateTo('')
+      setDeviceFilter('all')
       setConfirmingClear(false)
     } catch (err) {
       setError(err.message)
@@ -101,6 +119,19 @@ export default function AlertHistory() {
           value={search}
           onChange={e => setSearch(e.target.value)}
         />
+        <select
+          className="w-full rounded-md border border-white/[0.12] bg-surface px-2.5 py-2.5 text-[13px] text-ink outline-none sm:w-auto"
+          value={deviceFilter}
+          onChange={e => setDeviceFilter(e.target.value)}
+          disabled={sensors.length === 0}
+        >
+          <option value="all">All devices</option>
+          {sensors.map(sensor => (
+            <option key={sensor.sensor_id || sensor.id} value={sensor.sensor_id || sensor.id}>
+              {sensor.name || 'Unnamed sensor'}
+            </option>
+          ))}
+        </select>
         <label className="flex w-full items-center gap-2 text-[13px] text-ink-muted sm:w-auto">
           From
           <input
@@ -119,8 +150,8 @@ export default function AlertHistory() {
             onChange={e => setDateTo(e.target.value)}
           />
         </label>
-        {(search || dateFrom || dateTo) && (
-          <Button variant="ghost" size="sm" onClick={() => { setSearch(''); setDateFrom(''); setDateTo('') }}>
+        {(search || dateFrom || dateTo || deviceFilter !== 'all') && (
+          <Button variant="ghost" size="sm" onClick={() => { setSearch(''); setDateFrom(''); setDateTo(''); setDeviceFilter('all') }}>
             Clear
           </Button>
         )}
@@ -147,7 +178,8 @@ export default function AlertHistory() {
           >
             <p id="clear-history-title" className="font-display text-sm font-semibold text-ink">Delete all alert history?</p>
             <p id="clear-history-description" className="mt-1 text-xs leading-relaxed text-ink-muted">
-              This permanently removes every alert stored for your account. Other users are not affected.
+              This permanently removes every alert stored for your account, across all your devices — not just the
+              device selected above. Other users are not affected.
             </p>
             <div className="mt-3 flex flex-col-reverse gap-2 min-[360px]:flex-row min-[360px]:justify-end">
               <Button variant="secondary" size="sm" onClick={() => setConfirmingClear(false)} disabled={clearing}>
@@ -165,7 +197,7 @@ export default function AlertHistory() {
       <div className="relative z-10 animate-fade-up" style={{ animationDelay: '40ms' }}>
         {loading && <p className="italic text-ink-faint">Loading alerts…</p>}
         {error   && <p className="text-severity-high">Error: {error}</p>}
-        {!loading && !error && <AlertTable alerts={filtered} />}
+        {!loading && !error && <AlertTable alerts={filtered} sensorNameById={sensorNameById} />}
       </div>
 
       <style>{`

@@ -1,4 +1,4 @@
-import { useState, useMemo } from 'react'
+import { useCallback, useState, useMemo } from 'react'
 import Button from './theme/Button'
 import Tag from './theme/Tag'
 import { ChevronUp, ChevronDown, ChevronsUpDown } from 'lucide-react'
@@ -7,6 +7,7 @@ import { threatLabel, threatPlainEnglish } from '../utils/threatLabels'
 const COLUMNS = [
   { key: 'severity',  label: 'Severity' },
   { key: 'type',      label: 'Type' },
+  { key: 'device',    label: 'Device' },
   { key: 'src_ip',    label: 'Source IP' },
   { key: 'dst_ip',    label: 'Destination IP' },
   { key: 'timestamp', label: 'Timestamp' },
@@ -14,10 +15,15 @@ const COLUMNS = [
 
 const SEV_ORDER = { HIGH: 0, MEDIUM: 1, LOW: 2 }
 
-export default function AlertTable({ alerts = [] }) {
+export default function AlertTable({ alerts = [], sensorNameById = new Map() }) {
   const [sortKey, setSortKey]   = useState('timestamp')
   const [sortDir, setSortDir]   = useState('desc')
   const [filter,  setFilter]    = useState('ALL')
+
+  const deviceName = useCallback(
+    alert => sensorNameById.get(alert.sensor_id) || 'Unknown device',
+    [sensorNameById]
+  )
 
   const filtered = useMemo(() =>
     filter === 'ALL' ? alerts : alerts.filter(a => a.severity === filter)
@@ -27,10 +33,11 @@ export default function AlertTable({ alerts = [] }) {
     let va = a[sortKey], vb = b[sortKey]
     if (sortKey === 'severity') { va = SEV_ORDER[va] ?? 9; vb = SEV_ORDER[vb] ?? 9 }
     if (sortKey === 'timestamp') { va = new Date(va); vb = new Date(vb) }
+    if (sortKey === 'device') { va = deviceName(a); vb = deviceName(b) }
     if (va < vb) return sortDir === 'asc' ? -1 :  1
     if (va > vb) return sortDir === 'asc' ?  1 : -1
     return 0
-  }), [filtered, sortKey, sortDir])
+  }), [filtered, sortKey, sortDir, deviceName])
 
   function handleSort(key) {
     if (key === sortKey) setSortDir(d => d === 'asc' ? 'desc' : 'asc')
@@ -92,6 +99,7 @@ export default function AlertTable({ alerts = [] }) {
                     <span className="mt-0.5 inline-block text-[11px] text-ink-faint">{alert.type}</span>
                     <span className="mt-1 block max-w-[360px] text-xs leading-[1.4] text-ink-muted">{threatPlainEnglish(alert.type)}</span>
                   </td>
+                  <td className="border-b border-white/[0.08] px-3.5 py-2.5 text-ink-muted">{deviceName(alert)}</td>
                   <td className="border-b border-white/[0.08] px-3.5 py-2.5 font-mono">{alert.src_ip}</td>
                   <td className="border-b border-white/[0.08] px-3.5 py-2.5 font-mono">{alert.dst_ip}</td>
                   <td className="border-b border-white/[0.08] px-3.5 py-2.5 text-xs text-ink-faint">
