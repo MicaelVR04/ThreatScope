@@ -33,6 +33,7 @@ export default function Login() {
 
   const emailRedirectTo = `${window.location.origin}/login?confirmed=1`
   const emailWasConfirmed = new URLSearchParams(location.search).get('confirmed') === '1'
+  const oauthError = new URLSearchParams(location.search).get('oauth_error')
 
   const handleLogin = async () => {
     setError(null)
@@ -140,9 +141,14 @@ export default function Login() {
         </div>
 
         <div className="mb-6">
-          <label htmlFor="login-password" className="mb-1.5 block text-[13px] text-ink-muted">
-            Password
-          </label>
+          <div className="mb-1.5 flex items-center justify-between">
+            <label htmlFor="login-password" className="block text-[13px] text-ink-muted">
+              Password
+            </label>
+            <Link to="/forgot-password" className={`${AUTH_LINK_CLASS} text-[13px]`}>
+              Forgot password?
+            </Link>
+          </div>
           <div className="relative">
             <Lock size={16} className="pointer-events-none absolute left-3 top-1/2 -translate-y-1/2 text-ink-faint" />
             <input
@@ -170,6 +176,12 @@ export default function Login() {
             className="mb-4 animate-shake rounded-md border border-severity-high/25 bg-severity-high/10 px-3 py-2.5 text-[13px] text-severity-high"
           >
             {error}
+          </div>
+        )}
+
+        {oauthError && !error && (
+          <div className="mb-4 rounded-md border border-severity-high/25 bg-severity-high/10 px-3 py-2.5 text-[13px] text-severity-high" role="alert">
+            Google sign-in didn't complete: {oauthError}
           </div>
         )}
 
