@@ -7,6 +7,7 @@ API, and starts or pauses packet capture based on the dashboard command.
 
 import logging
 import os
+import platform
 import re
 import signal
 import socket
@@ -15,7 +16,7 @@ import time
 from uuid import UUID
 
 import requests
-from scapy.all import sniff
+from scapy.all import conf, sniff
 
 from sensor_config import (
     load_sensor_environment,
@@ -28,7 +29,18 @@ load_sensor_environment()
 
 
 VERSION = "1.2.0"
-INTERFACE = os.getenv("NETWORK_INTERFACE", "en0")
+
+
+def _default_interface():
+    configured = os.getenv("NETWORK_INTERFACE", "").strip()
+    if configured:
+        return configured
+    if platform.system() == "Windows":
+        return str(conf.iface)
+    return "en0"
+
+
+INTERFACE = _default_interface()
 HEARTBEAT_INTERVAL_SECONDS = int(os.getenv("SENSOR_HEARTBEAT_INTERVAL_SECONDS", "5"))
 CAPTURE_RETRY_SECONDS = int(os.getenv("SENSOR_CAPTURE_RETRY_SECONDS", "30"))
 DEFAULT_MONITORING_ENABLED = (
@@ -61,7 +73,7 @@ def ensure_enrolled():
         json={
             "code": code,
             "name": socket.gethostname(),
-            "platform": "macOS",
+            "platform": "macOS" if platform.system() == "Darwin" else platform.system(),
             "version": VERSION,
         },
         timeout=15,

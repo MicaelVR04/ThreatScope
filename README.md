@@ -2,7 +2,7 @@
 
 [Live dashboard](https://threatscope-dashboard.onrender.com/) · [Development branch](https://github.com/MicaelVR04/ThreatScope/tree/dev)
 
-ThreatScope is a real-time, macOS-focused Network Intrusion Detection System built for Holberton Demo Day. It continuously monitors packet activity, applies deterministic detection rules, and translates suspicious behavior into live, plain-English alerts.
+ThreatScope is a real-time Network Intrusion Detection System built for Holberton Demo Day. It continuously monitors packet activity, applies deterministic detection rules, and translates suspicious behavior into live, plain-English alerts.
 
 It is designed as a practical MVP for home networks and small IT teams. The project demonstrates a complete monitoring pipeline, from local packet capture through authenticated cloud storage and a live dashboard.
 
@@ -22,7 +22,7 @@ This is intentionally focused coverage, not a claim to detect every network atta
 ## How it works
 
 ```text
-macOS sensor (Python + Scapy)
+macOS or Windows sensor (Python + Scapy)
         |
         v
 Deterministic detection rules
@@ -41,7 +41,7 @@ The rules create alerts. Cloud AI is advisory only: it summarizes stored evidenc
 
 ## Current capabilities
 
-- Continuous packet monitoring through a managed macOS sensor service.
+- Continuous packet monitoring through a managed macOS or Windows sensor service.
 - Graphical sensor installation with one-time enrollment codes; no Terminal is required for normal setup.
 - Start, pause, and scheduled monitoring controls from the dashboard.
 - Live packet-activity pulse and real-time alert delivery through FastAPI WebSockets.
@@ -53,7 +53,7 @@ The rules create alerts. Cloud AI is advisory only: it summarizes stored evidenc
 
 ## Live demo
 
-Open the [ThreatScope dashboard](https://threatscope-dashboard.onrender.com/), sign in, and use **Sensor Setup** to enroll a macOS device.
+Open the [ThreatScope dashboard](https://threatscope-dashboard.onrender.com/), sign in, and use **Sensor Setup** to enroll a macOS or Windows device.
 
 The staging environment uses Render's free tier. Its API can sleep after inactivity, so the first request may take up to a minute to respond. This is appropriate for the Demo Day environment, not a production service-level guarantee.
 
@@ -83,7 +83,7 @@ npm install
 npm run dev
 ```
 
-For the full environment-variable reference, deployment setup, and sensor installer details, see [`.env.example`](.env.example), [`docs/free-staging-deployment.md`](docs/free-staging-deployment.md), and [`installer/macos/README.md`](installer/macos/README.md).
+For the full environment-variable reference, deployment setup, and sensor installer details, see [`.env.example`](.env.example), [`docs/free-staging-deployment.md`](docs/free-staging-deployment.md), [`installer/macos/README.md`](installer/macos/README.md), and [`installer/windows/README.md`](installer/windows/README.md).
 
 ## Demo traffic
 
@@ -116,7 +116,7 @@ For a live detection demo, use the installed sensor. The legacy demo traffic pat
 - The sensor processes packets in memory and sends compact alerts and heartbeat status. It does not upload raw packet captures.
 - Enrolled sensors use unique, revocable credentials. A one-time enrollment code binds a sensor to the signed-in account.
 - Browser alert reads are restricted by Supabase Row-Level Security; the API also verifies ownership before returning account data.
-- The project is a Demo Day MVP. A public commercial release would still need Apple notarization, always-on infrastructure, backups, organization roles, operational monitoring, broader detection coverage, and a formal incident-response model.
+- The project is a Demo Day MVP. A public commercial release would still need Apple notarization, Windows code signing, always-on infrastructure, backups, organization roles, operational monitoring, broader detection coverage, and a formal incident-response model.
 
 ## Tests
 

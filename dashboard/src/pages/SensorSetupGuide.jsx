@@ -5,6 +5,7 @@ import {
   Eye,
   KeyRound,
   Laptop,
+  Monitor,
   Power,
   Shield,
   ShieldCheck,
@@ -32,7 +33,7 @@ export default function SensorSetupGuide() {
 
       <main className="mx-auto max-w-5xl px-6 py-16 md:py-24">
         <p className="font-mono text-xs uppercase tracking-[0.2em] text-signal">
-          macOS project preview
+          Sensor project preview
         </p>
         <h1 className="mt-4 max-w-3xl font-display text-4xl font-bold text-ink md:text-6xl">
           Install and control the network sensor.
@@ -48,7 +49,7 @@ export default function SensorSetupGuide() {
             <GuideFact
               Icon={Eye}
               title="Visible and accountable"
-              body="It runs as a normal macOS background process. You can see its Python process in Activity Monitor and inspect its service status and logs."
+              body="It runs as a normal background process. You can see it in Activity Monitor on macOS or Task Scheduler on Windows."
             />
             <GuideFact
               Icon={ShieldCheck}
@@ -73,9 +74,19 @@ export default function SensorSetupGuide() {
             The setup uses a short-lived code, so the installer never contains a shared password or API key.
           </p>
           <div className="mt-8 grid gap-6 md:grid-cols-3">
-            <InstallStep Icon={Download} number="1" title="Download" body="Click Download for macOS in the dashboard, unzip the file, and open ThreatScope Sensor Setup." />
+            <InstallStep Icon={Download} number="1" title="Download" body="Choose macOS or Windows in the dashboard, extract the ZIP, and open the guided setup." />
             <InstallStep Icon={KeyRound} number="2" title="Connect" body="Generate an installation code in the dashboard and paste it into the setup app." />
-            <InstallStep Icon={CheckCircle2} number="3" title="Approve" body="Enter your Mac administrator password when macOS asks, then wait for the connected confirmation." />
+            <InstallStep Icon={CheckCircle2} number="3" title="Approve" body="Approve the normal macOS or Windows administrator prompt, then wait for the connected confirmation." />
+          </div>
+
+          <div className="mt-8 border-l-2 border-signal/50 pl-4">
+            <div className="flex items-center gap-2">
+              <Monitor size={18} className="text-signal" />
+              <h3 className="font-display text-sm font-semibold text-ink">Windows 10 and 11 project preview</h3>
+            </div>
+            <p className="mt-2 max-w-3xl text-sm leading-relaxed text-ink-muted">
+              Install Python 3.11 and <a href="https://npcap.com/#download" target="_blank" rel="noreferrer" className="font-semibold text-signal hover:text-signal/80">Npcap</a> from their official sites first. Extract the Windows ZIP, double-click <strong className="text-ink">Start ThreatScope Sensor Setup</strong>, approve User Account Control, and paste the one-time code. Do not disable Microsoft Defender or Windows security.
+            </p>
           </div>
 
           <div className="mt-8 border-l-2 border-signal/50 pl-4">
@@ -118,14 +129,14 @@ export default function SensorSetupGuide() {
             The dashboard&apos;s <strong className="text-ink">Stop monitoring</strong> button
             pauses packet inspection while leaving the lightweight service connected.
             To remove it completely, reopen <strong className="text-ink">ThreatScope Sensor Setup</strong>,
-            choose <strong className="text-ink">Remove Sensor</strong>, and approve the macOS prompt.
+            choose <strong className="text-ink">Remove Sensor</strong>, and approve the administrator prompt.
           </p>
           <div className="mt-6 flex max-w-3xl items-start gap-3 border-l-2 border-signal/50 pl-4">
             <Laptop size={18} className="mt-0.5 shrink-0 text-signal" />
             <p className="text-sm leading-relaxed text-ink-muted">
               Removing the local app stops the background service and deletes its root-only credential.
               You can also use <strong className="text-ink">Remove access</strong> in the dashboard to revoke
-              a lost or unavailable Mac immediately.
+              a lost or unavailable computer immediately.
             </p>
           </div>
         </section>
