@@ -85,7 +85,7 @@ export default function SensorSetupGuide() {
               <h3 className="font-display text-sm font-semibold text-ink">Windows 10 and 11 project preview</h3>
             </div>
             <p className="mt-2 max-w-3xl text-sm leading-relaxed text-ink-muted">
-              Install <a href="https://www.python.org/downloads/windows/" target="_blank" rel="noreferrer" className="font-semibold text-signal hover:text-signal/80">Python 3.11</a> and <a href="https://npcap.com/dist/" target="_blank" rel="noreferrer" className="font-semibold text-signal hover:text-signal/80">Npcap</a> from their official sites first. Extract the Windows ZIP, double-click <strong className="text-ink">Start ThreatScope Sensor Setup</strong>, approve User Account Control, and paste the one-time code. Do not disable Microsoft Defender or Windows security.
+              Install the <a href="https://www.python.org/downloads/windows/" target="_blank" rel="noreferrer" className="font-semibold text-signal hover:text-signal/80">latest stable Python 3 release</a> and <a href="https://npcap.com/dist/" target="_blank" rel="noreferrer" className="font-semibold text-signal hover:text-signal/80">Npcap</a> from their official sites first. ThreatScope currently supports Python 3.11 through 3.14; do not choose a Python 3.15 pre-release. Extract the Windows ZIP, double-click <strong className="text-ink">Start ThreatScope Sensor Setup</strong>, approve User Account Control, and paste the one-time code. Do not disable Microsoft Defender or Windows security.
             </p>
           </div>
 

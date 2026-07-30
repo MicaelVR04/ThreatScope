@@ -20,6 +20,16 @@ function Test-Administrator {
     return $principal.IsInRole([Security.Principal.WindowsBuiltInRole]::Administrator)
 }
 
+function Get-CompatiblePythonTag {
+    foreach ($tag in @('-3.14', '-3.13', '-3.12', '-3.11')) {
+        try {
+            & py $tag -c 'import sys; raise SystemExit(0 if (3, 11) <= sys.version_info[:2] <= (3, 14) else 1)' 2>$null
+            if ($LASTEXITCODE -eq 0) { return $tag }
+        } catch { }
+    }
+    return $null
+}
+
 function Set-PrivateDirectory([string]$Path) {
     New-Item -ItemType Directory -Path $Path -Force | Out-Null
     $acl = New-Object System.Security.AccessControl.DirectorySecurity
@@ -86,8 +96,8 @@ if (-not (Test-Path (Join-Path $env:WINDIR 'System32\Npcap\wpcap.dll')) -and -no
     throw 'Npcap is required for packet capture. Install it from https://npcap.com/dist/ and try again.'
 }
 
-& py -3.11 --version 2>$null | Out-Null
-if ($LASTEXITCODE -ne 0) { throw 'Python 3.11 is required. Install it from https://www.python.org/downloads/windows/ and try again.' }
+$pythonTag = Get-CompatiblePythonTag
+if (-not $pythonTag) { throw 'A stable Python 3 release from 3.11 through 3.14 is required. Install the latest stable version from https://www.python.org/downloads/windows/ and try again. Do not install a pre-release.' }
 
 $oldContent = if (Test-Path $ConfigPath) { Get-Content -Raw -Path $ConfigPath } else { '' }
 $oldApiUrl = Get-ConfigValue $oldContent 'API_BASE_URL'
@@ -105,7 +115,7 @@ try {
     $venvPath = Join-Path $InstallRoot 'venv'
     $pythonPath = Join-Path $venvPath 'Scripts\python.exe'
     if (-not (Test-Path $pythonPath)) {
-        & py -3.11 -m venv $venvPath
+        & py $pythonTag -m venv $venvPath
     }
     & $pythonPath -m pip install --disable-pip-version-check -r (Join-Path $InstallRoot 'requirements.txt')
     if ($LASTEXITCODE -ne 0) { throw 'ThreatScope could not install its sensor dependencies.' }

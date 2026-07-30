@@ -8,7 +8,7 @@ approval, and uses a short-lived enrollment code from the dashboard.
 ## Prerequisites
 
 - Windows 10 or 11
-- Python 3.11 from [python.org](https://www.python.org/downloads/windows/)
+- The latest stable Python 3 release from [python.org](https://www.python.org/downloads/windows/). ThreatScope currently supports Python 3.11 through 3.14; do not choose a Python 3.15 pre-release.
 - Npcap from the [official release archive](https://npcap.com/dist/)
 - An internet connection for the first dependency installation
 
