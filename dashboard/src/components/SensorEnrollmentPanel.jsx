@@ -1,10 +1,12 @@
 import { useCallback, useEffect, useMemo, useState } from 'react'
-import { AlertTriangle, CheckCircle2, ChevronDown, ChevronUp, CircleHelp, Clipboard, Download, ExternalLink, KeyRound, Laptop, Loader2, ShieldCheck, Trash2 } from 'lucide-react'
+import { AlertTriangle, CheckCircle2, ChevronDown, ChevronUp, CircleHelp, Clipboard, Download, ExternalLink, KeyRound, Laptop, Loader2, Monitor, ShieldCheck, Trash2 } from 'lucide-react'
 import Button from './theme/Button'
 import { createSensorEnrollment, getSensors, revokeSensor } from '../services/api'
 
-const INSTALLER_URL = import.meta.env.VITE_SENSOR_INSTALLER_URL?.trim()
+const MACOS_INSTALLER_URL = import.meta.env.VITE_SENSOR_INSTALLER_URL?.trim()
   || '/downloads/ThreatScope-Sensor-macOS.zip'
+const WINDOWS_INSTALLER_URL = import.meta.env.VITE_WINDOWS_SENSOR_INSTALLER_URL?.trim()
+  || '/downloads/ThreatScope-Sensor-Windows.zip'
 const CURRENT_SENSOR_VERSION = '1.2.0'
 
 function isOlderSensorVersion(version) {
@@ -96,10 +98,10 @@ export default function SensorEnrollmentPanel({ sensorOnline }) {
         <div className="max-w-2xl">
           <p className="font-mono text-[11px] uppercase tracking-[0.14em] text-signal">Sensor installation</p>
           <h2 className="mt-2 font-display text-lg font-semibold text-ink">
-            {sensorOnline ? 'Your network sensor is connected' : 'Connect this Mac without Terminal'}
+            {sensorOnline ? 'Your network sensor is connected' : 'Connect a network sensor without Terminal'}
           </h2>
           <p className="mt-1.5 text-sm leading-relaxed text-ink-muted">
-            Download the setup app, paste a one-time code, and approve the normal macOS administrator prompt.
+            Choose macOS or Windows, paste a one-time code, and approve the normal administrator prompt.
             The code expires after ten minutes and cannot be reused.
           </p>
         </div>
@@ -139,18 +141,25 @@ export default function SensorEnrollmentPanel({ sensorOnline }) {
       )}
 
       <div className="mt-6 grid gap-5 border-y border-white/[0.08] py-5 md:grid-cols-3">
-        <SetupStep Icon={Download} number="1" title="Download" body="Open the ThreatScope Sensor setup app." />
+        <SetupStep Icon={Download} number="1" title="Download" body="Choose the setup package for the computer that will monitor traffic." />
         <SetupStep Icon={KeyRound} number="2" title="Connect" body="Paste the private installation code shown here." />
-        <SetupStep Icon={ShieldCheck} number="3" title="Approve" body="Enter your Mac password when macOS asks for permission." />
+        <SetupStep Icon={ShieldCheck} number="3" title="Approve" body="Approve the normal macOS or Windows administrator prompt." />
       </div>
 
       <div className="mt-5 flex flex-wrap items-center gap-3">
         <a
-          href={INSTALLER_URL}
+          href={MACOS_INSTALLER_URL}
           download="ThreatScope-Sensor-macOS.zip"
           className="inline-flex min-h-11 items-center justify-center gap-2 rounded-md bg-signal px-5 font-display text-sm font-semibold text-base transition-colors hover:bg-signal/90 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-signal focus-visible:ring-offset-2 focus-visible:ring-offset-base"
         >
           <Download size={16} /> Download for macOS
+        </a>
+        <a
+          href={WINDOWS_INSTALLER_URL}
+          download="ThreatScope-Sensor-Windows.zip"
+          className="inline-flex min-h-11 items-center justify-center gap-2 rounded-md border border-signal/35 px-5 font-display text-sm font-semibold text-signal transition-colors hover:bg-signal-dim focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-signal focus-visible:ring-offset-2 focus-visible:ring-offset-base"
+        >
+          <Monitor size={16} /> Download for Windows
         </a>
         <Button variant="secondary" size="sm" onClick={generateCode} disabled={loading}>
           {loading ? <Loader2 size={15} className="animate-spin" /> : <KeyRound size={15} />}
@@ -194,6 +203,33 @@ export default function SensorEnrollmentPanel({ sensorOnline }) {
           >
             Read Apple&apos;s instructions <ExternalLink size={13} />
           </a>
+        </div>
+      </details>
+
+      <details className="group mt-3 rounded-md border border-white/[0.1] bg-base/50">
+        <summary className="flex min-h-16 cursor-pointer list-none items-center justify-between gap-4 px-4 py-3 marker:content-none hover:bg-white/[0.03] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-signal">
+          <span className="flex min-w-0 items-start gap-3">
+            <CircleHelp size={19} className="mt-0.5 shrink-0 text-signal" />
+            <span className="min-w-0">
+              <span className="block font-mono text-[10px] uppercase tracking-[0.12em] text-signal">Windows setup help</span>
+              <span className="mt-0.5 block font-display text-sm font-semibold text-ink">Install the Windows sensor safely</span>
+              <span className="mt-0.5 block text-xs font-normal leading-relaxed text-ink-muted">Open the project-preview setup window after extracting the ZIP.</span>
+            </span>
+          </span>
+          <span className="flex shrink-0 items-center gap-1.5 font-display text-xs font-semibold text-signal">
+            <span className="hidden sm:inline">View steps</span>
+            <ChevronDown size={16} className="transition-transform duration-200 group-open:rotate-180" />
+          </span>
+        </summary>
+        <div className="border-t border-white/[0.08] px-4 py-4 text-sm leading-relaxed text-ink-muted">
+          <ol className="list-decimal space-y-1.5 pl-5">
+            <li>Install <a href="https://npcap.com/#download" target="_blank" rel="noreferrer" className="font-semibold text-signal hover:text-signal/80">Npcap</a> from its official site if it is not already installed.</li>
+            <li>Extract the downloaded ZIP and double-click <strong className="text-ink">Start ThreatScope Sensor Setup</strong>.</li>
+            <li>Approve the standard Windows User Account Control prompt, paste the one-time code, and select Install.</li>
+          </ol>
+          <p className="mt-3 text-xs text-ink-faint">
+            This project-preview setup needs Windows 10 or 11, Python 3.11, and Npcap. Do not disable Microsoft Defender or Windows security to install it.
+          </p>
         </div>
       </details>
 

@@ -86,6 +86,7 @@ def test_engine_alert_ingestion_rejects_missing_key(monkeypatch):
 
 def test_engine_alert_ingestion_accepts_valid_key(monkeypatch):
     monkeypatch.setenv("ENGINE_API_KEY", "expected-key")
+    monkeypatch.setenv("SENSOR_OWNER_USER_ID", "98a345c1-6b65-4d93-96d6-59bec63fb4cf")
     monkeypatch.setenv("ALLOW_INSECURE_LOCAL_DEV", "false")
     payload = {
         "type": "PING_SWEEP",
