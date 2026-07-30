@@ -1,9 +1,11 @@
+import { useState } from 'react'
 import { NavLink, useNavigate } from 'react-router-dom'
 import { Shield, LayoutDashboard, Clock, Laptop, Wifi, WifiOff, LogOut, Home } from 'lucide-react'
 import Button from './theme/Button'
 
 export default function Navbar({ connected, userEmail, signingOut, onLogout }) {
   const navigate = useNavigate()
+  const [confirmingLogout, setConfirmingLogout] = useState(false)
 
   return (
     <header className="flex flex-wrap items-center gap-3 border-b border-white/[0.08] bg-surface px-4 py-3.5 sm:gap-6 sm:px-8">
@@ -99,7 +101,7 @@ export default function Navbar({ connected, userEmail, signingOut, onLogout }) {
           type="button"
           variant="secondary"
           size="sm"
-          onClick={onLogout}
+          onClick={() => setConfirmingLogout(true)}
           disabled={signingOut}
           title="Sign out"
           aria-label="Sign out"
@@ -108,6 +110,42 @@ export default function Navbar({ connected, userEmail, signingOut, onLogout }) {
           <span className="ts-logout-text leading-none">{signingOut ? 'Signing out' : 'Logout'}</span>
         </Button>
       </div>
+
+      {confirmingLogout && (
+        <div className="fixed inset-0 z-[100] grid place-items-center bg-base/75 px-4 backdrop-blur-sm" role="presentation">
+          <div
+            role="dialog"
+            aria-modal="true"
+            aria-labelledby="logout-confirmation-title"
+            className="w-full max-w-sm rounded-lg border border-white/[0.1] bg-surface p-6 shadow-2xl"
+          >
+            <div className="flex items-start gap-3">
+              <div className="grid h-10 w-10 shrink-0 place-items-center rounded-md bg-severity-medium/10 text-severity-medium">
+                <LogOut size={18} />
+              </div>
+              <div>
+                <h2 id="logout-confirmation-title" className="font-display text-lg font-semibold text-ink">Sign out of ThreatScope?</h2>
+                <p className="mt-1.5 text-sm leading-relaxed text-ink-muted">You will need to sign in again to view your dashboard and sensors.</p>
+              </div>
+            </div>
+            <div className="mt-6 flex justify-end gap-3">
+              <Button type="button" variant="ghost" size="sm" onClick={() => setConfirmingLogout(false)} disabled={signingOut}>
+                Cancel
+              </Button>
+              <Button
+                type="button"
+                variant="danger"
+                size="sm"
+                onClick={onLogout}
+                disabled={signingOut}
+              >
+                <LogOut size={15} />
+                {signingOut ? 'Signing out' : 'Sign out'}
+              </Button>
+            </div>
+          </div>
+        </div>
+      )}
 
       <style>{`
         @keyframes ts-pulse {
