@@ -24,15 +24,20 @@ function Show-SetupError([string]$Message) {
     [System.Windows.Forms.MessageBox]::Show($Message, 'ThreatScope Sensor Setup', 'OK', 'Error') | Out-Null
 }
 
+function Get-CompatiblePythonTag {
+    foreach ($tag in @('-3.14', '-3.13', '-3.12', '-3.11')) {
+        try {
+            & py $tag -c 'import sys; raise SystemExit(0 if (3, 11) <= sys.version_info[:2] <= (3, 14) else 1)' 2>$null
+            if ($LASTEXITCODE -eq 0) { return $tag }
+        } catch { }
+    }
+    return $null
+}
+
 function Test-Prerequisite([string]$Name) {
     switch ($Name) {
         'Python' {
-            try {
-                $version = & py -3.11 --version 2>$null
-                return $LASTEXITCODE -eq 0 -and $version -match 'Python 3\.11'
-            } catch {
-                return $false
-            }
+            return $null -ne (Get-CompatiblePythonTag)
         }
         'Npcap' {
             return (Test-Path (Join-Path $env:WINDIR 'System32\Npcap\wpcap.dll')) -or
@@ -98,7 +103,7 @@ $removeButton.Size = New-Object System.Drawing.Size(150, 38)
 $removeButton.FlatStyle = 'Flat'
 
 $pythonButton = New-Object System.Windows.Forms.Button
-$pythonButton.Text = 'Get Python 3.11'
+$pythonButton.Text = 'Get Python'
 $pythonButton.Location = New-Object System.Drawing.Point(354, 340)
 $pythonButton.Size = New-Object System.Drawing.Size(105, 38)
 $pythonButton.FlatStyle = 'Flat'
@@ -120,7 +125,7 @@ $form.Controls.AddRange(@($title, $subtitle, $requirements, $codeLabel, $codeBox
 function Update-Prerequisites {
     $pythonReady = Test-Prerequisite 'Python'
     $npcapReady = Test-Prerequisite 'Npcap'
-    $requirements.Text = "Python 3.11: $(if ($pythonReady) { 'ready' } else { 'required' })     Npcap: $(if ($npcapReady) { 'ready' } else { 'required' })"
+    $requirements.Text = "Python 3.11-3.14: $(if ($pythonReady) { 'ready' } else { 'required' })     Npcap: $(if ($npcapReady) { 'ready' } else { 'required' })"
     $requirements.ForeColor = if ($pythonReady -and $npcapReady) {
         [System.Drawing.Color]::FromArgb(45, 212, 191)
     } else {
@@ -139,7 +144,7 @@ $installButton.Add_Click({
         return
     }
     if (-not (Update-Prerequisites)) {
-        Show-SetupError 'Install Python 3.11 and Npcap, then reopen this setup window.'
+        Show-SetupError 'Install the latest stable Python 3 release (3.11 through 3.14 supported) and Npcap, then reopen this setup window. Do not install a Python pre-release.'
         return
     }
     $installButton.Enabled = $false
