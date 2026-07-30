@@ -115,7 +115,7 @@ export default function SensorSetup() {
                 <span className="rounded-full border border-severity-medium/30 px-2.5 py-1 font-mono text-[10px] uppercase tracking-wide text-severity-medium">Project preview</span>
               </div>
               <p className="mt-2 text-sm leading-relaxed text-ink-muted">
-                Windows 10 and 11 setup runs from a guided window after extracting the download. It uses a one-time enrollment code and needs Python 3.11, Npcap, and the standard Windows administrator prompt. Windows security should remain enabled.
+                Windows 10 and 11 setup runs from a guided window after extracting the download. It uses a one-time enrollment code and needs <a href="https://www.python.org/downloads/windows/" target="_blank" rel="noreferrer" className="font-semibold text-signal hover:text-signal/80">Python 3.11</a>, <a href="https://npcap.com/#download" target="_blank" rel="noreferrer" className="font-semibold text-signal hover:text-signal/80">Npcap</a>, and the standard Windows administrator prompt. Windows security should remain enabled.
               </p>
             </div>
           </div>
