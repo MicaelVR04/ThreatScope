@@ -1,6 +1,6 @@
 import { useState } from 'react'
 import { NavLink, useNavigate } from 'react-router-dom'
-import { Shield, LayoutDashboard, Clock, Laptop, Wifi, WifiOff, LogOut, Home } from 'lucide-react'
+import { Shield, LayoutDashboard, Clock, Laptop, Wifi, WifiOff, LogOut, Home, X } from 'lucide-react'
 import Button from './theme/Button'
 
 export default function Navbar({ connected, userEmail, signingOut, onLogout }) {
@@ -117,15 +117,25 @@ export default function Navbar({ connected, userEmail, signingOut, onLogout }) {
             role="dialog"
             aria-modal="true"
             aria-labelledby="logout-confirmation-title"
-            className="w-full max-w-sm rounded-lg border border-white/[0.1] bg-surface p-6 shadow-2xl"
+            className="relative w-full max-w-sm rounded-lg border border-white/[0.1] bg-surface p-6 shadow-2xl"
           >
+            <button
+              type="button"
+              onClick={() => setConfirmingLogout(false)}
+              disabled={signingOut}
+              title="Cancel sign out"
+              aria-label="Cancel sign out"
+              className="absolute right-3 top-3 grid h-10 w-10 place-items-center rounded-md text-ink-faint transition-colors hover:bg-white/[0.06] hover:text-ink focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-signal disabled:cursor-not-allowed disabled:opacity-40"
+            >
+              <X size={18} aria-hidden="true" />
+            </button>
             <div className="flex items-start gap-3">
               <div className="grid h-10 w-10 shrink-0 place-items-center rounded-md bg-severity-medium/10 text-severity-medium">
                 <LogOut size={18} />
               </div>
               <div>
                 <h2 id="logout-confirmation-title" className="font-display text-lg font-semibold text-ink">Sign out of ThreatScope?</h2>
-                <p className="mt-1.5 text-sm leading-relaxed text-ink-muted">You will need to sign in again to view your dashboard and sensors.</p>
+                <p className="mt-1.5 pr-7 text-sm leading-relaxed text-ink-muted">Only confirming below ends your session. Cancel to stay on the dashboard.</p>
               </div>
             </div>
             <div className="mt-6 flex justify-end gap-3">

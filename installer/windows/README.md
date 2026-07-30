@@ -9,7 +9,7 @@ approval, and uses a short-lived enrollment code from the dashboard.
 
 - Windows 10 or 11
 - Python 3.11 from [python.org](https://www.python.org/downloads/windows/)
-- Npcap from [npcap.com](https://npcap.com/#download)
+- Npcap from the [official release archive](https://npcap.com/dist/)
 - An internet connection for the first dependency installation
 
 The installer checks for Python and Npcap before it accepts an enrollment code.

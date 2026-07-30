@@ -223,7 +223,7 @@ export default function SensorEnrollmentPanel({ sensorOnline }) {
         </summary>
         <div className="border-t border-white/[0.08] px-4 py-4 text-sm leading-relaxed text-ink-muted">
           <ol className="list-decimal space-y-1.5 pl-5">
-            <li>Install <a href="https://www.python.org/downloads/windows/" target="_blank" rel="noreferrer" className="font-semibold text-signal hover:text-signal/80">Python 3.11</a> and <a href="https://npcap.com/#download" target="_blank" rel="noreferrer" className="font-semibold text-signal hover:text-signal/80">Npcap</a> from their official sites if they are not already installed.</li>
+            <li>Install <a href="https://www.python.org/downloads/windows/" target="_blank" rel="noreferrer" className="font-semibold text-signal hover:text-signal/80">Python 3.11</a> and <a href="https://npcap.com/dist/" target="_blank" rel="noreferrer" className="font-semibold text-signal hover:text-signal/80">Npcap</a> from their official sites if they are not already installed.</li>
             <li>Extract the downloaded ZIP and double-click <strong className="text-ink">Start ThreatScope Sensor Setup</strong>.</li>
             <li>Approve the standard Windows User Account Control prompt, paste the one-time code, and select Install.</li>
           </ol>
