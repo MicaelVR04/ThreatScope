@@ -85,7 +85,14 @@ export default function SensorSetupGuide() {
               <h3 className="font-display text-sm font-semibold text-ink">Windows 10 and 11 project preview</h3>
             </div>
             <p className="mt-2 max-w-3xl text-sm leading-relaxed text-ink-muted">
-              Install Python 3.11 and <a href="https://npcap.com/#download" target="_blank" rel="noreferrer" className="font-semibold text-signal hover:text-signal/80">Npcap</a> from their official sites first. Extract the Windows ZIP, double-click <strong className="text-ink">Start ThreatScope Sensor Setup</strong>, approve User Account Control, and paste the one-time code. Do not disable Microsoft Defender or Windows security.
+              Install <a href="https://www.python.org/downloads/windows/" target="_blank" rel="noreferrer" className="font-semibold text-signal hover:text-signal/80">Python 3.11</a> and <a href="https://npcap.com/dist/" target="_blank" rel="noreferrer" className="font-semibold text-signal hover:text-signal/80">Npcap</a> from their official sites first. Extract the Windows ZIP, double-click <strong className="text-ink">Start ThreatScope Sensor Setup</strong>, approve User Account Control, and paste the one-time code. Do not disable Microsoft Defender or Windows security.
+            </p>
+          </div>
+
+          <div className="mt-8 border-l-2 border-signal/50 pl-4">
+            <h3 className="font-display text-sm font-semibold text-ink">Verify a Windows sensor after setup</h3>
+            <p className="mt-2 max-w-3xl text-sm leading-relaxed text-ink-muted">
+              The setup window confirms its first secure API heartbeat. Then refresh the dashboard and confirm the registered device says Windows with a recent connection time. Start monitoring and browse normally for a minute to confirm that Live Network Pulse records packet activity. Use the deterministic demo traffic when you need to prove the alert rules themselves end to end.
             </p>
           </div>
 

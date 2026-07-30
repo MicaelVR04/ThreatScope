@@ -223,12 +223,39 @@ export default function SensorEnrollmentPanel({ sensorOnline }) {
         </summary>
         <div className="border-t border-white/[0.08] px-4 py-4 text-sm leading-relaxed text-ink-muted">
           <ol className="list-decimal space-y-1.5 pl-5">
-            <li>Install <a href="https://npcap.com/#download" target="_blank" rel="noreferrer" className="font-semibold text-signal hover:text-signal/80">Npcap</a> from its official site if it is not already installed.</li>
+            <li>Install <a href="https://www.python.org/downloads/windows/" target="_blank" rel="noreferrer" className="font-semibold text-signal hover:text-signal/80">Python 3.11</a> and <a href="https://npcap.com/dist/" target="_blank" rel="noreferrer" className="font-semibold text-signal hover:text-signal/80">Npcap</a> from their official sites if they are not already installed.</li>
             <li>Extract the downloaded ZIP and double-click <strong className="text-ink">Start ThreatScope Sensor Setup</strong>.</li>
             <li>Approve the standard Windows User Account Control prompt, paste the one-time code, and select Install.</li>
           </ol>
           <p className="mt-3 text-xs text-ink-faint">
             This project-preview setup needs Windows 10 or 11, Python 3.11, and Npcap. Do not disable Microsoft Defender or Windows security to install it.
+          </p>
+        </div>
+      </details>
+
+      <details className="group mt-3 rounded-md border border-signal/25 bg-signal-dim/40">
+        <summary className="flex min-h-16 cursor-pointer list-none items-center justify-between gap-4 px-4 py-3 marker:content-none hover:bg-signal-dim/60 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-signal">
+          <span className="flex min-w-0 items-start gap-3">
+            <ShieldCheck size={19} className="mt-0.5 shrink-0 text-signal" />
+            <span className="min-w-0">
+              <span className="block font-mono text-[10px] uppercase tracking-[0.12em] text-signal">Windows verification</span>
+              <span className="mt-0.5 block font-display text-sm font-semibold text-ink">Check that the sensor is working</span>
+              <span className="mt-0.5 block text-xs font-normal leading-relaxed text-ink-muted">Confirm the secure connection, then confirm live packet activity.</span>
+            </span>
+          </span>
+          <span className="flex shrink-0 items-center gap-1.5 font-display text-xs font-semibold text-signal">
+            <span className="hidden sm:inline">View checks</span>
+            <ChevronDown size={16} className="transition-transform duration-200 group-open:rotate-180" />
+          </span>
+        </summary>
+        <div className="border-t border-signal/20 px-4 py-4 text-sm leading-relaxed text-ink-muted">
+          <ol className="list-decimal space-y-1.5 pl-5">
+            <li>Setup must finish with <strong className="text-ink">Sensor connected successfully</strong>. That confirms the one-time code was exchanged for a private sensor credential and the API received its first heartbeat.</li>
+            <li>Refresh this page. Under <strong className="text-ink">Registered sensors</strong>, confirm the device lists <strong className="text-ink">Windows</strong> with a recent “Last connected” time.</li>
+            <li>Start monitoring, browse normally for a minute, and confirm the dashboard&apos;s <strong className="text-ink">Live Network Pulse</strong> shows packet activity.</li>
+          </ol>
+          <p className="mt-3 text-xs text-ink-faint">
+            Connection and packet activity prove setup and capture are active. The team&apos;s deterministic demo traffic remains the repeatable way to prove alert rules end to end.
           </p>
         </div>
       </details>

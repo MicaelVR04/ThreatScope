@@ -1,5 +1,5 @@
 import { Shield, X } from 'lucide-react'
-import { Link } from 'react-router-dom'
+import { useNavigate } from 'react-router-dom'
 
 // Same fine film-grain noise as Landing.jsx, generated once at module load —
 // not rebuilt, just reused so every page shares the exact same texture.
@@ -42,6 +42,16 @@ const BLOBS = [
 // ambient blobs, and the card header (logo/eyebrow/wordmark/subtitle). Each
 // page supplies its own form fields and actions as children.
 export default function AuthLayout({ eyebrow, subtitle, children }) {
+  const navigate = useNavigate()
+
+  const closeAuth = () => {
+    if (window.history.length > 1) {
+      navigate(-1)
+      return
+    }
+    navigate('/', { replace: true })
+  }
+
   return (
     <div className="relative flex min-h-screen items-center justify-center overflow-hidden bg-base px-4 py-6 sm:px-6">
       <div
@@ -72,14 +82,15 @@ export default function AuthLayout({ eyebrow, subtitle, children }) {
           uses shadow-only with no border for the same reason. A defined edge
           reads better here anyway, against the moving blob background. */}
       <div className="relative z-10 w-full max-w-[380px] animate-fade-up rounded-xl border border-white/[0.08] bg-surface p-6 sm:p-9">
-        <Link
-          to="/"
-          title="Close and return home"
-          aria-label="Close and return home"
+        <button
+          type="button"
+          onClick={closeAuth}
+          title="Close and go back"
+          aria-label="Close and go back"
           className="absolute right-3 top-3 grid h-10 w-10 place-items-center rounded-md text-ink-faint transition-colors duration-150 ease-swift hover:bg-white/[0.06] hover:text-ink focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-signal"
         >
           <X size={18} aria-hidden="true" />
-        </Link>
+        </button>
         <div className="mb-8 flex flex-col items-center text-center">
           <div className="mb-4 grid h-11 w-11 place-items-center rounded-lg bg-signal shadow-[0_0_0_1px_rgba(255,255,255,0.08),0_8px_22px_-4px_rgba(46,235,209,0.35)]">
             <Shield size={22} className="text-base" strokeWidth={2.4} />

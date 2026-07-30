@@ -83,7 +83,7 @@ if ($Action -eq 'Remove') {
 
 if ($EnrollmentCode -notmatch '^[A-Za-z0-9_-]{32,64}$') { throw 'The installation code format is not valid.' }
 if (-not (Test-Path (Join-Path $env:WINDIR 'System32\Npcap\wpcap.dll')) -and -not (Test-Path (Join-Path $env:WINDIR 'System32\wpcap.dll'))) {
-    throw 'Npcap is required for packet capture. Install it from https://npcap.com/#download and try again.'
+    throw 'Npcap is required for packet capture. Install it from https://npcap.com/dist/ and try again.'
 }
 
 & py -3.11 --version 2>$null | Out-Null

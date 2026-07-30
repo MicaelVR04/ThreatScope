@@ -130,7 +130,7 @@ function Update-Prerequisites {
 }
 
 $pythonButton.Add_Click({ Start-Process 'https://www.python.org/downloads/windows/' })
-$npcapButton.Add_Click({ Start-Process 'https://npcap.com/#download' })
+$npcapButton.Add_Click({ Start-Process 'https://npcap.com/dist/' })
 
 $installButton.Add_Click({
     $code = $codeBox.Text.Trim()
