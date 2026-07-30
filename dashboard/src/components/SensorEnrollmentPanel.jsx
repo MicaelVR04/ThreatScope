@@ -223,12 +223,12 @@ export default function SensorEnrollmentPanel({ sensorOnline }) {
         </summary>
         <div className="border-t border-white/[0.08] px-4 py-4 text-sm leading-relaxed text-ink-muted">
           <ol className="list-decimal space-y-1.5 pl-5">
-            <li>Install <a href="https://www.python.org/downloads/windows/" target="_blank" rel="noreferrer" className="font-semibold text-signal hover:text-signal/80">Python 3.11</a> and <a href="https://npcap.com/dist/" target="_blank" rel="noreferrer" className="font-semibold text-signal hover:text-signal/80">Npcap</a> from their official sites if they are not already installed.</li>
+            <li>Install the <a href="https://www.python.org/downloads/windows/" target="_blank" rel="noreferrer" className="font-semibold text-signal hover:text-signal/80">latest stable Python 3 release</a> and <a href="https://npcap.com/dist/" target="_blank" rel="noreferrer" className="font-semibold text-signal hover:text-signal/80">Npcap</a> from their official sites if they are not already installed.</li>
             <li>Extract the downloaded ZIP and double-click <strong className="text-ink">Start ThreatScope Sensor Setup</strong>.</li>
             <li>Approve the standard Windows User Account Control prompt, paste the one-time code, and select Install.</li>
           </ol>
           <p className="mt-3 text-xs text-ink-faint">
-            This project-preview setup needs Windows 10 or 11, Python 3.11, and Npcap. Do not disable Microsoft Defender or Windows security to install it.
+            This project-preview setup supports Python 3.11 through 3.14. Use the latest stable release, currently Python 3.14.6, and do not choose a Python 3.15 pre-release. Windows 10 or 11 and Npcap are also required. Do not disable Microsoft Defender or Windows security.
           </p>
         </div>
       </details>
