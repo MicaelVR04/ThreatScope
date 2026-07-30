@@ -16,6 +16,19 @@ The installer checks for Python and Npcap before it accepts an enrollment code.
 It opens only the official prerequisite pages. Do not disable Microsoft Defender
 or Windows security to run this project-preview package.
 
+## Verify the installation
+
+1. Setup must report **Sensor connected successfully**. This means the API
+   accepted the one-time code exchange and received the sensor's first secure
+   heartbeat.
+2. Refresh the dashboard. The registered device should show `Windows` and a
+   recent connection time.
+3. Start monitoring and browse normally for one minute. The Live Network Pulse
+   should record packet activity.
+
+This validates installation, authentication, and capture activity. Use the
+team's deterministic demo traffic to validate the alert rules end to end.
+
 ## Security model
 
 - The package includes the public HTTPS API URL, never `ENGINE_API_KEY` or a
