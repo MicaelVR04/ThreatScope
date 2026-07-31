@@ -1,0 +1,43 @@
+services:
+  engine:
+    build: ./engine
+    container_name: threatscope_engine
+    profiles:
+      - capture
+    network_mode: host
+    cap_add:
+      - NET_ADMIN
+      - NET_RAW
+    env_file:
+      - .env
+    environment:
+      API_URL: http://api:8000/alerts
+    volumes:
+      - ./engine:/app
+    depends_on:
+      - api
+    restart: unless-stopped
+
+  api:
+    build:
+      context: ./api
+      dockerfile: dockerfile
+    container_name: threatscope_api
+    ports:
+      - "8000:8000"
+    env_file:
+      - .env
+    volumes:
+      - ./api:/app
+    restart: unless-stopped
+
+  dashboard:
+    build: ./dashboard
+    container_name: threatscope_dashboard
+    ports:
+      - "5173:8080"
+    env_file:
+      - .env
+    depends_on:
+      - api
+    restart: unless-stopped
